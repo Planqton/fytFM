@@ -22,6 +22,9 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
+
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
@@ -39,24 +42,35 @@ jobs:
 
         # Find the unsigned APK
         APK_UNSIGNED=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+        APK_ALIGNED="app/build/outputs/apk/release/fytFM-${VERSION}-aligned.apk"
         APK_SIGNED="app/build/outputs/apk/release/fytFM-${VERSION}-signed.apk"
 
+        echo "Found APK: $APK_UNSIGNED"
+
+        # Find build-tools
+        BUILD_TOOLS_DIR=$(ls -d ${ANDROID_HOME}/build-tools/*/ | tail -1)
+        echo "Using build-tools: $BUILD_TOOLS_DIR"
+
+        # Zipalign first
+        ${BUILD_TOOLS_DIR}zipalign -v -p 4 "$APK_UNSIGNED" "$APK_ALIGNED"
+
         # Sign with apksigner
-        ${ANDROID_HOME}/build-tools/34.0.0/apksigner sign \
+        ${BUILD_TOOLS_DIR}apksigner sign \
           --ks /tmp/keystore.jks \
           --ks-type JKS \
           --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
           --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
           --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
           --out "$APK_SIGNED" \
-          "$APK_UNSIGNED"
+          "$APK_ALIGNED"
 
         echo "APK_PATH=$APK_SIGNED" >> $GITHUB_ENV
         echo "VERSION=$VERSION" >> $GITHUB_ENV
 
     - name: Verify APK signature
       run: |
-        ${ANDROID_HOME}/build-tools/34.0.0/apksigner verify --verbose "${{ env.APK_PATH }}"
+        BUILD_TOOLS_DIR=$(ls -d ${ANDROID_HOME}/build-tools/*/ | tail -1)
+        ${BUILD_TOOLS_DIR}apksigner verify --verbose "${{ env.APK_PATH }}"
 
     - name: Create Release
       uses: softprops/action-gh-release@v1
