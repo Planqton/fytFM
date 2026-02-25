@@ -2,10 +2,12 @@ package at.planqton.fytfm.ui
 
 import android.app.Dialog
 import android.content.Context
+import android.content.DialogInterface
 import android.os.Bundle
 import android.view.View
 import android.view.Window
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -18,6 +20,7 @@ import at.planqton.fytfm.scanner.RadioScanner
 class StationListDialog(
     context: Context,
     private val radioScanner: RadioScanner,
+    private val onStationsAdded: (List<RadioStation>) -> Unit,
     private val onStationSelected: (RadioStation) -> Unit
 ) : Dialog(context) {
 
@@ -26,12 +29,16 @@ class StationListDialog(
     private lateinit var stationRecycler: RecyclerView
     private lateinit var tvEmptyState: TextView
     private lateinit var scanProgressContainer: LinearLayout
+    private lateinit var scanOptionsContainer: LinearLayout
     private lateinit var scanProgress: ProgressBar
     private lateinit var tvScanStatus: TextView
     private lateinit var btnScan: Button
+    private lateinit var btnAdd: Button
     private lateinit var btnClose: Button
+    private lateinit var cbRequirePs: CheckBox
+    private lateinit var cbRequirePi: CheckBox
 
-    private val stationAdapter = StationAdapter { station ->
+    private val scanAdapter = ScanStationAdapter { station ->
         onStationSelected(station)
         dismiss()
     }
@@ -39,6 +46,9 @@ class StationListDialog(
     private var isShowingFM = true
     private var fmStations: List<RadioStation> = emptyList()
     private var amStations: List<RadioStation> = emptyList()
+    private val scanResultsLive = mutableListOf<RadioStation>()
+    private var currentPhase = ""
+    private var scanCancelled = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,21 +67,36 @@ class StationListDialog(
         updateStationList()
     }
 
+    override fun onStop() {
+        super.onStop()
+        // Scan stoppen wenn Dialog geschlossen wird
+        scanCancelled = true
+        radioScanner.stopScan()
+    }
+
     private fun initViews() {
         btnFmTab = findViewById(R.id.btnFmTab)
         btnAmTab = findViewById(R.id.btnAmTab)
         stationRecycler = findViewById(R.id.stationRecycler)
         tvEmptyState = findViewById(R.id.tvEmptyState)
         scanProgressContainer = findViewById(R.id.scanProgressContainer)
+        scanOptionsContainer = findViewById(R.id.scanOptionsContainer)
         scanProgress = findViewById(R.id.scanProgress)
         tvScanStatus = findViewById(R.id.tvScanStatus)
         btnScan = findViewById(R.id.btnScan)
         btnClose = findViewById(R.id.btnClose)
+        cbRequirePs = findViewById(R.id.cbRequirePs)
+        cbRequirePi = findViewById(R.id.cbRequirePi)
+        btnAdd = findViewById(R.id.btnAdd)
+
+        // Checkboxen standardmäßig aktiviert
+        cbRequirePs.isChecked = true
+        cbRequirePi.isChecked = true
 
         stationRecycler.layoutManager = LinearLayoutManager(
-            context, LinearLayoutManager.HORIZONTAL, false
+            context, LinearLayoutManager.VERTICAL, false
         )
-        stationRecycler.adapter = stationAdapter
+        stationRecycler.adapter = scanAdapter
     }
 
     private fun setupListeners() {
@@ -94,6 +119,14 @@ class StationListDialog(
         btnClose.setOnClickListener {
             dismiss()
         }
+
+        btnAdd.setOnClickListener {
+            val stations = if (isShowingFM) fmStations else amStations
+            if (stations.isNotEmpty()) {
+                onStationsAdded(stations)
+            }
+            dismiss()
+        }
     }
 
     private fun updateTabSelection() {
@@ -110,29 +143,66 @@ class StationListDialog(
         } else {
             stationRecycler.visibility = View.VISIBLE
             tvEmptyState.visibility = View.GONE
-            stationAdapter.setStations(stations)
+            scanAdapter.setStations(stations)
         }
     }
 
     private fun startScan() {
+        scanCancelled = false  // Reset für neuen Scan
         scanProgressContainer.visibility = View.VISIBLE
+        scanOptionsContainer.visibility = View.GONE  // Optionen während Scan ausblenden
+        btnAdd.visibility = View.GONE  // Hinzufügen-Button ausblenden
         btnScan.isEnabled = false
         scanProgress.progress = 0
 
+        // Live-Liste leeren und RecyclerView anzeigen für Live-Updates
+        scanResultsLive.clear()
+        scanAdapter.setStations(scanResultsLive)
+        stationRecycler.visibility = View.VISIBLE
+        tvEmptyState.visibility = View.GONE
+
+        val requirePs = cbRequirePs.isChecked
+        val requirePi = cbRequirePi.isChecked
+
         if (isShowingFM) {
-            tvScanStatus.text = "Scanning FM..."
+            currentPhase = ""
+            tvScanStatus.text = "Phase 1: Signal..."
             radioScanner.scanFM(
-                onProgress = { progress, frequency, remainingSec, _ ->
+                onProgress = { progress, frequency, remainingSec, filteredCount, phase ->
+                    // Bei Phasenwechsel Liste leeren
+                    if (phase != currentPhase) {
+                        if (phase.contains("Phase 2") && currentPhase.contains("Phase 1")) {
+                            scanResultsLive.clear()
+                            scanAdapter.setStations(scanResultsLive.toList())
+                        }
+                        currentPhase = phase
+                    }
+
                     scanProgress.progress = progress
                     val timeStr = if (remainingSec > 60) "%d:%02d".format(remainingSec / 60, remainingSec % 60) else "%ds".format(remainingSec)
-                    tvScanStatus.text = "FM %.1f MHz | ~$timeStr".format(frequency)
+                    val filterStr = if (filteredCount > 0) " | $filteredCount gefiltert" else ""
+                    val countStr = " | ${scanResultsLive.size} gefunden"
+                    tvScanStatus.text = "$phase: %.1f MHz | ~$timeStr$filterStr$countStr".format(frequency)
+                },
+                onStationFound = { station ->
+                    // Live-Update: Sender sofort zur Liste hinzufügen
+                    scanResultsLive.add(station)
+                    scanAdapter.setStations(scanResultsLive.toList())
+                    stationRecycler.scrollToPosition(scanResultsLive.size - 1)
                 },
                 onComplete = { stations ->
-                    fmStations = stations
+                    // Bei Abbruch: alte Sender behalten, nur UI zurücksetzen
+                    if (!scanCancelled && stations.isNotEmpty()) {
+                        fmStations = stations
+                    }
                     scanProgressContainer.visibility = View.GONE
+                    scanOptionsContainer.visibility = View.VISIBLE
+                    btnAdd.visibility = if (fmStations.isNotEmpty()) View.VISIBLE else View.GONE
                     btnScan.isEnabled = true
                     updateStationList()
-                }
+                },
+                requirePs = requirePs,
+                requirePi = requirePi
             )
         } else {
             tvScanStatus.text = "Scanning AM..."
@@ -143,8 +213,13 @@ class StationListDialog(
                     tvScanStatus.text = "AM %d kHz | ~$timeStr".format(frequency.toInt())
                 },
                 onComplete = { stations ->
-                    amStations = stations
+                    // Bei Abbruch: alte Sender behalten, nur UI zurücksetzen
+                    if (!scanCancelled && stations.isNotEmpty()) {
+                        amStations = stations
+                    }
                     scanProgressContainer.visibility = View.GONE
+                    scanOptionsContainer.visibility = View.VISIBLE
+                    btnAdd.visibility = if (amStations.isNotEmpty()) View.VISIBLE else View.GONE
                     btnScan.isEnabled = true
                     updateStationList()
                 }

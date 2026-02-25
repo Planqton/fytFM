@@ -50,7 +50,9 @@
             android:id="@+id/scanProgress"
             style="@android:style/Widget.ProgressBar.Horizontal"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content" />
+            android:layout_height="8dp"
+            android:max="100"
+            android:progressDrawable="@drawable/scan_progress_bar" />
 
         <TextView
             android:id="@+id/tvScanStatus"
@@ -66,21 +68,57 @@
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/stationRecycler"
         android:layout_width="match_parent"
-        android:layout_height="120dp"
+        android:layout_height="200dp"
         android:layout_marginTop="16dp"
-        android:clipToPadding="false"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp" />
+        android:background="#11000000" />
 
     <!-- Empty state -->
     <TextView
         android:id="@+id/tvEmptyState"
         android:layout_width="match_parent"
-        android:layout_height="120dp"
+        android:layout_height="200dp"
         android:gravity="center"
-        android:text="No stations found.\nTap scan to search."
+        android:text="Keine Sender gefunden.\nTippe Scan um zu suchen."
         android:textColor="@color/radio_text_secondary"
         android:visibility="gone" />
+
+    <!-- Scan Filter Options -->
+    <LinearLayout
+        android:id="@+id/scanOptionsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:background="#22FFFFFF">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Scan-Filter:"
+            android:textColor="@color/radio_text_primary"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/cbRequirePs"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Muss Namen senden (PS)"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary"
+            android:checked="false" />
+
+        <CheckBox
+            android:id="@+id/cbRequirePi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Muss PI enthalten"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary"
+            android:checked="false" />
+
+    </LinearLayout>
 
     <!-- Buttons -->
     <LinearLayout
@@ -100,6 +138,18 @@
             android:paddingEnd="24dp"
             android:text="Scan"
             android:textColor="@color/radio_text_primary" />
+
+        <Button
+            android:id="@+id/btnAdd"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginEnd="16dp"
+            android:background="@drawable/button_background"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp"
+            android:text="Hinzufügen"
+            android:textColor="@color/radio_text_primary"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/btnClose"

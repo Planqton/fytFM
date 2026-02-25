@@ -4,18 +4,19 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import at.planqton.fytfm.RdsManager
 import at.planqton.fytfm.data.RadioStation
 import com.android.fmradio.FmNative
 import kotlin.concurrent.thread
 
 /**
  * RadioScanner - Echter Hardware-Scan für FYT Head Units
- * Phase 1: RSSI-Scan (87.5-108.0 MHz)
- * Phase 2: RDS-Namen sammeln
+ * Phase 1: RSSI-Scan (87.5-108.0 MHz) - Alle Sender mit Signal finden
+ * Phase 2: RDS-Verifizierung via RdsManager - PS/PI prüfen und filtern
  *
- * Verwendet direkt fmsyu_jni für alle Abfragen (NavRadio-Stil).
+ * Nutzt den gleichen RdsManager wie das Debug-Display für RDS-Daten.
  */
-class RadioScanner {
+class RadioScanner(private val rdsManager: RdsManager) {
 
     companion object {
         private const val TAG = "RadioScanner"
@@ -34,13 +35,10 @@ class RadioScanner {
         private const val SCAN_RSSI_THRESHOLD = 15
         private const val SCAN_SETTLE_TIME_MS = 250L
         private const val SCAN_RSSI_SAMPLES = 3
-        private const val RDS_COLLECT_TIME_MS = 4000
-        private const val PI_CODE_WAIT_TIME_MS = 1500
+        private const val RDS_COLLECT_TIME_MS = 5000L  // 5 Sekunden pro Sender für RDS
 
         // fmsyu_jni Command Codes (NavRadio-Stil)
         private const val CMD_GETRSSI = 0x0b      // 11
-        private const val CMD_RDSGETPS = 0x1e     // 30 - PS Name
-        private const val CMD_RDSGETPI = 0x19    // 25 - PI Code (vermutlich)
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -57,11 +55,20 @@ class RadioScanner {
         }
     }
 
+    /**
+     * FM-Scan mit 2 Durchgängen:
+     * 1. Alle Frequenzen mit RSSI >= Threshold finden
+     * 2. RDS-Daten sammeln und filtern (via RdsManager wie Debug-Display)
+     *
+     * @param requirePs Sender ohne PS-Name werden gefiltert
+     * @param requirePi Sender ohne PI-Code werden gefiltert
+     */
     fun scanFM(
-        onProgress: (progress: Int, frequency: Float, remainingSeconds: Int, filteredCount: Int) -> Unit,
+        onProgress: (progress: Int, frequency: Float, remainingSeconds: Int, filteredCount: Int, phase: String) -> Unit,
         onStationFound: ((RadioStation) -> Unit)? = null,
         onComplete: (List<RadioStation>) -> Unit,
-        verifyWithPiCode: Boolean = false
+        requirePs: Boolean = false,
+        requirePi: Boolean = false
     ) {
         if (isScanning) {
             Log.w(TAG, "Scan already running")
@@ -77,6 +84,7 @@ class RadioScanner {
             var filteredCount = 0
 
             try {
+                // ==================== PHASE 1: RSSI SCAN ====================
                 Log.i(TAG, "════════════════════════════════════════════════════")
                 Log.i(TAG, "         PHASE 1: RSSI SCAN (87.5-108.0 MHz)")
                 Log.i(TAG, "════════════════════════════════════════════════════")
@@ -97,7 +105,7 @@ class RadioScanner {
                         ((totalEstimatedMs - elapsedMs) / 1000).toInt()
                     } else 0
 
-                    mainHandler.post { onProgress(progress, currentFreq, remainingSeconds, filteredCount) }
+                    mainHandler.post { onProgress(progress, currentFreq, remainingSeconds, filteredCount, "Phase 1: Signal") }
 
                     // Tune zur Frequenz
                     tuneToFrequency(currentFreq)
@@ -112,6 +120,7 @@ class RadioScanner {
                         val station = RadioStation(currentFreq, null, rssi, false)
                         foundStations.add(station)
                         Log.i(TAG, "★ FOUND: %.1f MHz | RSSI: %d".format(currentFreq, rssi))
+                        // Phase 1: Sofort anzeigen
                         mainHandler.post { onStationFound?.invoke(station) }
                     }
 
@@ -119,22 +128,20 @@ class RadioScanner {
                 }
 
                 if (isCancelled) {
-                    Log.i(TAG, "Scan cancelled")
-                    mainHandler.post { onComplete(foundStations) }
+                    Log.i(TAG, "Scan cancelled in Phase 1")
+                    mainHandler.post { onComplete(emptyList()) }
                     return@thread
                 }
 
                 Log.i(TAG, "Phase 1 complete: ${foundStations.size} stations found")
 
-                // ==================== PHASE 2: RDS/PI VERIFICATION ====================
-                if (foundStations.isNotEmpty()) {
-                    val phaseTitle = if (verifyWithPiCode) "PHASE 2: PI-CODE VERIFICATION + RDS" else "PHASE 2: COLLECTING RDS NAMES"
+                // ==================== PHASE 2: RDS VERIFICATION via RdsManager ====================
+                if (foundStations.isNotEmpty() && (requirePs || requirePi)) {
                     Log.i(TAG, "════════════════════════════════════════════════════")
-                    Log.i(TAG, "         $phaseTitle")
+                    Log.i(TAG, "         PHASE 2: RDS VERIFICATION (PS=${requirePs}, PI=${requirePi})")
                     Log.i(TAG, "════════════════════════════════════════════════════")
 
                     val verifiedStations = mutableListOf<RadioStation>()
-
                     val phase2StartTime = System.currentTimeMillis()
 
                     foundStations.forEachIndexed { index, station ->
@@ -148,40 +155,110 @@ class RadioScanner {
                             val avgPerStation = phase2Elapsed / index
                             ((foundStations.size - index) * avgPerStation / 1000).toInt()
                         } else {
-                            ((foundStations.size - index) * 5.5).toInt()
+                            ((foundStations.size - index) * (RDS_COLLECT_TIME_MS / 1000)).toInt()
                         }
 
-                        mainHandler.post { onProgress(progress, station.frequency, remainingSeconds, filteredCount) }
+                        mainHandler.post { onProgress(progress, station.frequency, remainingSeconds, filteredCount, "Phase 2: RDS") }
 
+                        // RDS-Daten zurücksetzen
+                        rdsManager.clearRds()
+
+                        // Tune zur Frequenz
                         tuneToFrequency(station.frequency)
 
-                        // PI-Code und RDS-Name gleichzeitig sammeln
-                        val (hasValidPi, rdsName) = collectPiAndRds(
-                            timeoutMs = RDS_COLLECT_TIME_MS,
-                            requirePi = verifyWithPiCode
-                        )
+                        // RDS-Daten sammeln (wie Debug-Display) - warten auf Daten
+                        val (hasPs, hasPi, psName, piCode) = collectRdsViaManager(RDS_COLLECT_TIME_MS)
 
-                        // Bei PI-Verifizierung: Station ohne PI überspringen
-                        if (verifyWithPiCode && !hasValidPi) {
+                        // Filtern basierend auf Anforderungen
+                        val psOk = !requirePs || hasPs
+                        val piOk = !requirePi || hasPi
+
+                        if (!psOk || !piOk) {
                             filteredCount++
-                            Log.i(TAG, "  %.1f MHz → KEIN PI-CODE (entfernt) [%d gefiltert]".format(station.frequency, filteredCount))
+                            val reason = when {
+                                !psOk && !piOk -> "kein PS & kein PI"
+                                !psOk -> "kein PS"
+                                else -> "kein PI"
+                            }
+                            Log.i(TAG, "  %.1f MHz → GEFILTERT ($reason) [%d gefiltert]".format(station.frequency, filteredCount))
                             return@forEachIndexed
                         }
 
-                        val verifiedStation = station.copy(name = if (rdsName.isNotEmpty()) rdsName else null)
+                        // Station mit RDS-Daten hinzufügen
+                        val verifiedStation = station.copy(name = if (psName.isNotEmpty()) psName else null)
                         verifiedStations.add(verifiedStation)
 
-                        val piInfo = if (verifyWithPiCode) " [PI OK]" else ""
-                        if (rdsName.isNotEmpty()) {
-                            Log.i(TAG, "  %.1f MHz → \"%s\"$piInfo".format(station.frequency, rdsName))
+                        // Live-Callback für UI-Update
+                        mainHandler.post { onStationFound?.invoke(verifiedStation) }
+
+                        val piStr = if (piCode != 0) String.format(" [PI=0x%04X]", piCode) else ""
+                        if (psName.isNotEmpty()) {
+                            Log.i(TAG, "  %.1f MHz → \"%s\"$piStr ✓".format(station.frequency, psName))
                         } else {
-                            Log.i(TAG, "  %.1f MHz → (kein RDS Name)$piInfo".format(station.frequency))
+                            Log.i(TAG, "  %.1f MHz → (kein PS Name)$piStr ✓".format(station.frequency))
                         }
+                    }
+
+                    // Bei Abbruch: leere Liste zurückgeben
+                    if (isCancelled) {
+                        Log.i(TAG, "Scan cancelled in Phase 2 (with filter)")
+                        mainHandler.post { onComplete(emptyList()) }
+                        return@thread
                     }
 
                     // Ersetze foundStations mit verifizierten
                     foundStations.clear()
                     foundStations.addAll(verifiedStations)
+                } else if (foundStations.isNotEmpty()) {
+                    // Keine Filterung - trotzdem RDS-Namen sammeln
+                    Log.i(TAG, "════════════════════════════════════════════════════")
+                    Log.i(TAG, "         PHASE 2: RDS NAMES SAMMELN (ohne Filter)")
+                    Log.i(TAG, "════════════════════════════════════════════════════")
+
+                    val stationsWithNames = mutableListOf<RadioStation>()
+                    val phase2StartTime = System.currentTimeMillis()
+
+                    foundStations.forEachIndexed { index, station ->
+                        if (isCancelled) return@forEachIndexed
+
+                        val progress = 50 + ((index + 1).toFloat() / foundStations.size * 50).toInt()
+                        val phase2Elapsed = System.currentTimeMillis() - phase2StartTime
+                        val remainingSeconds = if (index > 0) {
+                            val avgPerStation = phase2Elapsed / index
+                            ((foundStations.size - index) * avgPerStation / 1000).toInt()
+                        } else {
+                            ((foundStations.size - index) * (RDS_COLLECT_TIME_MS / 1000)).toInt()
+                        }
+
+                        mainHandler.post { onProgress(progress, station.frequency, remainingSeconds, 0, "Phase 2: RDS") }
+
+                        rdsManager.clearRds()
+                        tuneToFrequency(station.frequency)
+
+                        val (_, _, psName, _) = collectRdsViaManager(RDS_COLLECT_TIME_MS)
+
+                        val stationWithName = station.copy(name = if (psName.isNotEmpty()) psName else null)
+                        stationsWithNames.add(stationWithName)
+
+                        // Live-Callback für UI-Update
+                        mainHandler.post { onStationFound?.invoke(stationWithName) }
+
+                        if (psName.isNotEmpty()) {
+                            Log.i(TAG, "  %.1f MHz → \"%s\"".format(station.frequency, psName))
+                        } else {
+                            Log.i(TAG, "  %.1f MHz → (kein RDS Name)".format(station.frequency))
+                        }
+                    }
+
+                    // Bei Abbruch: leere Liste zurückgeben
+                    if (isCancelled) {
+                        Log.i(TAG, "Scan cancelled in Phase 2 (no filter)")
+                        mainHandler.post { onComplete(emptyList()) }
+                        return@thread
+                    }
+
+                    foundStations.clear()
+                    foundStations.addAll(stationsWithNames)
                 }
 
                 // Log results
@@ -197,6 +274,52 @@ class RadioScanner {
             }
         }
     }
+
+    /**
+     * Sammelt RDS-Daten via RdsManager (wie Debug-Display)
+     * @return Quadruple(hasPs, hasPi, psName, piCode)
+     */
+    private fun collectRdsViaManager(timeoutMs: Long): RdsResult {
+        val startTime = System.currentTimeMillis()
+        var foundPs = ""
+        var foundPi = 0
+
+        // Warten und regelmäßig RDS-Manager abfragen
+        while (System.currentTimeMillis() - startTime < timeoutMs && !isCancelled) {
+            Thread.sleep(250)
+
+            // PS vom RdsManager holen
+            val ps = rdsManager.ps
+            if (!ps.isNullOrEmpty() && ps.length >= 2) {
+                foundPs = ps
+            }
+
+            // PI vom RdsManager holen
+            val pi = rdsManager.pi
+            if (pi != 0) {
+                foundPi = pi
+            }
+
+            // Früh abbrechen wenn beides gefunden
+            if (foundPs.isNotEmpty() && foundPi != 0) {
+                break
+            }
+        }
+
+        return RdsResult(
+            hasPs = foundPs.isNotEmpty(),
+            hasPi = foundPi != 0,
+            psName = foundPs,
+            piCode = foundPi
+        )
+    }
+
+    data class RdsResult(
+        val hasPs: Boolean,
+        val hasPi: Boolean,
+        val psName: String,
+        val piCode: Int
+    )
 
     fun scanAM(
         onProgress: (progress: Int, frequency: Float, remainingSeconds: Int, filteredCount: Int) -> Unit,
@@ -293,98 +416,6 @@ class RadioScanner {
         }
 
         return if (validSamples > 0) totalRssi / validSamples else 0
-    }
-
-    /**
-     * Holt PS Name direkt via fmsyu_jni (NavRadio-Stil)
-     */
-    private fun fetchPs(): String {
-        val native = fmNative ?: return ""
-
-        // Methode 1: fmsyu_jni(0x1e)
-        try {
-            val inBundle = Bundle()
-            val outBundle = Bundle()
-            val result = native.fmsyu_jni(CMD_RDSGETPS, inBundle, outBundle)
-            if (result == 0) {
-                val psData = outBundle.getByteArray("PSname")
-                if (psData != null && psData.isNotEmpty()) {
-                    val ps = String(psData, Charsets.US_ASCII)
-                        .replace(Regex("[\\x00-\\x1F]"), "")
-                        .trim()
-                    if (ps.isNotEmpty()) return ps
-                }
-            }
-        } catch (e: Throwable) { }
-
-        // Methode 2: getPsString()
-        try {
-            val ps = native.psString
-            if (!ps.isNullOrEmpty()) return ps.trim()
-        } catch (e: Throwable) { }
-
-        // Methode 3: getPs()
-        try {
-            val psBytes = native.ps
-            if (psBytes != null && psBytes.isNotEmpty()) {
-                val ps = String(psBytes, Charsets.US_ASCII)
-                    .replace(Regex("[\\x00-\\x1F]"), "")
-                    .trim()
-                if (ps.isNotEmpty()) return ps
-            }
-        } catch (e: Throwable) { }
-
-        return ""
-    }
-
-    /**
-     * Sammelt PI-Code und RDS-Name gleichzeitig
-     * @return Pair(hasValidPi, rdsName)
-     */
-    private fun collectPiAndRds(timeoutMs: Int, requirePi: Boolean): Pair<Boolean, String> {
-        val attempts = timeoutMs / 500
-        val native = fmNative ?: return Pair(false, "")
-
-        var foundPi = false
-        var collectedPs = ""
-
-        repeat(attempts) { attempt ->
-            if (isCancelled) return Pair(foundPi, collectedPs)
-
-            try { Thread.sleep(500) } catch (e: InterruptedException) { return Pair(foundPi, collectedPs) }
-
-            // RDS lesen um Hardware zu triggern
-            try { native.readRds() } catch (e: Throwable) { }
-
-            // PI-Code prüfen (via readRds return value oder andere Methode)
-            if (!foundPi && requirePi) {
-                // PI-Code kommt oft über readRds() return value
-                try {
-                    val rdsResult = native.readRds()
-                    // Wenn ein gültiger PI-Code empfangen wurde, ist rdsResult oft > 0
-                    if (rdsResult.toInt() != 0) {
-                        foundPi = true
-                        Log.d(TAG, "  PI indication received after ${(attempt + 1) * 500}ms")
-                    }
-                } catch (e: Throwable) { }
-            }
-
-            // PS Name sammeln
-            val ps = fetchPs()
-            if (ps.isNotEmpty() && ps != collectedPs) {
-                collectedPs = ps
-                Log.d(TAG, "  RDS PS: '$collectedPs'")
-            }
-
-            // Früh abbrechen wenn beides gefunden (oder PI nicht benötigt)
-            val piOk = foundPi || !requirePi
-            val nameOk = collectedPs.length >= 2 && !collectedPs.matches(Regex("^[\\s?]+$"))
-            if (piOk && nameOk) {
-                return Pair(foundPi, collectedPs)
-            }
-        }
-
-        return Pair(foundPi, collectedPs)
     }
 
     private fun logScanResults(stations: List<RadioStation>) {

@@ -49,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var stationAdapter: StationAdapter
     private lateinit var fmNative: FmNative
     private lateinit var rdsManager: RdsManager
+    private lateinit var radioScanner: at.planqton.fytfm.scanner.RadioScanner
     private var twUtil: TWUtilHelper? = null
 
     private var isPlaying = true
@@ -61,6 +62,7 @@ class MainActivity : AppCompatActivity() {
         presetRepository = PresetRepository(this)
         fmNative = FmNative.getInstance()
         rdsManager = RdsManager(fmNative)
+        radioScanner = at.planqton.fytfm.scanner.RadioScanner(rdsManager)
 
         // Initialize TWUtil for MCU communication - critical for RDS!
         twUtil = TWUtilHelper()
@@ -99,28 +101,52 @@ class MainActivity : AppCompatActivity() {
         rdsManager.startPolling(object : RdsManager.RdsCallback {
             override fun onRdsUpdate(ps: String?, rt: String?, rssi: Int, pi: Int, pty: Int, tp: Int, ta: Int, afList: ShortArray?) {
                 runOnUiThread {
-                    // PTY mit Name
-                    val ptyStr = if (pty > 0) "$pty (${RdsManager.getPtyName(pty)})" else ""
+                    // Alter für jeden Wert holen
+                    val psAge = rdsManager.psAgeMs
+                    val piAge = rdsManager.piAgeMs
+                    val ptyAge = rdsManager.ptyAgeMs
+                    val rtAge = rdsManager.rtAgeMs
+                    val rssiAge = rdsManager.rssiAgeMs
+                    val tpTaAge = rdsManager.tpTaAgeMs
+                    val afAge = rdsManager.afAgeMs
 
-                    // TP/TA
-                    val tpTaStr = "TP=$tp TA=$ta"
+                    // Labels mit Alter aktualisieren (Format: "(Xs) Label:")
+                    findViewById<android.widget.TextView>(R.id.labelPs)?.text =
+                        if (psAge >= 0) "(${psAge / 1000}s) PS:" else "PS:"
+                    findViewById<android.widget.TextView>(R.id.labelPi)?.text =
+                        if (piAge >= 0) "(${piAge / 1000}s) PI:" else "PI:"
+                    findViewById<android.widget.TextView>(R.id.labelPty)?.text =
+                        if (ptyAge >= 0) "(${ptyAge / 1000}s) PTY:" else "PTY:"
+                    findViewById<android.widget.TextView>(R.id.labelRt)?.text =
+                        if (rtAge >= 0) "(${rtAge / 1000}s) RT:" else "RT:"
+                    findViewById<android.widget.TextView>(R.id.labelRssi)?.text =
+                        if (rssiAge >= 0) "(${rssiAge / 1000}s) RSSI:" else "RSSI:"
+                    findViewById<android.widget.TextView>(R.id.labelAf)?.text =
+                        if (afAge >= 0) "(${afAge / 1000}s) AF:" else "AF:"
+                    findViewById<android.widget.TextView>(R.id.labelTpTa)?.text =
+                        if (tpTaAge >= 0) "(${tpTaAge / 1000}s) TP/TA:" else "TP/TA:"
 
-                    // PI als Hex
+                    // Werte ohne Alter-Präfix
+                    val psStr = ps ?: ""
                     val piStr = if (pi != 0) String.format("0x%04X", pi and 0xFFFF) else ""
-
-                    // AF als Frequenz-Liste
+                    val ptyStr = if (pty > 0) "$pty (${RdsManager.getPtyName(pty)})" else ""
+                    val rtStr = rt ?: ""
+                    val rssiStr = "$rssi dBm"
+                    val tpTaStr = "TP=$tp TA=$ta"
                     val afStr = if (afList != null && afList.isNotEmpty()) {
                         afList.map { freq ->
-                            // AF-Frequenzen sind oft in 100 kHz Einheiten oder direkt als Dezimalwert
                             val freqMhz = if (freq > 875) freq / 10.0f else (87.5f + freq * 0.1f)
                             String.format("%.1f", freqMhz)
                         }.joinToString(", ")
                     } else ""
 
+                    // Header statisch
+                    findViewById<android.widget.TextView>(R.id.debugHeader)?.text = "RDS Debug"
+
                     updateDebugInfo(
-                        ps = ps ?: "",
-                        rt = rt ?: "",
-                        rssi = rssi,
+                        ps = psStr,
+                        rt = rtStr,
+                        rssiStr = rssiStr,
                         pi = piStr,
                         pty = ptyStr,
                         tpTa = tpTaStr,
@@ -285,14 +311,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun updateDebugInfo(ps: String? = null, pi: String? = null, pty: String? = null,
-                        rt: String? = null, rssi: Int? = null, freq: Float? = null, af: String? = null, tpTa: String? = null) {
+                        rt: String? = null, rssiStr: String? = null, freq: Float? = null, af: String? = null, tpTa: String? = null) {
         if (debugOverlay?.visibility != View.VISIBLE) return
 
         ps?.let { debugPs?.text = it.ifEmpty { "--------" } }
         pi?.let { debugPi?.text = if (it.isNotEmpty()) it else "----" }
         pty?.let { debugPty?.text = if (it.isNotEmpty()) it else "--" }
         rt?.let { debugRt?.text = it.ifEmpty { "--------------------------------" } }
-        rssi?.let { debugRssi?.text = "$it dBm" }
+        rssiStr?.let { debugRssi?.text = it }
         freq?.let { debugFreq?.text = String.format("%.1f MHz", it) }
         af?.let { debugAf?.text = it.ifEmpty { "----" } }
         tpTa?.let { debugTpTa?.text = it }
@@ -372,10 +398,9 @@ class MainActivity : AppCompatActivity() {
             toggleRadioPower()
         }
 
-        // Search button - DEAKTIVIERT
+        // Search button - öffnet Sendersuche Dialog
         findViewById<ImageButton>(R.id.btnSearch).setOnClickListener {
-            // Scanner deaktiviert
-            android.widget.Toast.makeText(this, "Scanner deaktiviert", android.widget.Toast.LENGTH_SHORT).show()
+            showStationScanDialog()
         }
 
         // All list button
@@ -524,6 +549,25 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Abbrechen", null)
             .show()
+    }
+
+    private fun showStationScanDialog() {
+        val dialog = at.planqton.fytfm.ui.StationListDialog(
+            this,
+            radioScanner,
+            onStationsAdded = { stations ->
+                // Gefundene Sender zu den Presets hinzufügen
+                saveStations(stations)
+                loadStationsForCurrentMode()
+            },
+            onStationSelected = { station ->
+                // Station ausgewählt - tune zur Frequenz
+                frequencyScale.setFrequency(station.frequency)
+                updateFrequencyDisplay(station.frequency)
+                rdsManager.tune(station.frequency)
+            }
+        )
+        dialog.show()
     }
 
     private fun saveStations(stations: List<at.planqton.fytfm.data.RadioStation>) {

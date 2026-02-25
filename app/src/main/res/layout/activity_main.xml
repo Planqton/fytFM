@@ -346,6 +346,7 @@
         android:visibility="gone">
 
         <TextView
+            android:id="@+id/debugHeader"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="RDS Debug"
@@ -359,7 +360,8 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal">
             <TextView
-                android:layout_width="60dp"
+                android:id="@+id/labelPs"
+                android:layout_width="80dp"
                 android:layout_height="wrap_content"
                 android:text="PS:"
                 android:textColor="#AAAAAA"
@@ -380,7 +382,8 @@
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
             <TextView
-                android:layout_width="60dp"
+                android:id="@+id/labelPi"
+                android:layout_width="80dp"
                 android:layout_height="wrap_content"
                 android:text="PI:"
                 android:textColor="#AAAAAA"
@@ -401,7 +404,8 @@
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
             <TextView
-                android:layout_width="60dp"
+                android:id="@+id/labelPty"
+                android:layout_width="80dp"
                 android:layout_height="wrap_content"
                 android:text="PTY:"
                 android:textColor="#AAAAAA"
@@ -422,7 +426,8 @@
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
             <TextView
-                android:layout_width="60dp"
+                android:id="@+id/labelRt"
+                android:layout_width="80dp"
                 android:layout_height="wrap_content"
                 android:text="RT:"
                 android:textColor="#AAAAAA"
@@ -446,7 +451,8 @@
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
             <TextView
-                android:layout_width="60dp"
+                android:id="@+id/labelRssi"
+                android:layout_width="80dp"
                 android:layout_height="wrap_content"
                 android:text="RSSI:"
                 android:textColor="#AAAAAA"
@@ -488,7 +494,8 @@
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
             <TextView
-                android:layout_width="60dp"
+                android:id="@+id/labelAf"
+                android:layout_width="80dp"
                 android:layout_height="wrap_content"
                 android:text="AF:"
                 android:textColor="#AAAAAA"
@@ -512,7 +519,8 @@
             android:orientation="horizontal"
             android:layout_marginTop="4dp">
             <TextView
-                android:layout_width="60dp"
+                android:id="@+id/labelTpTa"
+                android:layout_width="80dp"
                 android:layout_height="wrap_content"
                 android:text="TP/TA:"
                 android:textColor="#AAAAAA"

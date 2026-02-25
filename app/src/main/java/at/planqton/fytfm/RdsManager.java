@@ -29,7 +29,8 @@ public class RdsManager {
     private static final int CMD_RDSGETFREQPS = 0x20;  // 32 - Get FreqPS (enthält PI!)
 
     // Polling
-    private static final int POLL_INTERVAL_MS = 500;
+    private static final int POLL_INTERVAL_MS = 250;
+    private static final int RDS_READ_ITERATIONS = 8;  // Mehrere readRds() für besseren RT-Empfang
 
     private final FmNative fmNative;
     private final Handler handler;
@@ -48,6 +49,15 @@ public class RdsManager {
     private int currentTp = 0;
     private int currentTa = 0;
     private short[] currentAfList = null;
+
+    // Timestamps für jeden RDS-Wert
+    private long lastPsTimestamp = 0;
+    private long lastPiTimestamp = 0;
+    private long lastPtyTimestamp = 0;
+    private long lastRtTimestamp = 0;
+    private long lastRssiTimestamp = 0;
+    private long lastTpTaTimestamp = 0;
+    private long lastAfTimestamp = 0;
 
     public interface RdsCallback {
         void onRdsUpdate(String ps, String rt, int rssi, int pi, int pty, int tp, int ta, short[] afList);
@@ -174,35 +184,45 @@ public class RdsManager {
             return;
         }
 
-        // WICHTIG: readRds() aufrufen um RDS-Decoder zu triggern!
-        try {
-            short rdsResult = fmNative.readRds();
-            if (rdsResult != 0) {
-                Log.d(TAG, "pollRds: readRds() = " + rdsResult);
+        // WICHTIG: readRds() mehrfach aufrufen um RDS-Decoder zu triggern!
+        // Dies gibt dem Chip mehr Zeit, RT-Daten zu akkumulieren
+        for (int i = 0; i < RDS_READ_ITERATIONS; i++) {
+            try {
+                short rdsResult = fmNative.readRds();
+                if (rdsResult != 0) {
+                    Log.d(TAG, "pollRds: readRds()[" + i + "] = " + rdsResult);
+                }
+            } catch (Throwable e) {
+                // Ignorieren
             }
-        } catch (Throwable e) {
-            // Ignorieren
         }
 
         // PS abrufen
         String ps = fetchPs();
         Log.d(TAG, "pollRds: fetchPs() returned: '" + ps + "'");
-        if (ps != null && !ps.isEmpty() && !ps.equals(currentPs)) {
-            currentPs = ps;
-            Log.i(TAG, "PS: '" + ps + "'");
+        if (ps != null && !ps.isEmpty()) {
+            lastPsTimestamp = System.currentTimeMillis();
+            if (!ps.equals(currentPs)) {
+                currentPs = ps;
+                Log.i(TAG, "PS: '" + ps + "'");
+            }
         }
 
         // RT abrufen
         String rt = fetchRt();
         Log.d(TAG, "pollRds: fetchRt() returned: '" + rt + "'");
-        if (rt != null && !rt.isEmpty() && !rt.equals(currentRt)) {
-            currentRt = rt;
-            Log.i(TAG, "RT: '" + rt + "'");
+        if (rt != null && !rt.isEmpty()) {
+            lastRtTimestamp = System.currentTimeMillis();  // RT empfangen - Timestamp aktualisieren
+            if (!rt.equals(currentRt)) {
+                currentRt = rt;
+                Log.i(TAG, "RT: '" + rt + "'");
+            }
         }
 
         // RSSI abrufen
         try {
             currentRssi = fmNative.getrssi();
+            lastRssiTimestamp = System.currentTimeMillis();
         } catch (Throwable e) {
             // Ignorieren
         }
@@ -216,17 +236,26 @@ public class RdsManager {
             if (result == 0) {
                 // PTY
                 int pty = outBundle.getInt("PTYstate", outBundle.getInt("pty", -1));
-                if (pty >= 0) currentPty = pty;
+                if (pty >= 0) {
+                    currentPty = pty;
+                    lastPtyTimestamp = System.currentTimeMillis();
+                }
 
                 // PI
                 int pi = outBundle.getInt("PIcode", outBundle.getInt("PIstate", 0));
-                if (pi != 0) currentPi = pi;
+                if (pi != 0) {
+                    currentPi = pi;
+                    lastPiTimestamp = System.currentTimeMillis();
+                }
 
                 // TP/TA
                 int tp = outBundle.getInt("TPstate", -1);
                 int ta = outBundle.getInt("TAstate", -1);
-                if (tp >= 0) currentTp = tp;
-                if (ta >= 0) currentTa = ta;
+                if (tp >= 0 || ta >= 0) {
+                    if (tp >= 0) currentTp = tp;
+                    if (ta >= 0) currentTa = ta;
+                    lastTpTaTimestamp = System.currentTimeMillis();
+                }
 
                 Log.d(TAG, "pollRds: GETRDSSTATE -> PI=0x" + Integer.toHexString(currentPi) +
                       " PTY=" + currentPty + " TP=" + currentTp + " TA=" + currentTa);
@@ -241,6 +270,7 @@ public class RdsManager {
                 int fmSvcPi = com.android.fmradio.FmService.getPi();
                 if (fmSvcPi != 0) {
                     currentPi = fmSvcPi;
+                    lastPiTimestamp = System.currentTimeMillis();
                     Log.d(TAG, "pollRds: PI from FmService callback: 0x" + Integer.toHexString(currentPi));
                 }
             } catch (Throwable e) {
@@ -269,6 +299,7 @@ public class RdsManager {
                         for (int candidatePi : new int[]{pi1, pi2, pi3, pi4}) {
                             if (candidatePi >= 0x1000 && candidatePi <= 0xFFFF) {
                                 currentPi = candidatePi;
+                                lastPiTimestamp = System.currentTimeMillis();
                                 Log.i(TAG, "pollRds: PI from RDSGETFREQPS: 0x" + Integer.toHexString(currentPi));
                                 break;
                             }
@@ -285,6 +316,7 @@ public class RdsManager {
             int lookupPi = lookupPiByPs(currentPs);
             if (lookupPi != 0) {
                 currentPi = lookupPi;
+                lastPiTimestamp = System.currentTimeMillis();
                 Log.d(TAG, "pollRds: PI from PS lookup '" + currentPs + "': 0x" + Integer.toHexString(currentPi));
             }
         }
@@ -325,6 +357,7 @@ public class RdsManager {
 
                 if (afArray != null && afArray.length > 0) {
                     currentAfList = new short[afArray.length];
+                    lastAfTimestamp = System.currentTimeMillis();
                     StringBuilder afStr = new StringBuilder();
                     for (int i = 0; i < afArray.length; i++) {
                         currentAfList[i] = (short) afArray[i];
@@ -353,6 +386,7 @@ public class RdsManager {
                 Log.d(TAG, "pollRds: native activeAf() returned: " + afFreq);
                 if (afFreq > 0) {
                     currentAfList = new short[]{afFreq};
+                    lastAfTimestamp = System.currentTimeMillis();
                     float freqMhz = afFreq / 10.0f;  // Oft in 100kHz
                     if (freqMhz >= 87.5 && freqMhz <= 108.0) {
                         Log.i(TAG, "pollRds: AF from activeAf(): " + String.format("%.1f", freqMhz));
@@ -534,17 +568,32 @@ public class RdsManager {
         currentTp = 0;
         currentTa = 0;
         currentAfList = null;
+        // Alle Timestamps zurücksetzen
+        lastPsTimestamp = 0;
+        lastPiTimestamp = 0;
+        lastPtyTimestamp = 0;
+        lastRtTimestamp = 0;
+        lastRssiTimestamp = 0;
+        lastTpTaTimestamp = 0;
+        lastAfTimestamp = 0;
     }
 
     // Getter
     public String getPs() { return currentPs; }
+    public long getPsAgeMs() { return lastPsTimestamp > 0 ? System.currentTimeMillis() - lastPsTimestamp : -1; }
     public String getRt() { return currentRt; }
+    public long getRtAgeMs() { return lastRtTimestamp > 0 ? System.currentTimeMillis() - lastRtTimestamp : -1; }
     public int getRssi() { return currentRssi; }
+    public long getRssiAgeMs() { return lastRssiTimestamp > 0 ? System.currentTimeMillis() - lastRssiTimestamp : -1; }
     public int getPi() { return currentPi; }
+    public long getPiAgeMs() { return lastPiTimestamp > 0 ? System.currentTimeMillis() - lastPiTimestamp : -1; }
     public int getPty() { return currentPty; }
+    public long getPtyAgeMs() { return lastPtyTimestamp > 0 ? System.currentTimeMillis() - lastPtyTimestamp : -1; }
     public int getTp() { return currentTp; }
     public int getTa() { return currentTa; }
+    public long getTpTaAgeMs() { return lastTpTaTimestamp > 0 ? System.currentTimeMillis() - lastTpTaTimestamp : -1; }
     public short[] getAfList() { return currentAfList; }
+    public long getAfAgeMs() { return lastAfTimestamp > 0 ? System.currentTimeMillis() - lastAfTimestamp : -1; }
     public boolean isPolling() { return isPolling; }
 
     /**

@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@color/radio_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:gravity="center_vertical">
+
+        <!-- Frequency -->
+        <TextView
+            android:id="@+id/tvFrequency"
+            android:layout_width="80dp"
+            android:layout_height="wrap_content"
+            android:text="98.4 MHz"
+            android:textColor="@color/radio_text_primary"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <!-- Station Name -->
+        <TextView
+            android:id="@+id/tvStationName"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="12dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text=""
+            android:textColor="@color/radio_text_primary"
+            android:textSize="14sp" />
+
+        <!-- RSSI -->
+        <TextView
+            android:id="@+id/tvRssi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="25 dB"
+            android:textColor="@color/radio_text_secondary"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:background="#22000000" />
+
+</LinearLayout>
