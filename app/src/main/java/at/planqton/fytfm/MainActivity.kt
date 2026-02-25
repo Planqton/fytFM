@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.widget.CheckBox
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -15,6 +16,7 @@ import androidx.recyclerview.widget.RecyclerView
 import at.planqton.fytfm.data.PresetRepository
 import at.planqton.fytfm.ui.StationAdapter
 import com.android.fmradio.FmNative
+import com.syu.jni.SyuJniNative
 
 class MainActivity : AppCompatActivity() {
 
@@ -38,6 +40,7 @@ class MainActivity : AppCompatActivity() {
     private var debugRssi: TextView? = null
     private var debugFreq: TextView? = null
     private var debugAf: TextView? = null
+    private var debugAfUsing: TextView? = null
     private var debugTpTa: TextView? = null
     private var checkRdsInfo: CheckBox? = null
     private var checkLayoutInfo: CheckBox? = null
@@ -83,6 +86,7 @@ class MainActivity : AppCompatActivity() {
         // Load last frequency from SharedPreferences
         val lastFreq = loadLastFrequency()
         frequencyScale.setFrequency(lastFreq)
+        rdsManager.setUiFrequency(lastFreq)  // Für AF-Vergleich
         updateFrequencyDisplay(lastFreq)
         updateModeButton()
         loadStationsForCurrentMode()
@@ -139,7 +143,25 @@ class MainActivity : AppCompatActivity() {
                             val freqMhz = if (freq > 875) freq / 10.0f else (87.5f + freq * 0.1f)
                             String.format("%.1f", freqMhz)
                         }.joinToString(", ")
-                    } else ""
+                    } else if (rdsManager.isAfEnabled) {
+                        "enabled"
+                    } else {
+                        "disabled"
+                    }
+
+                    // AF-Nutzung: Prüfen ob Hardware auf anderer Frequenz ist
+                    // CMD_CURRENTFREQ gibt leider keine Daten zurück, daher können wir
+                    // AF-Switches nicht erkennen. Zeigen stattdessen Hardware-Frequenz wenn verfügbar.
+                    val hwFreq = rdsManager.hardwareFrequency
+                    val afUsingStr = if (hwFreq > 0) {
+                        if (rdsManager.isUsingAlternateFrequency) {
+                            "Yes (${String.format("%.1f", hwFreq)} MHz)"
+                        } else {
+                            "No (${String.format("%.1f", hwFreq)} MHz)"
+                        }
+                    } else {
+                        "-- (not available)"
+                    }
 
                     // Header statisch
                     findViewById<android.widget.TextView>(R.id.debugHeader)?.text = "RDS Debug"
@@ -151,7 +173,8 @@ class MainActivity : AppCompatActivity() {
                         pi = piStr,
                         pty = ptyStr,
                         tpTa = tpTaStr,
-                        af = afStr
+                        af = afStr,
+                        afUsing = afUsingStr
                     )
                 }
             }
@@ -208,6 +231,7 @@ class MainActivity : AppCompatActivity() {
         debugRssi = findViewById(R.id.debugRssi)
         debugFreq = findViewById(R.id.debugFreq)
         debugAf = findViewById(R.id.debugAf)
+        debugAfUsing = findViewById(R.id.debugAfUsing)
         debugTpTa = findViewById(R.id.debugTpTa)
         checkRdsInfo = findViewById(R.id.checkRdsInfo)
         checkLayoutInfo = findViewById(R.id.checkLayoutInfo)
@@ -312,7 +336,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun updateDebugInfo(ps: String? = null, pi: String? = null, pty: String? = null,
-                        rt: String? = null, rssiStr: String? = null, freq: Float? = null, af: String? = null, tpTa: String? = null) {
+                        rt: String? = null, rssiStr: String? = null, freq: Float? = null,
+                        af: String? = null, tpTa: String? = null, afUsing: String? = null) {
         if (debugOverlay?.visibility != View.VISIBLE) return
 
         ps?.let { debugPs?.text = it.ifEmpty { "--------" } }
@@ -322,6 +347,7 @@ class MainActivity : AppCompatActivity() {
         rssiStr?.let { debugRssi?.text = it }
         freq?.let { debugFreq?.text = String.format("%.1f MHz", it) }
         af?.let { debugAf?.text = it.ifEmpty { "----" } }
+        afUsing?.let { debugAfUsing?.text = it }
         tpTa?.let { debugTpTa?.text = it }
     }
 
@@ -408,8 +434,36 @@ class MainActivity : AppCompatActivity() {
             // Favorite functionality - to be implemented
         }
 
+        android.util.Log.i("fytFM", "Setting up btnPlayPause click listener")
         btnPlayPause.setOnClickListener {
+            android.util.Log.i("fytFM", "PlayPause button clicked! isPlaying=$isPlaying isRadioOn=$isRadioOn")
             isPlaying = !isPlaying
+            // Mute/Unmute the radio
+            if (isRadioOn) {
+                val shouldMute = !isPlaying
+
+                // Method 1: sys.radio.mute system property (works as system app)
+                try {
+                    val systemPropertiesClass = Class.forName("android.os.SystemProperties")
+                    val setMethod = systemPropertiesClass.getMethod("set", String::class.java, String::class.java)
+                    setMethod.invoke(null, "sys.radio.mute", if (shouldMute) "1" else "0")
+                    android.util.Log.i("fytFM", "sys.radio.mute = ${if (shouldMute) "1" else "0"}")
+                } catch (e: Exception) {
+                    android.util.Log.e("fytFM", "Failed to set sys.radio.mute: ${e.message}")
+                }
+
+                // Method 2: Direct SyuJniNative (libsyu_jni.so)
+                if (SyuJniNative.isLibraryLoaded()) {
+                    val result = SyuJniNative.getInstance().muteAmp(shouldMute)
+                    android.util.Log.i("fytFM", "SyuJniNative.muteAmp($shouldMute) = $result")
+                } else {
+                    android.util.Log.w("fytFM", "libsyu_jni.so not loaded")
+                }
+
+                // Method 3: FmNative setMute
+                val fmResult = fmNative.setMute(shouldMute)
+                android.util.Log.i("fytFM", "FmNative.setMute($shouldMute) = $fmResult")
+            }
             updatePlayPauseButton()
         }
 
@@ -496,6 +550,92 @@ class MainActivity : AppCompatActivity() {
         switchDebug.setOnCheckedChangeListener { _, isChecked ->
             presetRepository.setShowDebugInfos(isChecked)
             updateDebugOverlayVisibility()
+        }
+
+        // LOC Local Mode toggle
+        val switchLocalMode = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchLocalMode)
+        switchLocalMode.isChecked = presetRepository.isLocalMode()
+        switchLocalMode.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setLocalMode(isChecked)
+            fmNative?.setLocalMode(isChecked)
+        }
+
+        // Mono Mode toggle
+        val switchMonoMode = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchMonoMode)
+        switchMonoMode.isChecked = presetRepository.isMonoMode()
+        switchMonoMode.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setMonoMode(isChecked)
+            fmNative?.setMonoMode(isChecked)
+        }
+
+        // Radio Area item (opens selection dialog)
+        val textRadioAreaValue = dialogView.findViewById<TextView>(R.id.textRadioAreaValue)
+        textRadioAreaValue.text = getRadioAreaName(presetRepository.getRadioArea())
+        dialogView.findViewById<View>(R.id.itemRadioArea).setOnClickListener {
+            showRadioAreaDialog { selectedArea ->
+                presetRepository.setRadioArea(selectedArea)
+                fmNative?.setRadioArea(selectedArea)
+                textRadioAreaValue.text = getRadioAreaName(selectedArea)
+            }
+        }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+    }
+
+    private fun getRadioAreaName(area: Int): String {
+        return when (area) {
+            0 -> "USA, Korea"
+            1 -> "Latin America"
+            2 -> "Europe"
+            3 -> "Russia"
+            4 -> "Japan"
+            else -> "Europe"
+        }
+    }
+
+    private fun showRadioAreaDialog(onSelected: (Int) -> Unit) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_radio_area, null)
+
+        val dialog = AlertDialog.Builder(this, R.style.TransparentDialog)
+            .setView(dialogView)
+            .create()
+
+        val currentArea = presetRepository.getRadioArea()
+
+        // Checkmarks basierend auf aktuellem Wert setzen
+        val checkUSA = dialogView.findViewById<ImageView>(R.id.checkUSA)
+        val checkLatinAmerica = dialogView.findViewById<ImageView>(R.id.checkLatinAmerica)
+        val checkEurope = dialogView.findViewById<ImageView>(R.id.checkEurope)
+        val checkRussia = dialogView.findViewById<ImageView>(R.id.checkRussia)
+        val checkJapan = dialogView.findViewById<ImageView>(R.id.checkJapan)
+
+        checkUSA.visibility = if (currentArea == 0) View.VISIBLE else View.GONE
+        checkLatinAmerica.visibility = if (currentArea == 1) View.VISIBLE else View.GONE
+        checkEurope.visibility = if (currentArea == 2) View.VISIBLE else View.GONE
+        checkRussia.visibility = if (currentArea == 3) View.VISIBLE else View.GONE
+        checkJapan.visibility = if (currentArea == 4) View.VISIBLE else View.GONE
+
+        // Click handlers
+        dialogView.findViewById<View>(R.id.itemAreaUSA).setOnClickListener {
+            onSelected(0)
+            dialog.dismiss()
+        }
+        dialogView.findViewById<View>(R.id.itemAreaLatinAmerica).setOnClickListener {
+            onSelected(1)
+            dialog.dismiss()
+        }
+        dialogView.findViewById<View>(R.id.itemAreaEurope).setOnClickListener {
+            onSelected(2)
+            dialog.dismiss()
+        }
+        dialogView.findViewById<View>(R.id.itemAreaRussia).setOnClickListener {
+            onSelected(3)
+            dialog.dismiss()
+        }
+        dialogView.findViewById<View>(R.id.itemAreaJapan).setOnClickListener {
+            onSelected(4)
+            dialog.dismiss()
         }
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
@@ -690,6 +830,8 @@ class MainActivity : AppCompatActivity() {
                 fmNative.powerOff()
                 twUtil?.radioOff()
                 isRadioOn = false
+                isPlaying = true  // Reset to "playing" state for next power on
+                updatePlayPauseButton()
             } else {
                 // Radio einschalten - REIHENFOLGE KRITISCH!
                 val frequency = frequencyScale.getFrequency()
@@ -757,9 +899,16 @@ class MainActivity : AppCompatActivity() {
                 android.util.Log.i("fytFM", "isRadioOn = $isRadioOn")
 
                 if (isRadioOn) {
+                    // Reset play state to playing (unmuted) when radio turns on
+                    isPlaying = true
+                    updatePlayPauseButton()
                     // Schritt 6: RDS aktivieren
                     android.util.Log.i("fytFM", "Step 6: RdsManager.enableRds()")
                     rdsManager.enableRds()
+
+                    // Schritt 6b: Tuner Settings anwenden
+                    android.util.Log.i("fytFM", "Step 6b: Apply tuner settings")
+                    applyTunerSettings()
 
                     // Schritt 7: RDS-Polling starten
                     android.util.Log.i("fytFM", "Step 7: startRdsPolling()")
@@ -777,12 +926,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Wendet die gespeicherten Tuner-Settings an (LOC, Mono, Area)
+     */
+    private fun applyTunerSettings() {
+        try {
+            // LOC Local Mode
+            val localMode = presetRepository.isLocalMode()
+            fmNative?.setLocalMode(localMode)
+            android.util.Log.d("fytFM", "Applied LOC mode: $localMode")
+
+            // Mono Mode
+            val monoMode = presetRepository.isMonoMode()
+            fmNative?.setMonoMode(monoMode)
+            android.util.Log.d("fytFM", "Applied Mono mode: $monoMode")
+
+            // Radio Area
+            val radioArea = presetRepository.getRadioArea()
+            fmNative?.setRadioArea(radioArea)
+            android.util.Log.d("fytFM", "Applied Radio Area: $radioArea")
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Error applying tuner settings: ${e.message}")
+        }
+    }
+
+    /**
      * Tune zu einer Frequenz.
      */
     private fun tuneToFrequency(frequency: Float) {
         android.util.Log.d("fytFM", "Tuning to $frequency MHz")
 
         try {
+            // UI-Frequenz setzen für AF-Vergleich
+            rdsManager.setUiFrequency(frequency)
             rdsManager.tune(frequency)
         } catch (e: Throwable) {
             android.util.Log.w("fytFM", "tune failed: ${e.message}")

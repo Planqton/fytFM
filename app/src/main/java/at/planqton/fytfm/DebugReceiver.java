@@ -26,6 +26,8 @@ import java.nio.charset.StandardCharsets;
  *   rssi       - Liest nur RSSI
  *   seek_up    - Seek zur nächsten Frequenz mit Signal (aufwärts)
  *   seek_down  - Seek zur nächsten Frequenz mit Signal (abwärts)
+ *   mute       - Audio stumm schalten
+ *   unmute     - Audio wieder einschalten
  *   test_all   - Führt kompletten Test durch
  *
  * EXAMPLES:
@@ -104,6 +106,18 @@ public class DebugReceiver extends BroadcastReceiver {
             case "seek_down":
                 cmdSeek(false);
                 break;
+            case "mute":
+                cmdMute(true);
+                break;
+            case "unmute":
+                cmdMute(false);
+                break;
+            case "mcu_mute":
+                cmdMcuMute(true);
+                break;
+            case "mcu_unmute":
+                cmdMcuMute(false);
+                break;
             case "twutil":
                 cmdTwUtilTest();
                 break;
@@ -118,7 +132,7 @@ public class DebugReceiver extends BroadcastReceiver {
                 break;
             default:
                 log("Unknown command: " + cmd);
-                log("Available: status, poweron, poweroff, tune, rds, rds_enable, rssi, seek_up, seek_down, test_all, twutil, sqlfm, sqlfm_probe, sqlfm_ps");
+                log("Available: status, poweron, poweroff, tune, rds, rds_enable, rssi, seek_up, seek_down, mute, unmute, test_all, twutil, sqlfm, sqlfm_probe, sqlfm_ps");
         }
 
         log("========================================");
@@ -347,6 +361,45 @@ public class DebugReceiver extends BroadcastReceiver {
             fm.tune(currentFreq);
         } catch (Throwable e) {
             // ignore
+        }
+    }
+
+    private void cmdMute(boolean mute) {
+        log("--- " + (mute ? "MUTE" : "UNMUTE") + " (FmNative) ---");
+
+        if (!FmNative.isLibraryLoaded()) {
+            log("ERROR: Library not loaded!");
+            return;
+        }
+
+        FmNative fm = FmNative.getInstance();
+
+        try {
+            int result = fm.setMute(mute);
+            log("FmNative.setMute(" + mute + ") = " + result);
+        } catch (Throwable e) {
+            log("setMute EXCEPTION: " + e.getMessage());
+        }
+    }
+
+    private void cmdMcuMute(boolean mute) {
+        log("--- " + (mute ? "MCU MUTE" : "MCU UNMUTE") + " (TWUtil) ---");
+
+        if (twUtil == null || !twUtil.isAvailable()) {
+            log("ERROR: TWUtil not available!");
+            return;
+        }
+
+        try {
+            if (mute) {
+                twUtil.mute();
+                log("TWUtil.mute() called");
+            } else {
+                twUtil.unmute();
+                log("TWUtil.unmute() called");
+            }
+        } catch (Throwable e) {
+            log("TWUtil mute EXCEPTION: " + e.getMessage());
         }
     }
 

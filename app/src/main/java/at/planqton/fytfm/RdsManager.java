@@ -21,8 +21,10 @@ public class RdsManager {
     private static final String TAG = "RdsManager";
 
     // JNI Command Codes (aus NavRadio+ FmNative.smali)
+    private static final int CMD_CURRENTFREQ = 0x12;   // 18 - Get current hardware frequency
     private static final int CMD_RDSONOFF = 0x15;      // 21 - RDS ein/aus
-    private static final int CMD_RDSAFCONFIG = 0x18;   // 24 - RDS AF Config
+    private static final int CMD_RDSAFCONFIG = 0x18;   // 24 - RDS AF Config (SET)
+    private static final int CMD_GETRDSCONFIG = 0x1a;  // 26 - Get RDS Config (might have AF!)
     private static final int CMD_GETRDSSTATE = 0x1b;   // 27 - Get RDS State (PTY, PI, TP, TA)
     private static final int CMD_RDSGETPS = 0x1e;      // 30 - PS abrufen
     private static final int CMD_RDSGETTEXT = 0x1f;    // 31 - RT abrufen
@@ -49,6 +51,9 @@ public class RdsManager {
     private int currentTp = 0;
     private int currentTa = 0;
     private short[] currentAfList = null;
+    private boolean afEnabled = false;
+    private float hardwareFrequency = 0f;  // Echte Frequenz vom FM-Chip
+    private float uiFrequency = 0f;        // Vom User eingestellte Frequenz
 
     // Timestamps für jeden RDS-Wert
     private long lastPsTimestamp = 0;
@@ -126,7 +131,10 @@ public class RdsManager {
         try {
             Bundle inBundle = new Bundle();
             Bundle outBundle = new Bundle();
-            inBundle.putInt("AFconfig", enable ? 1 : 0);
+            // Try different values: 1, 2 (RDS_ITEM_AF), or higher
+            int configValue = enable ? 2 : 0;  // RDS_ITEM_AF = 2 from FmConstants
+            inBundle.putInt("configdata", configValue);
+            Log.i(TAG, "enableAf: setting configdata=" + configValue);
 
             int result = fmNative.fmsyu_jni(CMD_RDSAFCONFIG, inBundle, outBundle);
             Log.i(TAG, "enableAf(" + enable + "): ret=" + result);
@@ -321,78 +329,64 @@ public class RdsManager {
             }
         }
 
-        // AF (Alternative Frequencies) abrufen via RDSAFCONFIG
+        // Hardware-Frequenz abfragen via CMD_CURRENTFREQ (0x12)
+        // Um zu erkennen ob sqlfm zu einer AF gewechselt hat
         try {
             Bundle inBundle = new Bundle();
             Bundle outBundle = new Bundle();
-            int result = fmNative.fmsyu_jni(CMD_RDSAFCONFIG, inBundle, outBundle);
-            Log.d(TAG, "pollRds: RDSAFCONFIG(0x18) returned: " + result);
+            int result = fmNative.fmsyu_jni(CMD_CURRENTFREQ, inBundle, outBundle);
+            Log.d(TAG, "pollRds: CMD_CURRENTFREQ returned: " + result + ", bundle size: " + outBundle.size());
 
-            if (result == 0) {
-                // Debug: Alle Keys im Bundle anzeigen
+            if (result == 0 && !outBundle.isEmpty()) {
+                // Debug: Alle Keys anzeigen
                 for (String key : outBundle.keySet()) {
                     Object val = outBundle.get(key);
-                    Log.d(TAG, "pollRds: RDSAFCONFIG bundle key='" + key + "' type=" +
-                          (val != null ? val.getClass().getSimpleName() : "null"));
+                    Log.d(TAG, "pollRds: CURRENTFREQ key='" + key + "' = " + val);
                 }
 
-                // Versuche verschiedene Key-Namen für AF-Liste
-                int[] afArray = outBundle.getIntArray("AFList");
-                if (afArray == null) afArray = outBundle.getIntArray("AFlist");
-                if (afArray == null) afArray = outBundle.getIntArray("AF");
-                if (afArray == null) afArray = outBundle.getIntArray("aflist");
-
-                // Auch short[] versuchen
-                if (afArray == null) {
-                    short[] shortAf = outBundle.getShortArray("AFList");
-                    if (shortAf == null) shortAf = outBundle.getShortArray("AF");
-                    if (shortAf == null) shortAf = outBundle.getShortArray("aflist");
-                    if (shortAf != null && shortAf.length > 0) {
-                        afArray = new int[shortAf.length];
-                        for (int i = 0; i < shortAf.length; i++) {
-                            afArray[i] = shortAf[i];
-                        }
+                // Versuche verschiedene Keys für Frequenz
+                int freqInt = outBundle.getInt("frequency", outBundle.getInt("freq", outBundle.getInt("Freq", -1)));
+                if (freqInt > 0) {
+                    // Frequenz könnte in verschiedenen Formaten sein: 1037 = 103.7, 10370 = 103.70
+                    if (freqInt > 10000) {
+                        hardwareFrequency = freqInt / 100.0f;  // 10370 -> 103.70
+                    } else {
+                        hardwareFrequency = freqInt / 10.0f;   // 1037 -> 103.7
                     }
-                }
-
-                if (afArray != null && afArray.length > 0) {
-                    currentAfList = new short[afArray.length];
-                    lastAfTimestamp = System.currentTimeMillis();
-                    StringBuilder afStr = new StringBuilder();
-                    for (int i = 0; i < afArray.length; i++) {
-                        currentAfList[i] = (short) afArray[i];
-                        if (i > 0) afStr.append(", ");
-                        // Konvertiere zu MHz
-                        float freqMhz = afArray[i] / 100.0f;
-                        if (freqMhz >= 87.5 && freqMhz <= 108.0) {
-                            afStr.append(String.format("%.1f", freqMhz));
-                        } else {
-                            afStr.append(afArray[i]);
-                        }
-                    }
-                    Log.i(TAG, "pollRds: AF list [" + afArray.length + "]: " + afStr);
-                } else {
-                    Log.d(TAG, "pollRds: No AF data in RDSAFCONFIG bundle");
+                    Log.i(TAG, "pollRds: Hardware freq = " + hardwareFrequency + " MHz (raw: " + freqInt + ")");
                 }
             }
         } catch (Throwable e) {
-            Log.w(TAG, "RDSAFCONFIG failed: " + e.getMessage());
+            Log.w(TAG, "pollRds: CMD_CURRENTFREQ failed: " + e.getMessage());
         }
 
-        // Fallback: AF via native activeAf() - gibt eine einzelne AF-Frequenz zurück
+        // AF (Alternative Frequencies) Status abrufen via CMD_GETRDSCONFIG (0x1a)
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fmNative.fmsyu_jni(CMD_GETRDSCONFIG, inBundle, outBundle);
+
+            if (result == 0 && !outBundle.isEmpty()) {
+                // AF enabled status
+                int afConfig = outBundle.getInt("AFconfig", -1);
+                if (afConfig >= 0) {
+                    afEnabled = (afConfig == 1);
+                    lastAfTimestamp = System.currentTimeMillis();
+                }
+            }
+        } catch (Throwable e) {
+            Log.d(TAG, "pollRds: GETRDSCONFIG failed: " + e.getMessage());
+        }
+
+        // Methode 2: Via native activeAf() - gibt einzelne AF zurück
         if (currentAfList == null) {
             try {
                 short afFreq = fmNative.activeAf();
-                Log.d(TAG, "pollRds: native activeAf() returned: " + afFreq);
                 if (afFreq > 0) {
                     currentAfList = new short[]{afFreq};
                     lastAfTimestamp = System.currentTimeMillis();
-                    float freqMhz = afFreq / 10.0f;  // Oft in 100kHz
-                    if (freqMhz >= 87.5 && freqMhz <= 108.0) {
-                        Log.i(TAG, "pollRds: AF from activeAf(): " + String.format("%.1f", freqMhz));
-                    } else {
-                        Log.i(TAG, "pollRds: AF from activeAf(): " + afFreq);
-                    }
+                    float freqMhz = afFreq / 10.0f;
+                    Log.i(TAG, "pollRds: AF from activeAf(): " + String.format("%.1f MHz", freqMhz));
                 }
             } catch (Throwable e) {
                 Log.d(TAG, "pollRds: activeAf() failed: " + e.getMessage());
@@ -593,8 +587,17 @@ public class RdsManager {
     public int getTa() { return currentTa; }
     public long getTpTaAgeMs() { return lastTpTaTimestamp > 0 ? System.currentTimeMillis() - lastTpTaTimestamp : -1; }
     public short[] getAfList() { return currentAfList; }
+    public boolean isAfEnabled() { return afEnabled; }
     public long getAfAgeMs() { return lastAfTimestamp > 0 ? System.currentTimeMillis() - lastAfTimestamp : -1; }
     public boolean isPolling() { return isPolling; }
+    public float getHardwareFrequency() { return hardwareFrequency; }
+    public void setUiFrequency(float freq) { this.uiFrequency = freq; }
+    public boolean isUsingAlternateFrequency() {
+        // Prüfen ob Hardware auf anderer Frequenz ist als UI zeigt
+        // Toleranz von 0.05 MHz für Rundungsfehler
+        return hardwareFrequency > 0 && uiFrequency > 0 &&
+               Math.abs(hardwareFrequency - uiFrequency) > 0.05f;
+    }
 
     /**
      * Wandelt PTY-Code in lesbaren Namen um (RDS/Europe Standard).

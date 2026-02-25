@@ -142,6 +142,33 @@
             android:fontFamily="monospace" />
     </LinearLayout>
 
+    <!-- AF (Alternative Frequencies) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="4dp">
+
+        <TextView
+            android:layout_width="60dp"
+            android:layout_height="wrap_content"
+            android:text="AF:"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/debugAf"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="--"
+            android:textColor="#00FF88"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:maxLines="2"
+            android:ellipsize="end" />
+    </LinearLayout>
+
     <!-- Frequency -->
     <LinearLayout
         android:layout_width="match_parent"

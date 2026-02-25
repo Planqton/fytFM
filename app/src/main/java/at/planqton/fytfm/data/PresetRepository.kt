@@ -97,4 +97,29 @@ class PresetRepository(context: Context) {
     fun setShowDebugInfos(enabled: Boolean) {
         settingsPrefs.edit().putBoolean("show_debug_infos", enabled).apply()
     }
+
+    // Tuner Settings
+    fun isLocalMode(): Boolean {
+        return settingsPrefs.getBoolean("local_mode", false)
+    }
+
+    fun setLocalMode(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("local_mode", enabled).apply()
+    }
+
+    fun isMonoMode(): Boolean {
+        return settingsPrefs.getBoolean("mono_mode", false)
+    }
+
+    fun setMonoMode(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("mono_mode", enabled).apply()
+    }
+
+    fun getRadioArea(): Int {
+        return settingsPrefs.getInt("radio_area", 2) // 2 = Europe
+    }
+
+    fun setRadioArea(area: Int) {
+        settingsPrefs.edit().putInt("radio_area", area).apply()
+    }
 }

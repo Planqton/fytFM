@@ -17,10 +17,21 @@ public class FmNative {
     private static final String TAG = "FmNative";
 
     // fmsyu_jni Command Codes (NavRadio-Stil)
+    public static final int CMD_GETMONOSTERO = 0x09;   // 9 - Mono/Stereo Status lesen
+    public static final int CMD_SETMONOSTERO = 0x0a;   // 10 - Mono/Stereo setzen
     public static final int CMD_GETRSSI = 0x0b;        // 11 - RSSI abrufen
+    public static final int CMD_DENSENSEDETECT = 0x0e; // 14 - LOC/Local Mode (Empfindlichkeit)
+    public static final int CMD_SETGET_AREA = 0x14;    // 20 - Radio Area/Region
     public static final int CMD_RDSONOFF = 0x15;       // 21 - RDS ein/aus
     public static final int CMD_RDSGETPS = 0x1e;       // 30 - PS Name
     public static final int CMD_RDSGETTEXT = 0x1f;     // 31 - Radio Text
+
+    // Radio Area Konstanten (basierend auf NavRadio+ Analyse)
+    public static final int AREA_USA_KOREA = 0;        // USA/Korea: 87.5-108 MHz, 200kHz step
+    public static final int AREA_LATIN_AMERICA = 1;    // Latin America
+    public static final int AREA_EUROPE = 2;           // Europe: 87.5-108 MHz, 100kHz step
+    public static final int AREA_RUSSIA = 3;           // Russia
+    public static final int AREA_JAPAN = 4;            // Japan: 76-90 MHz, 100kHz step
 
     private static FmNative instance;
     private static boolean libraryLoaded = false;
@@ -279,5 +290,143 @@ public class FmNative {
             }
         } catch (Throwable e) {}
         return null;
+    }
+
+    // ========== Tuner Settings Methoden ==========
+
+    /**
+     * Mono-Modus setzen (für Rauschunterdrückung bei schwachem Signal)
+     * @param enabled true = Mono erzwingen, false = Stereo erlauben
+     * @return true wenn erfolgreich
+     */
+    public boolean setMonoMode(boolean enabled) {
+        if (!libraryLoaded) return false;
+        try {
+            int result = setmonostero(enabled ? 1 : 0);
+            Log.i(TAG, "setMonoMode(" + enabled + ") = " + result);
+            return result == 0;
+        } catch (Throwable e) {
+            Log.e(TAG, "setMonoMode failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Mono-Modus Status abfragen
+     * @return true wenn Mono aktiv, false wenn Stereo
+     */
+    public boolean isMonoMode() {
+        if (!libraryLoaded) return false;
+        try {
+            int result = getmonostero(0);
+            Log.d(TAG, "isMonoMode() = " + result);
+            return result == 1;
+        } catch (Throwable e) {
+            Log.e(TAG, "isMonoMode failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * LOC (Local) Modus setzen - filtert schwache Sender
+     * @param enabled true = nur starke lokale Sender, false = alle Sender
+     * @return true wenn erfolgreich
+     */
+    public boolean setLocalMode(boolean enabled) {
+        if (!libraryLoaded) return false;
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            inBundle.putInt("value", enabled ? 1 : 0);
+            int result = fmsyu_jni(CMD_DENSENSEDETECT, inBundle, outBundle);
+            Log.i(TAG, "setLocalMode(" + enabled + ") = " + result);
+            return result == 0;
+        } catch (Throwable e) {
+            Log.e(TAG, "setLocalMode failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * LOC (Local) Modus Status abfragen
+     * @return true wenn LOC aktiv
+     */
+    public boolean isLocalMode() {
+        if (!libraryLoaded) return false;
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fmsyu_jni(CMD_DENSENSEDETECT, inBundle, outBundle);
+            if (result == 0) {
+                int value = outBundle.getInt("value", 0);
+                Log.d(TAG, "isLocalMode() = " + value);
+                return value == 1;
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "isLocalMode failed: " + e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * Radio Area/Region setzen
+     * @param area AREA_EUROPE, AREA_USA oder AREA_JAPAN
+     * @return true wenn erfolgreich
+     */
+    public boolean setRadioArea(int area) {
+        if (!libraryLoaded) return false;
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            inBundle.putInt("area", area);
+            int result = fmsyu_jni(CMD_SETGET_AREA, inBundle, outBundle);
+            Log.i(TAG, "setRadioArea(" + area + ") = " + result);
+            return result == 0;
+        } catch (Throwable e) {
+            Log.e(TAG, "setRadioArea failed: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Radio Area/Region abfragen
+     * @return Area-Konstante oder -1 bei Fehler
+     */
+    public int getRadioArea() {
+        if (!libraryLoaded) return -1;
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fmsyu_jni(CMD_SETGET_AREA, inBundle, outBundle);
+            if (result == 0) {
+                int area = outBundle.getInt("area", 0);
+                Log.d(TAG, "getRadioArea() = " + area);
+                return area;
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "getRadioArea failed: " + e.getMessage());
+        }
+        return -1;
+    }
+
+    /**
+     * Stereo-Status abfragen (ob aktuell Stereo empfangen wird)
+     * @return true wenn Stereo-Empfang
+     */
+    public boolean isStereoReceiving() {
+        if (!libraryLoaded) return false;
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fmsyu_jni(CMD_GETMONOSTERO, inBundle, outBundle);
+            if (result == 0) {
+                // 0 = Mono, 1 = Stereo
+                int status = outBundle.getInt("status", 0);
+                return status == 1;
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "isStereoReceiving failed: " + e.getMessage());
+        }
+        return false;
     }
 }
