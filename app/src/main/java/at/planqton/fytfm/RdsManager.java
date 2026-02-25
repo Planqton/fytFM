@@ -28,9 +28,9 @@ public class RdsManager {
     private static final int CMD_RDSGETTEXT = 0x1f;    // 31 - RT abrufen
     private static final int CMD_RDSGETFREQPS = 0x20;  // 32 - Get FreqPS (enthält PI!)
 
-    // Polling
-    private static final int POLL_INTERVAL_MS = 250;
-    private static final int RDS_READ_ITERATIONS = 8;  // Mehrere readRds() für besseren RT-Empfang
+    // Polling (optimiert für langsame RDS-Sender)
+    private static final int POLL_INTERVAL_MS = 150;
+    private static final int RDS_READ_ITERATIONS = 12;  // Mehrere readRds() für besseren RT-Empfang
 
     private final FmNative fmNative;
     private final Handler handler;

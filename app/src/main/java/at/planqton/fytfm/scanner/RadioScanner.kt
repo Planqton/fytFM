@@ -35,7 +35,7 @@ class RadioScanner(private val rdsManager: RdsManager) {
         private const val SCAN_RSSI_THRESHOLD = 15
         private const val SCAN_SETTLE_TIME_MS = 250L
         private const val SCAN_RSSI_SAMPLES = 3
-        private const val RDS_COLLECT_TIME_MS = 5000L  // 5 Sekunden pro Sender für RDS
+        private const val RDS_COLLECT_TIME_MS = 8000L  // 8 Sekunden pro Sender für RDS (optimiert für langsame Sender)
 
         // fmsyu_jni Command Codes (NavRadio-Stil)
         private const val CMD_GETRSSI = 0x0b      // 11
