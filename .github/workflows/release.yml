@@ -1,0 +1,78 @@
+name: Build and Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+
+    - name: Build Release APK
+      run: ./gradlew assembleRelease
+
+    - name: Decode Keystore
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > /tmp/keystore.jks
+
+    - name: Sign APK
+      run: |
+        # Get version from tag
+        VERSION=${GITHUB_REF#refs/tags/v}
+
+        # Find the unsigned APK
+        APK_UNSIGNED=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
+        APK_SIGNED="app/build/outputs/apk/release/fytFM-${VERSION}-signed.apk"
+
+        # Sign with apksigner
+        ${ANDROID_HOME}/build-tools/34.0.0/apksigner sign \
+          --ks /tmp/keystore.jks \
+          --ks-type JKS \
+          --ks-key-alias "${{ secrets.KEY_ALIAS }}" \
+          --ks-pass "pass:${{ secrets.KEYSTORE_PASSWORD }}" \
+          --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+          --out "$APK_SIGNED" \
+          "$APK_UNSIGNED"
+
+        echo "APK_PATH=$APK_SIGNED" >> $GITHUB_ENV
+        echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+    - name: Verify APK signature
+      run: |
+        ${ANDROID_HOME}/build-tools/34.0.0/apksigner verify --verbose "${{ env.APK_PATH }}"
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ env.APK_PATH }}
+        name: fytFM v${{ env.VERSION }}
+        body: |
+          ## fytFM v${{ env.VERSION }}
+
+          ### Installation
+          1. Download the APK
+          2. Install on your FYT Android head unit
+
+          **Note:** This app requires system-level signing to work properly.
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Cleanup
+      if: always()
+      run: rm -f /tmp/keystore.jks

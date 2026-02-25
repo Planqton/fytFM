@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Release secrets (don't commit these!)
+upload/release.ini
+upload/platform.jks
+upload/*.pk8
+upload/*.pem

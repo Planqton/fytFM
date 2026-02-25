@@ -82,6 +82,55 @@ class PresetRepository(context: Context) {
         amPrefs.edit().remove(KEY_STATIONS).apply()
     }
 
+    /**
+     * Favorisiert einen Sender. Falls der Sender nicht existiert, wird er hinzugefügt.
+     * @return true wenn Sender jetzt favorisiert ist, false wenn nicht mehr favorisiert
+     */
+    fun toggleFavorite(frequency: Float, isAM: Boolean): Boolean {
+        val stations = if (isAM) loadAmStations() else loadFmStations()
+        val existingStation = stations.find { Math.abs(it.frequency - frequency) < 0.05f }
+
+        val updatedStations: List<RadioStation>
+        val isFavoriteNow: Boolean
+
+        if (existingStation != null) {
+            // Sender existiert - Favorit togglen
+            isFavoriteNow = !existingStation.isFavorite
+            updatedStations = stations.map {
+                if (Math.abs(it.frequency - frequency) < 0.05f) {
+                    it.copy(isFavorite = isFavoriteNow)
+                } else it
+            }
+        } else {
+            // Sender existiert nicht - hinzufügen und favorisieren
+            isFavoriteNow = true
+            val newStation = RadioStation(
+                frequency = frequency,
+                name = null,
+                rssi = 0,
+                isAM = isAM,
+                isFavorite = true
+            )
+            updatedStations = (stations + newStation).sortedBy { it.frequency }
+        }
+
+        if (isAM) {
+            saveAmStations(updatedStations)
+        } else {
+            saveFmStations(updatedStations)
+        }
+
+        return isFavoriteNow
+    }
+
+    /**
+     * Prüft ob ein Sender favorisiert ist
+     */
+    fun isFavorite(frequency: Float, isAM: Boolean): Boolean {
+        val stations = if (isAM) loadAmStations() else loadFmStations()
+        return stations.find { Math.abs(it.frequency - frequency) < 0.05f }?.isFavorite ?: false
+    }
+
     fun isPowerOnStartup(): Boolean {
         return settingsPrefs.getBoolean(KEY_POWER_ON_STARTUP, false)
     }
@@ -121,5 +170,82 @@ class PresetRepository(context: Context) {
 
     fun setRadioArea(area: Int) {
         settingsPrefs.edit().putInt("radio_area", area).apply()
+    }
+
+    // Favoriten-Filter Status (FM und AM getrennt)
+    fun isShowFavoritesOnlyFm(): Boolean {
+        return settingsPrefs.getBoolean("show_favorites_only_fm", false)
+    }
+
+    fun setShowFavoritesOnlyFm(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("show_favorites_only_fm", enabled).apply()
+    }
+
+    fun isShowFavoritesOnlyAm(): Boolean {
+        return settingsPrefs.getBoolean("show_favorites_only_am", false)
+    }
+
+    fun setShowFavoritesOnlyAm(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("show_favorites_only_am", enabled).apply()
+    }
+
+    // Überschreibe favorisierte Sender beim Scan
+    fun isOverwriteFavorites(): Boolean {
+        return settingsPrefs.getBoolean("overwrite_favorites", false)
+    }
+
+    fun setOverwriteFavorites(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("overwrite_favorites", enabled).apply()
+    }
+
+    /**
+     * Fügt gescannte Sender zur Liste hinzu.
+     * Favorisierte Sender werden nur überschrieben wenn isOverwriteFavorites() true ist.
+     *
+     * @param scannedStations Die neu gescannten Sender
+     * @param isAM true für AM, false für FM
+     * @return Die zusammengeführte Liste
+     */
+    fun mergeScannedStations(scannedStations: List<RadioStation>, isAM: Boolean): List<RadioStation> {
+        val existingStations = if (isAM) loadAmStations() else loadFmStations()
+        val overwriteFavorites = isOverwriteFavorites()
+
+        // Map für schnellen Zugriff auf existierende Sender nach Frequenz
+        val existingMap = existingStations.associateBy {
+            (it.frequency * 10).toInt() // Auf 0.1 MHz Genauigkeit runden
+        }.toMutableMap()
+
+        for (scanned in scannedStations) {
+            val freqKey = (scanned.frequency * 10).toInt()
+            val existing = existingMap[freqKey]
+
+            if (existing != null) {
+                // Sender existiert bereits
+                if (existing.isFavorite && !overwriteFavorites) {
+                    // Favorit behalten, aber evtl. Name updaten wenn leer
+                    if (existing.name.isNullOrBlank() && !scanned.name.isNullOrBlank()) {
+                        existingMap[freqKey] = existing.copy(name = scanned.name, rssi = scanned.rssi)
+                    }
+                    // Sonst: Favorit komplett behalten
+                } else {
+                    // Überschreiben (aber Favorit-Status behalten wenn er einer war)
+                    existingMap[freqKey] = scanned.copy(isFavorite = existing.isFavorite)
+                }
+            } else {
+                // Neuer Sender - hinzufügen
+                existingMap[freqKey] = scanned
+            }
+        }
+
+        val mergedStations = existingMap.values.sortedBy { it.frequency }
+
+        // Speichern
+        if (isAM) {
+            saveAmStations(mergedStations)
+        } else {
+            saveFmStations(mergedStations)
+        }
+
+        return mergedStations
     }
 }

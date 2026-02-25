@@ -3,6 +3,7 @@ package at.planqton.fytfm.ui
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
@@ -55,6 +56,7 @@ class StationAdapter(
         private val container: LinearLayout = itemView.findViewById(R.id.stationContainer)
         private val tvFrequency: TextView = itemView.findViewById(R.id.tvFrequency)
         private val tvStationName: TextView = itemView.findViewById(R.id.tvStationName)
+        private val ivFavorite: ImageView = itemView.findViewById(R.id.ivFavorite)
 
         fun bind(station: RadioStation, isSelected: Boolean) {
             tvFrequency.text = station.getDisplayFrequency()
@@ -66,6 +68,9 @@ class StationAdapter(
             } else {
                 tvStationName.visibility = View.GONE
             }
+
+            // Favoriten-Stern anzeigen
+            ivFavorite.visibility = if (station.isFavorite) View.VISIBLE else View.GONE
 
             container.isSelected = isSelected
         }

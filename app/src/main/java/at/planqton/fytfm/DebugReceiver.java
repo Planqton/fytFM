@@ -47,6 +47,14 @@ public class DebugReceiver extends BroadcastReceiver {
     private static final int CMD_RDSGETTEXT = 0x1f;    // 31
     private static final int CMD_GETRSSI = 0x0b;       // 11
 
+    // RDS Extended Commands (zu testen)
+    private static final int CMD_RDSAFCONFIG = 0x18;   // 24 - RDS AF Config SET
+    private static final int CMD_RDSGETAFLIST = 0x19;  // 25 - ? AF List GET
+    private static final int CMD_GETRDSCONFIG = 0x1a;  // 26 - Get RDS Config
+    private static final int CMD_GETRDSSTATE = 0x1b;   // 27 - Get RDS State
+    private static final int CMD_RDSGETCT = 0x1c;      // 28 - ? Clock Time GET
+    private static final int CMD_RDSGETFREQPS = 0x20;  // 32 - Get FreqPS (PI)
+
     private static TWUtilHelper twUtil;
     private static boolean radioOn = false;
     private static float currentFreq = 90.4f;
@@ -130,9 +138,18 @@ public class DebugReceiver extends BroadcastReceiver {
             case "sqlfm_ps":
                 cmdSqlFmReadPs();
                 break;
+            case "rds_af":
+                cmdTestAfCommands();
+                break;
+            case "rds_ct":
+                cmdTestCtCommands();
+                break;
+            case "rds_probe":
+                cmdProbeRdsCommands();
+                break;
             default:
                 log("Unknown command: " + cmd);
-                log("Available: status, poweron, poweroff, tune, rds, rds_enable, rssi, seek_up, seek_down, mute, unmute, test_all, twutil, sqlfm, sqlfm_probe, sqlfm_ps");
+                log("Available: status, poweron, poweroff, tune, rds, rds_enable, rssi, seek_up, seek_down, mute, unmute, test_all, twutil, sqlfm, sqlfm_probe, sqlfm_ps, rds_af, rds_ct, rds_probe");
         }
 
         log("========================================");
@@ -753,6 +770,280 @@ public class DebugReceiver extends BroadcastReceiver {
             String lps = sqlFm.getLPSname(curFreq);
             log("LPSname(" + curFreq + "): '" + lps + "'");
         }
+    }
+
+    /**
+     * Testet AF (Alternative Frequencies) Commands
+     */
+    private void cmdTestAfCommands() {
+        log("--- TEST AF COMMANDS ---");
+
+        if (!FmNative.isLibraryLoaded()) {
+            log("ERROR: Library not loaded!");
+            return;
+        }
+
+        FmNative fm = FmNative.getInstance();
+
+        // 1. Native activeAf()
+        log("=== Native activeAf() ===");
+        try {
+            short af = fm.activeAf();
+            log("activeAf() = " + af + " (0x" + Integer.toHexString(af & 0xFFFF) + ")");
+            if (af > 0) {
+                float afMhz = af / 10.0f;
+                log("  -> " + afMhz + " MHz");
+            }
+        } catch (Throwable e) {
+            log("activeAf() EXCEPTION: " + e.getMessage());
+        }
+
+        // 2. CMD_RDSAFCONFIG (0x18) - AF Config SET/GET
+        log("=== fmsyu_jni(0x18) - RDSAFCONFIG ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(CMD_RDSAFCONFIG, inBundle, outBundle);
+            log("fmsyu_jni(0x18) = " + result);
+            dumpBundle("outBundle", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x18) EXCEPTION: " + e.getMessage());
+        }
+
+        // 3. CMD_RDSGETAFLIST (0x19) - vermutlich AF List GET
+        log("=== fmsyu_jni(0x19) - RDSGETAFLIST? ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(CMD_RDSGETAFLIST, inBundle, outBundle);
+            log("fmsyu_jni(0x19) = " + result);
+            dumpBundle("outBundle", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x19) EXCEPTION: " + e.getMessage());
+        }
+
+        // 4. CMD_GETRDSCONFIG (0x1a) - Get RDS Config (könnte AF enthalten)
+        log("=== fmsyu_jni(0x1a) - GETRDSCONFIG ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(CMD_GETRDSCONFIG, inBundle, outBundle);
+            log("fmsyu_jni(0x1a) = " + result);
+            dumpBundle("outBundle", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x1a) EXCEPTION: " + e.getMessage());
+        }
+
+        // 5. CMD_GETRDSSTATE (0x1b) - Get RDS State
+        log("=== fmsyu_jni(0x1b) - GETRDSSTATE ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(CMD_GETRDSSTATE, inBundle, outBundle);
+            log("fmsyu_jni(0x1b) = " + result);
+            dumpBundle("outBundle", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x1b) EXCEPTION: " + e.getMessage());
+        }
+
+        log("AF test complete");
+    }
+
+    /**
+     * Testet CT (Clock Time) Commands
+     */
+    private void cmdTestCtCommands() {
+        log("--- TEST CT (CLOCK TIME) COMMANDS ---");
+
+        if (!FmNative.isLibraryLoaded()) {
+            log("ERROR: Library not loaded!");
+            return;
+        }
+
+        FmNative fm = FmNative.getInstance();
+
+        // 1. CMD_RDSGETCT (0x1c) - vermutlich Clock Time
+        log("=== fmsyu_jni(0x1c) - RDSGETCT? ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(CMD_RDSGETCT, inBundle, outBundle);
+            log("fmsyu_jni(0x1c) = " + result);
+            dumpBundle("outBundle", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x1c) EXCEPTION: " + e.getMessage());
+        }
+
+        // 2. Probiere 0x1d
+        log("=== fmsyu_jni(0x1d) ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(0x1d, inBundle, outBundle);
+            log("fmsyu_jni(0x1d) = " + result);
+            dumpBundle("outBundle", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x1d) EXCEPTION: " + e.getMessage());
+        }
+
+        // 3. Schaue in GETRDSSTATE (0x1b) nach CT-Feldern
+        log("=== Check GETRDSSTATE for CT ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(CMD_GETRDSSTATE, inBundle, outBundle);
+            log("fmsyu_jni(0x1b) = " + result);
+            dumpBundle("outBundle (full)", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x1b) EXCEPTION: " + e.getMessage());
+        }
+
+        // 4. Probiere 0x16 und 0x17
+        log("=== fmsyu_jni(0x16) ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(0x16, inBundle, outBundle);
+            log("fmsyu_jni(0x16) = " + result);
+            dumpBundle("outBundle", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x16) EXCEPTION: " + e.getMessage());
+        }
+
+        log("=== fmsyu_jni(0x17) ===");
+        try {
+            Bundle inBundle = new Bundle();
+            Bundle outBundle = new Bundle();
+            int result = fm.fmsyu_jni(0x17, inBundle, outBundle);
+            log("fmsyu_jni(0x17) = " + result);
+            dumpBundle("outBundle", outBundle);
+        } catch (Throwable e) {
+            log("fmsyu_jni(0x17) EXCEPTION: " + e.getMessage());
+        }
+
+        log("CT test complete");
+    }
+
+    /**
+     * Probiert alle RDS-relevanten Commands durch (0x15 - 0x21)
+     */
+    private void cmdProbeRdsCommands() {
+        log("--- PROBE ALL RDS COMMANDS (0x15 - 0x21) ---");
+
+        if (!FmNative.isLibraryLoaded()) {
+            log("ERROR: Library not loaded!");
+            return;
+        }
+
+        FmNative fm = FmNative.getInstance();
+
+        for (int cmd = 0x15; cmd <= 0x21; cmd++) {
+            log("=== fmsyu_jni(0x" + Integer.toHexString(cmd) + ") ===");
+            try {
+                Bundle inBundle = new Bundle();
+                Bundle outBundle = new Bundle();
+                int result = fm.fmsyu_jni(cmd, inBundle, outBundle);
+                log("  result = " + result);
+                if (outBundle.size() > 0) {
+                    dumpBundle("  outBundle", outBundle);
+                } else {
+                    log("  outBundle: empty");
+                }
+            } catch (Throwable e) {
+                log("  EXCEPTION: " + e.getMessage());
+            }
+        }
+
+        log("Probe complete");
+    }
+
+    /**
+     * Gibt alle Keys und Werte eines Bundles aus
+     */
+    private void dumpBundle(String name, Bundle bundle) {
+        if (bundle == null || bundle.isEmpty()) {
+            log(name + ": empty");
+            return;
+        }
+
+        log(name + " (" + bundle.size() + " keys):");
+        for (String key : bundle.keySet()) {
+            Object value = bundle.get(key);
+            if (value instanceof byte[]) {
+                byte[] bytes = (byte[]) value;
+                log("  " + key + " = byte[" + bytes.length + "]: " + bytesToHex(bytes));
+                // Versuche als String zu interpretieren
+                String asString = new String(bytes, StandardCharsets.UTF_8).trim();
+                if (!asString.isEmpty() && isPrintable(asString)) {
+                    log("    -> \"" + asString + "\"");
+                }
+                // Versuche als short[]-Frequenzliste zu interpretieren
+                if (bytes.length >= 2 && bytes.length % 2 == 0) {
+                    StringBuilder freqList = new StringBuilder();
+                    for (int i = 0; i < bytes.length; i += 2) {
+                        int freq = (bytes[i] & 0xFF) | ((bytes[i + 1] & 0xFF) << 8);
+                        if (freq >= 875 && freq <= 1080) {
+                            freqList.append(String.format("%.1f ", freq / 10.0f));
+                        }
+                    }
+                    if (freqList.length() > 0) {
+                        log("    -> Frequencies: " + freqList.toString().trim());
+                    }
+                }
+            } else if (value instanceof short[]) {
+                short[] shorts = (short[]) value;
+                StringBuilder sb = new StringBuilder();
+                for (short s : shorts) {
+                    sb.append(s).append(" ");
+                }
+                log("  " + key + " = short[" + shorts.length + "]: " + sb.toString().trim());
+                // Als Frequenzen interpretieren
+                StringBuilder freqList = new StringBuilder();
+                for (short s : shorts) {
+                    if (s >= 875 && s <= 1080) {
+                        freqList.append(String.format("%.1f ", s / 10.0f));
+                    }
+                }
+                if (freqList.length() > 0) {
+                    log("    -> Frequencies: " + freqList.toString().trim());
+                }
+            } else if (value instanceof int[]) {
+                int[] ints = (int[]) value;
+                StringBuilder sb = new StringBuilder();
+                for (int i : ints) {
+                    sb.append(i).append(" ");
+                }
+                log("  " + key + " = int[" + ints.length + "]: " + sb.toString().trim());
+            } else if (value instanceof float[]) {
+                float[] floats = (float[]) value;
+                StringBuilder sb = new StringBuilder();
+                for (float f : floats) {
+                    sb.append(f).append(" ");
+                }
+                log("  " + key + " = float[" + floats.length + "]: " + sb.toString().trim());
+                // Als Frequenzen interpretieren
+                StringBuilder freqList = new StringBuilder();
+                for (float f : floats) {
+                    if (f >= 87.5f && f <= 108.0f) {
+                        freqList.append(String.format("%.1f ", f));
+                    } else if (f >= 875f && f <= 1080f) {
+                        freqList.append(String.format("%.1f ", f / 10.0f));
+                    }
+                }
+                if (freqList.length() > 0) {
+                    log("    -> Frequencies: " + freqList.toString().trim());
+                }
+            } else {
+                log("  " + key + " = " + value + " (" + (value != null ? value.getClass().getSimpleName() : "null") + ")");
+            }
+        }
+    }
+
+    private boolean isPrintable(String s) {
+        for (char c : s.toCharArray()) {
+            if (c < 32 && c != '\n' && c != '\r' && c != '\t') return false;
+        }
+        return true;
     }
 
     private void log(String msg) {

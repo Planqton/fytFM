@@ -25,14 +25,30 @@
         android:textSize="11sp"
         android:visibility="gone" />
 
-    <!-- Frequency -->
-    <TextView
-        android:id="@+id/tvFrequency"
+    <!-- Frequency with optional favorite star -->
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="98.4"
-        android:textColor="@color/radio_text_primary"
-        android:textSize="14sp" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:id="@+id/ivFavorite"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:layout_marginEnd="4dp"
+            android:src="@drawable/ic_star_small"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/tvFrequency"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="98.4"
+            android:textColor="@color/radio_text_primary"
+            android:textSize="14sp" />
+
+    </LinearLayout>
 
     <!-- RSSI Signal Strength -->
     <TextView

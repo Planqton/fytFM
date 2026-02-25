@@ -13,7 +13,10 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import android.widget.ProgressBar
 import at.planqton.fytfm.data.PresetRepository
+import at.planqton.fytfm.data.UpdateRepository
+import at.planqton.fytfm.data.UpdateState
 import at.planqton.fytfm.ui.StationAdapter
 import com.android.fmradio.FmNative
 import com.syu.jni.SyuJniNative
@@ -53,10 +56,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fmNative: FmNative
     private lateinit var rdsManager: RdsManager
     private lateinit var radioScanner: at.planqton.fytfm.scanner.RadioScanner
+    private lateinit var updateRepository: UpdateRepository
     private var twUtil: TWUtilHelper? = null
 
     private var isPlaying = true
     private var isRadioOn = false
+    private var showFavoritesOnly = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,6 +71,7 @@ class MainActivity : AppCompatActivity() {
         fmNative = FmNative.getInstance()
         rdsManager = RdsManager(fmNative)
         radioScanner = at.planqton.fytfm.scanner.RadioScanner(rdsManager)
+        updateRepository = UpdateRepository(this)
 
         // Initialize TWUtil for MCU communication - critical for RDS!
         twUtil = TWUtilHelper()
@@ -89,8 +95,10 @@ class MainActivity : AppCompatActivity() {
         rdsManager.setUiFrequency(lastFreq)  // Für AF-Vergleich
         updateFrequencyDisplay(lastFreq)
         updateModeButton()
+        loadFavoritesFilterState()
         loadStationsForCurrentMode()
         updatePowerButton()
+        updateFavoriteButton()
 
         // Auto power on if enabled in settings
         if (presetRepository.isPowerOnStartup() && !isRadioOn) {
@@ -379,11 +387,15 @@ class MainActivity : AppCompatActivity() {
             tuneToFrequency(frequency)
             // Save frequency to SharedPreferences
             saveLastFrequency(frequency)
+            // Update favorite button
+            updateFavoriteButton()
         }
 
         frequencyScale.setOnModeChangeListener { mode ->
             updateModeButton()
+            loadFavoritesFilterState()  // Filter-Status für neuen Modus laden
             loadStationsForCurrentMode()
+            updateFavoriteButton()
         }
 
         // Explizit longClickable aktivieren
@@ -431,7 +443,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnFavorite.setOnClickListener {
-            // Favorite functionality - to be implemented
+            toggleCurrentStationFavorite()
         }
 
         android.util.Log.i("fytFM", "Setting up btnPlayPause click listener")
@@ -494,7 +506,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btnSkipNext).setOnClickListener {
             skipToNextStation()
         }
-        findViewById<ImageButton>(R.id.btnFolder).setOnClickListener { }
+        findViewById<ImageButton>(R.id.btnFolder).setOnClickListener {
+            toggleFavoritesFilter()
+        }
         findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
             showSettingsDialog()
         }
@@ -579,8 +593,117 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Overwrite Favorites toggle
+        val switchOverwriteFavorites = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchOverwriteFavorites)
+        switchOverwriteFavorites.isChecked = presetRepository.isOverwriteFavorites()
+        switchOverwriteFavorites.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setOverwriteFavorites(isChecked)
+        }
+
+        // App Version / Update
+        val itemAppVersion = dialogView.findViewById<View>(R.id.itemAppVersion)
+        val textVersionValue = dialogView.findViewById<TextView>(R.id.textVersionValue)
+        val progressUpdate = dialogView.findViewById<ProgressBar>(R.id.progressUpdate)
+        val ivVersionChevron = dialogView.findViewById<ImageView>(R.id.ivVersionChevron)
+
+        // Aktuelle Version anzeigen
+        textVersionValue.text = "v${updateRepository.getCurrentVersion()} - Tippen zum Prüfen"
+
+        // State Listener für UI-Updates
+        updateRepository.setStateListener { state ->
+            runOnUiThread {
+                when (state) {
+                    is UpdateState.Idle -> {
+                        progressUpdate.visibility = View.GONE
+                        ivVersionChevron.visibility = View.VISIBLE
+                        textVersionValue.text = "v${updateRepository.getCurrentVersion()} - Tippen zum Prüfen"
+                    }
+                    is UpdateState.Checking -> {
+                        progressUpdate.visibility = View.VISIBLE
+                        ivVersionChevron.visibility = View.GONE
+                        textVersionValue.text = "Prüfe auf Updates..."
+                    }
+                    is UpdateState.NoUpdate -> {
+                        progressUpdate.visibility = View.GONE
+                        ivVersionChevron.visibility = View.VISIBLE
+                        textVersionValue.text = "Aktuell (v${updateRepository.getCurrentVersion()})"
+                    }
+                    is UpdateState.UpdateAvailable -> {
+                        progressUpdate.visibility = View.GONE
+                        ivVersionChevron.visibility = View.VISIBLE
+                        textVersionValue.text = "Update verfügbar: v${state.info.latestVersion}"
+                    }
+                    is UpdateState.Downloading -> {
+                        progressUpdate.visibility = View.VISIBLE
+                        ivVersionChevron.visibility = View.GONE
+                        textVersionValue.text = "Wird heruntergeladen..."
+                    }
+                    is UpdateState.ReadyToInstall -> {
+                        progressUpdate.visibility = View.GONE
+                        ivVersionChevron.visibility = View.VISIBLE
+                        textVersionValue.text = "Update bereit - Tippen zum Installieren"
+                    }
+                    is UpdateState.Error -> {
+                        progressUpdate.visibility = View.GONE
+                        ivVersionChevron.visibility = View.VISIBLE
+                        textVersionValue.text = "Fehler: ${state.message}"
+                    }
+                }
+            }
+        }
+
+        itemAppVersion.setOnClickListener {
+            when (val state = updateRepository.updateState) {
+                is UpdateState.Idle, is UpdateState.NoUpdate, is UpdateState.Error -> {
+                    updateRepository.checkForUpdates()
+                }
+                is UpdateState.UpdateAvailable -> {
+                    // Download starten
+                    AlertDialog.Builder(this)
+                        .setTitle("Update verfügbar")
+                        .setMessage("Version ${state.info.latestVersion} ist verfügbar.\n\nJetzt herunterladen?")
+                        .setPositiveButton("Herunterladen") { _, _ ->
+                            updateRepository.downloadUpdate(state.info.downloadUrl)
+                        }
+                        .setNegativeButton("Später", null)
+                        .show()
+                }
+                is UpdateState.ReadyToInstall -> {
+                    updateRepository.installUpdate(state.apkUri)
+                }
+                else -> {
+                    // Checking or Downloading - nichts tun
+                }
+            }
+        }
+
+        // Close App button
+        dialogView.findViewById<TextView>(R.id.btnCloseApp).setOnClickListener {
+            dialog.dismiss()
+            closeApp()
+        }
+
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
+    }
+
+    /**
+     * Beendet die App vollständig (Radio aus, Prozess beenden)
+     */
+    private fun closeApp() {
+        // Radio ausschalten
+        if (isRadioOn) {
+            stopRdsPolling()
+            fmNative.powerOff()
+            twUtil?.radioOff()
+        }
+        twUtil?.close()
+
+        // Activity beenden
+        finishAffinity()
+
+        // Prozess beenden
+        android.os.Process.killProcess(android.os.Process.myPid())
     }
 
     private fun getRadioAreaName(area: Int): String {
@@ -721,8 +844,9 @@ class MainActivity : AppCompatActivity() {
             this,
             radioScanner,
             onStationsAdded = { stations ->
-                // Gefundene Sender zu den Presets hinzufügen
-                saveStations(stations)
+                // Gefundene Sender mit bestehenden zusammenführen (Favoriten schützen)
+                val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                presetRepository.mergeScannedStations(stations, isAM)
                 loadStationsForCurrentMode()
             },
             onStationSelected = { station ->
@@ -744,11 +868,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun loadStationsForCurrentMode() {
-        val stations = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+        val allStations = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
             presetRepository.loadFmStations()
         } else {
             presetRepository.loadAmStations()
         }
+
+        // Filter anwenden wenn aktiviert
+        val stations = if (showFavoritesOnly) {
+            allStations.filter { it.isFavorite }
+        } else {
+            allStations
+        }
+
         stationAdapter.setStations(stations)
         stationAdapter.setSelectedFrequency(frequencyScale.getFrequency())
     }
@@ -1043,10 +1175,88 @@ class MainActivity : AppCompatActivity() {
         btnPower.alpha = if (isRadioOn) 1.0f else 0.5f
     }
 
+    /**
+     * Lädt den Favoriten-Filter-Status für den aktuellen Modus (FM/AM)
+     */
+    private fun loadFavoritesFilterState() {
+        showFavoritesOnly = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+            presetRepository.isShowFavoritesOnlyFm()
+        } else {
+            presetRepository.isShowFavoritesOnlyAm()
+        }
+        updateFolderButton()
+    }
+
+    /**
+     * Aktualisiert das Herz-Icon basierend auf dem aktuellen Sender
+     */
+    private fun updateFavoriteButton() {
+        val frequency = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val isFavorite = presetRepository.isFavorite(frequency, isAM)
+
+        val iconRes = if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
+        btnFavorite.setImageResource(iconRes)
+    }
+
+    /**
+     * Aktualisiert das Folder-Icon basierend auf dem Filter-Status
+     */
+    private fun updateFolderButton() {
+        val btnFolder = findViewById<ImageButton>(R.id.btnFolder)
+        val iconRes = if (showFavoritesOnly) R.drawable.ic_folder_star else R.drawable.ic_folder
+        btnFolder.setImageResource(iconRes)
+    }
+
+    /**
+     * Favorisiert/Unfavorisiert den aktuellen Sender
+     */
+    private fun toggleCurrentStationFavorite() {
+        val frequency = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+
+        val isFavoriteNow = presetRepository.toggleFavorite(frequency, isAM)
+
+        // UI aktualisieren
+        updateFavoriteButton()
+        loadStationsForCurrentMode()
+
+        // Toast anzeigen
+        val message = if (isFavoriteNow) {
+            "Sender zu Favoriten hinzugefügt"
+        } else {
+            "Sender aus Favoriten entfernt"
+        }
+        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Schaltet zwischen "Alle Sender" und "Nur Favoriten" um
+     */
+    private fun toggleFavoritesFilter() {
+        showFavoritesOnly = !showFavoritesOnly
+
+        // Filter-Status speichern (FM und AM getrennt)
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+            presetRepository.setShowFavoritesOnlyFm(showFavoritesOnly)
+        } else {
+            presetRepository.setShowFavoritesOnlyAm(showFavoritesOnly)
+        }
+
+        // UI aktualisieren
+        updateFolderButton()
+        loadStationsForCurrentMode()
+
+        // Toast anzeigen
+        val message = if (showFavoritesOnly) "Nur Favoriten" else "Alle Sender"
+        android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         stopRdsPolling()
         twUtil?.close()
+        updateRepository.destroy()
         // Turn off radio when app closes
         if (isRadioOn) {
             fmNative.powerOff()
