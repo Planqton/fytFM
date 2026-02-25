@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/debugChecklistOverlay"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/debug_overlay_background"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:minWidth="160dp"
+    android:visibility="gone">
+
+    <!-- Header -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Debug Windows"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <!-- RDS Info Checkbox -->
+    <CheckBox
+        android:id="@+id/checkRdsInfo"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="RDS Info"
+        android:textColor="#FFFFFF"
+        android:textSize="13sp"
+        android:buttonTint="#FFFFFF"
+        android:checked="true" />
+
+    <!-- Future debug windows can be added here -->
+
+</LinearLayout>

@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">fytFM</string>
+    <string name="default_frequency">FM 98.40</string>
+    <string name="prev_station">Previous station</string>
+    <string name="next_station">Next station</string>
+    <string name="favorite">Favorite</string>
+    <string name="fm_mode">FM Mode</string>
+    <string name="search">Search</string>
+    <string name="skip_previous">Skip previous</string>
+    <string name="skip_next">Skip next</string>
+    <string name="play_pause">Play/Pause</string>
+    <string name="folder">Folder</string>
+    <string name="settings">Settings</string>
+</resources>

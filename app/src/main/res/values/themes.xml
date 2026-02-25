@@ -1,0 +1,44 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.FytFM" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Primary brand color. -->
+        <item name="colorPrimary">@color/radio_background</item>
+        <item name="colorPrimaryVariant">@color/radio_background</item>
+        <item name="colorOnPrimary">@color/radio_text_primary</item>
+        <!-- Secondary brand color. -->
+        <item name="colorSecondary">@color/radio_indicator</item>
+        <item name="colorSecondaryVariant">@color/radio_indicator</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <!-- Status bar color. -->
+        <item name="android:statusBarColor">@color/radio_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <!-- Navigation bar -->
+        <item name="android:navigationBarColor">@color/radio_background</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <!-- Background -->
+        <item name="android:windowBackground">@color/radio_background</item>
+        <!-- Dialog Theme -->
+        <item name="alertDialogTheme">@style/FytFM.AlertDialog</item>
+        <item name="android:alertDialogTheme">@style/FytFM.AlertDialog</item>
+    </style>
+
+    <!-- AlertDialog Style -->
+    <style name="FytFM.AlertDialog" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
+        <item name="colorPrimary">#333333</item>
+        <item name="colorAccent">#333333</item>
+        <item name="buttonBarPositiveButtonStyle">@style/FytFM.DialogButton</item>
+        <item name="buttonBarNegativeButtonStyle">@style/FytFM.DialogButton</item>
+        <item name="buttonBarNeutralButtonStyle">@style/FytFM.DialogButton</item>
+    </style>
+
+    <style name="FytFM.DialogButton" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:textColor">#333333</item>
+    </style>
+
+    <!-- Transparent Dialog Style -->
+    <style name="TransparentDialog" parent="Theme.MaterialComponents.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

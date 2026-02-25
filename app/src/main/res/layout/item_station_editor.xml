@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:orientation="horizontal"
+        android:paddingStart="24dp"
+        android:paddingEnd="16dp"
+        android:gravity="center_vertical">
+
+        <!-- Download/Logo Icon -->
+        <ImageView
+            android:id="@+id/ivStationLogo"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="8dp"
+            android:src="@drawable/ic_download"
+            android:background="@drawable/icon_background_circle" />
+
+        <!-- Station Info -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="16dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvFrequency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="FM 88.80"
+                android:textColor="#333333"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvStationName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Uncustomised Name"
+                android:textColor="#888888"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
+        <!-- Action Buttons -->
+        <ImageButton
+            android:id="@+id/btnEdit"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/button_icon_background"
+            android:src="@drawable/ic_edit"
+            android:scaleType="center"
+            android:contentDescription="Edit" />
+
+        <ImageButton
+            android:id="@+id/btnFavorite"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/button_icon_background"
+            android:src="@drawable/ic_favorite_border"
+            android:scaleType="center"
+            android:contentDescription="Favorite" />
+
+        <ImageButton
+            android:id="@+id/btnDelete"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/button_icon_background"
+            android:src="@drawable/ic_delete"
+            android:scaleType="center"
+            android:contentDescription="Delete" />
+
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="88dp"
+        android:layout_marginEnd="16dp"
+        android:background="#E8E8E8" />
+
+</LinearLayout>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/radio_background"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <!-- Frequency Display -->
+    <TextView
+        android:id="@+id/tvFrequencyPip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="FM 98.40"
+        android:textColor="@color/radio_text_primary"
+        android:textSize="28sp"
+        android:textStyle="bold" />
+
+    <!-- Frequency Scale -->
+    <at.planqton.fytfm.FrequencyScaleView
+        android:id="@+id/frequencyScalePip"
+        android:layout_width="match_parent"
+        android:layout_height="80dp"
+        android:layout_marginTop="8dp" />
+
+    <!-- Playback Controls -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/btnSkipPrevPip"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@null"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_skip_previous" />
+
+        <ImageButton
+            android:id="@+id/btnPlayPausePip"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:background="@drawable/pip_play_background"
+            android:padding="16dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_pause" />
+
+        <ImageButton
+            android:id="@+id/btnSkipNextPip"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@null"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_skip_next" />
+
+    </LinearLayout>
+
+</LinearLayout>

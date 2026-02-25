@@ -1,0 +1,531 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
+
+<LinearLayout
+    android:id="@+id/rootLayout"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/radio_background"
+    android:gravity="center"
+    android:orientation="vertical">
+
+    <!-- Top Bar - Power Button + Line -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="60dp"
+        android:layout_marginTop="20dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp">
+
+        <ImageButton
+            android:id="@+id/btnPower"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Power"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_power" />
+
+        <!-- Thin horizontal line -->
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"
+            android:layout_marginStart="20dp"
+            android:background="#CCCCCC" />
+
+    </LinearLayout>
+
+    <!-- Main Content Area -->
+    <LinearLayout
+        android:id="@+id/mainContentArea"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:paddingLeft="25dp"
+        android:paddingRight="25dp">
+
+        <!-- Frequency Row: < Heart FM_XX.XX > -->
+        <LinearLayout
+            android:id="@+id/frequencyRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnPrevStation"
+                android:layout_width="115dp"
+                android:layout_height="115dp"
+                android:layout_gravity="center_vertical"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/prev_station"
+                android:padding="25dp"
+                android:scaleType="fitXY"
+                android:src="@drawable/ic_chevron_left" />
+
+            <ImageButton
+                android:id="@+id/btnFavorite"
+                android:layout_width="115dp"
+                android:layout_height="115dp"
+                android:layout_gravity="center_vertical"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/favorite"
+                android:padding="25dp"
+                android:scaleType="fitXY"
+                android:src="@drawable/ic_favorite_border" />
+
+            <TextView
+                android:id="@+id/tvFrequency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:minWidth="480dp"
+                android:text="@string/default_frequency"
+                android:textColor="@color/radio_text_primary"
+                android:textSize="99sp" />
+
+            <ImageButton
+                android:id="@+id/btnNextStation"
+                android:layout_width="115dp"
+                android:layout_height="115dp"
+                android:layout_gravity="center_vertical"
+                android:layout_marginStart="55dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/next_station"
+                android:padding="25dp"
+                android:scaleType="fitXY"
+                android:src="@drawable/ic_chevron_right" />
+
+        </LinearLayout>
+
+        <!-- Frequency Scale -->
+        <at.planqton.fytfm.FrequencyScaleView
+            android:id="@+id/frequencyScale"
+            android:layout_width="match_parent"
+            android:layout_height="120dp"
+            android:layout_marginTop="16dp" />
+
+    </LinearLayout>
+
+    <!-- Combined Control Bar - FM, Search, SkipPrev, Play, SkipNext, Folder, Settings -->
+    <LinearLayout
+        android:id="@+id/controlBar"
+        android:layout_width="wrap_content"
+        android:layout_height="100dp"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <ImageButton
+            android:id="@+id/btnFM"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/fm_mode"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_fm" />
+
+        <ImageButton
+            android:id="@+id/btnSearch"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/search"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_search" />
+
+        <ImageButton
+            android:id="@+id/btnSkipPrev"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/skip_previous"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_skip_previous" />
+
+        <ImageButton
+            android:id="@+id/btnPlayPause"
+            android:layout_width="92dp"
+            android:layout_height="92dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/pip_play_background"
+            android:contentDescription="@string/play_pause"
+            android:padding="20dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_pause" />
+
+        <ImageButton
+            android:id="@+id/btnSkipNext"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/skip_next"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_skip_next" />
+
+        <ImageButton
+            android:id="@+id/btnFolder"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/folder"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_folder" />
+
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings"
+            android:padding="14dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_settings" />
+
+    </LinearLayout>
+
+    <!-- Hidden playbackControls for PiP mode compatibility -->
+    <LinearLayout
+        android:id="@+id/playbackControls"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        android:orientation="horizontal" />
+
+    <!-- Station Presets Bar -->
+    <LinearLayout
+        android:id="@+id/stationBar"
+        android:layout_width="match_parent"
+        android:layout_height="70dp"
+        android:layout_marginBottom="16dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp">
+
+        <TextView
+            android:id="@+id/tvAllList"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="8dp"
+            android:text="All list"
+            android:textColor="@color/radio_text_secondary"
+            android:textSize="14sp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/stationRecycler"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:paddingStart="8dp"
+            android:paddingEnd="16dp" />
+
+    </LinearLayout>
+
+</LinearLayout>
+
+    <!-- Debug Checklist Panel - draggable -->
+    <LinearLayout
+        android:id="@+id/debugChecklistOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:background="@drawable/debug_overlay_background"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:minWidth="160dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Debug Windows"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/checkRdsInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RDS Info"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:buttonTint="#FFFFFF"
+            android:checked="true" />
+
+        <CheckBox
+            android:id="@+id/checkLayoutInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Layout Info"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:buttonTint="#FFFFFF"
+            android:checked="false" />
+    </LinearLayout>
+
+    <!-- Layout Info Debug Overlay -->
+    <LinearLayout
+        android:id="@+id/debugLayoutOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|bottom"
+        android:layout_margin="16dp"
+        android:background="@drawable/debug_overlay_background"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Layout Info"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/debugLayoutName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="layout (default)"
+            android:textColor="#00FF00"
+            android:textSize="16sp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/debugScreenInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Screen: 0x0"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp"
+            android:fontFamily="monospace"
+            android:layout_marginTop="4dp" />
+
+        <TextView
+            android:id="@+id/debugDensityInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Density: 0"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp"
+            android:fontFamily="monospace" />
+    </LinearLayout>
+
+    <!-- RDS Debug Overlay - draggable, semi-transparent -->
+    <LinearLayout
+        android:id="@+id/debugOverlay"
+        android:layout_width="700dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end"
+        android:layout_margin="16dp"
+        android:background="@drawable/debug_overlay_background"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RDS Debug"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="PS:"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp" />
+            <TextView
+                android:id="@+id/debugPs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--------"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="PI:"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp" />
+            <TextView
+                android:id="@+id/debugPi"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="----"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="PTY:"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp" />
+            <TextView
+                android:id="@+id/debugPty"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="RT:"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp" />
+            <TextView
+                android:id="@+id/debugRt"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="--------------------------------"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:maxLines="4"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="RSSI:"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp" />
+            <TextView
+                android:id="@+id/debugRssi"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-- dBm"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="Freq:"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp" />
+            <TextView
+                android:id="@+id/debugFreq"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--.- MHz"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="AF:"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp" />
+            <TextView
+                android:id="@+id/debugAf"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="----"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="4dp">
+            <TextView
+                android:layout_width="60dp"
+                android:layout_height="wrap_content"
+                android:text="TP/TA:"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp" />
+            <TextView
+                android:id="@+id/debugTpTa"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="TP=- TA=-"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+    </LinearLayout>
+
+</FrameLayout>
