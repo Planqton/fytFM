@@ -24,6 +24,8 @@ import java.nio.charset.StandardCharsets;
  *   rds        - Liest RDS-Daten (PS, RT, RSSI)
  *   rds_enable - Aktiviert RDS
  *   rssi       - Liest nur RSSI
+ *   seek_up    - Seek zur nächsten Frequenz mit Signal (aufwärts)
+ *   seek_down  - Seek zur nächsten Frequenz mit Signal (abwärts)
  *   test_all   - Führt kompletten Test durch
  *
  * EXAMPLES:
@@ -96,6 +98,12 @@ public class DebugReceiver extends BroadcastReceiver {
             case "test_all":
                 cmdTestAll(freq != null ? Float.parseFloat(freq) : 90.4f);
                 break;
+            case "seek_up":
+                cmdSeek(true);
+                break;
+            case "seek_down":
+                cmdSeek(false);
+                break;
             case "twutil":
                 cmdTwUtilTest();
                 break;
@@ -110,7 +118,7 @@ public class DebugReceiver extends BroadcastReceiver {
                 break;
             default:
                 log("Unknown command: " + cmd);
-                log("Available: status, poweron, poweroff, tune, rds, rds_enable, rssi, test_all, twutil, sqlfm, sqlfm_probe, sqlfm_ps");
+                log("Available: status, poweron, poweroff, tune, rds, rds_enable, rssi, seek_up, seek_down, test_all, twutil, sqlfm, sqlfm_probe, sqlfm_ps");
         }
 
         log("========================================");
@@ -260,6 +268,85 @@ public class DebugReceiver extends BroadcastReceiver {
             log("RSSI after tune: " + rssi + " dBm");
         } catch (Throwable e) {
             log("RSSI read failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Manueller Seek zum nächsten Sender mit Signal.
+     * Native seek() hat JNI-Bugs, daher manuell implementiert.
+     */
+    private void cmdSeek(boolean seekUp) {
+        log("--- SEEK " + (seekUp ? "UP" : "DOWN") + " from " + currentFreq + " MHz ---");
+
+        if (!FmNative.isLibraryLoaded()) {
+            log("ERROR: Library not loaded!");
+            return;
+        }
+
+        if (!radioOn) {
+            log("ERROR: Radio is OFF! Use 'poweron' first.");
+            return;
+        }
+
+        FmNative fm = FmNative.getInstance();
+
+        float step = 0.1f;
+        float minFreq = 87.5f;
+        float maxFreq = 108.0f;
+        int rssiThreshold = 200;  // 0-255 Skala, ~200+ = gutes Signal
+
+        float freq = seekUp ? currentFreq + step : currentFreq - step;
+        int attempts = 0;
+        int maxAttempts = 205;  // Ganzes Band
+
+        log("Starting seek... (threshold: " + rssiThreshold + " dBm)");
+
+        while (attempts < maxAttempts) {
+            // Wrap around
+            if (freq > maxFreq) freq = minFreq;
+            if (freq < minFreq) freq = maxFreq;
+
+            // Tune
+            try {
+                fm.tune(freq);
+            } catch (Throwable e) {
+                log("tune(" + freq + ") EXCEPTION: " + e.getMessage());
+                break;
+            }
+
+            // Warten
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                break;
+            }
+
+            // RSSI messen
+            int rssi = 0;
+            try {
+                rssi = fm.getrssi();
+            } catch (Throwable e) {
+                // ignore
+            }
+
+            log(String.format("  %.1f MHz -> RSSI %d", freq, rssi));
+
+            if (rssi >= rssiThreshold) {
+                log("*** FOUND: " + String.format("%.1f", freq) + " MHz (RSSI: " + rssi + ") ***");
+                currentFreq = freq;
+                return;
+            }
+
+            freq = seekUp ? freq + step : freq - step;
+            attempts++;
+        }
+
+        log("No station found after " + attempts + " attempts");
+        // Zurück zur ursprünglichen Frequenz
+        try {
+            fm.tune(currentFreq);
+        } catch (Throwable e) {
+            // ignore
         }
     }
 

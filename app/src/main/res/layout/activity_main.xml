@@ -69,6 +69,7 @@
                 android:layout_gravity="center_vertical"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/prev_station"
+                android:longClickable="true"
                 android:padding="25dp"
                 android:scaleType="fitXY"
                 android:src="@drawable/ic_chevron_left" />
@@ -104,6 +105,7 @@
                 android:layout_marginStart="55dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/next_station"
+                android:longClickable="true"
                 android:padding="25dp"
                 android:scaleType="fitXY"
                 android:src="@drawable/ic_chevron_right" />

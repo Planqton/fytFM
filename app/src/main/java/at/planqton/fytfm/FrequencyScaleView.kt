@@ -92,11 +92,13 @@ class FrequencyScaleView @JvmOverloads constructor(
     }
 
     private fun drawFMScale(canvas: Canvas, availableWidth: Float, scaleY: Float, frequencyRange: Float) {
-        var freq = FM_MIN_FREQUENCY
-        while (freq <= FM_MAX_FREQUENCY) {
+        // Zeichne Ticks mit Integer-Arithmetik um Float-Präzisionsfehler zu vermeiden
+        // freqInt ist die Frequenz * 10 (875 = 87.5 MHz, 880 = 88.0 MHz, etc.)
+        var freqInt = 875  // Start bei 87.5 MHz
+        while (freqInt <= 1080) {  // Ende bei 108.0 MHz
+            val freq = freqInt / 10.0f
             val x = paddingHorizontal + (freq - FM_MIN_FREQUENCY) / frequencyRange * availableWidth
 
-            val freqInt = (freq * 10).toInt()
             // Major tick: every 1.0 MHz (88.0, 89.0, 90.0...)
             val isMajorTick = freqInt % 10 == 0
             // Medium tick: every 0.5 MHz but not whole MHz and not 87.5 (first tick)
@@ -111,16 +113,16 @@ class FrequencyScaleView @JvmOverloads constructor(
             canvas.drawLine(x, scaleY - tickHeight, x, scaleY, scalePaint)
 
             // Labels every 2.0 MHz from 88 onwards, plus 108
-            if ((freqInt % 20 == 0 && freq >= 88f) || freqInt == 1080) {
+            if ((freqInt % 20 == 0 && freqInt >= 880) || freqInt == 1080) {
                 canvas.drawText(
-                    freq.toInt().toString(),
+                    (freqInt / 10).toString(),
                     x,
                     scaleY + textMarginTop + textPaint.textSize,
                     textPaint
                 )
             }
 
-            freq += 0.2f
+            freqInt += 1  // 0.1 MHz Schritte
         }
     }
 
@@ -199,6 +201,14 @@ class FrequencyScaleView @JvmOverloads constructor(
     fun setFrequency(frequency: Float) {
         currentFrequency = frequency.coerceIn(minFrequency, maxFrequency)
         onFrequencyChangeListener?.invoke(currentFrequency)
+        invalidate()
+    }
+
+    /**
+     * Setzt die Frequenz nur visuell (für Seek-Animation), ohne Listener zu triggern.
+     */
+    fun setFrequencyVisualOnly(frequency: Float) {
+        currentFrequency = frequency.coerceIn(minFrequency, maxFrequency)
         invalidate()
     }
 

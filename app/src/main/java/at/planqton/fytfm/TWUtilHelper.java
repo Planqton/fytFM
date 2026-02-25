@@ -171,6 +171,16 @@ public class TWUtilHelper {
         write(CMD_RADIO_POWER, 0);
     }
 
+    public void unmute() {
+        int result = write(CMD_RADIO_MUTE, 0);
+        Log.i(TAG, "unmute: CMD_RADIO_MUTE(0) = " + result);
+    }
+
+    public void mute() {
+        int result = write(CMD_RADIO_MUTE, 1);
+        Log.i(TAG, "mute: CMD_RADIO_MUTE(1) = " + result);
+    }
+
     /**
      * Initialisierungs-Sequenz für FYT Radio - CRITICAL for RDS!
      * This must be called before FM powerOn to enable RDS properly.

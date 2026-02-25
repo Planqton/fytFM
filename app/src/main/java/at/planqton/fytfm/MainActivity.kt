@@ -131,7 +131,8 @@ class MainActivity : AppCompatActivity() {
                     val piStr = if (pi != 0) String.format("0x%04X", pi and 0xFFFF) else ""
                     val ptyStr = if (pty > 0) "$pty (${RdsManager.getPtyName(pty)})" else ""
                     val rtStr = rt ?: ""
-                    val rssiStr = "$rssi dBm"
+                    // RSSI: Relativer Wert 0-255 (kein echtes dBm)
+                    val rssiStr = "$rssi"
                     val tpTaStr = "TP=$tp TA=$ta"
                     val afStr = if (afList != null && afList.isNotEmpty()) {
                         afList.map { freq ->
@@ -359,6 +360,10 @@ class MainActivity : AppCompatActivity() {
             loadStationsForCurrentMode()
         }
 
+        // Explizit longClickable aktivieren
+        btnPrevStation.isLongClickable = true
+        btnNextStation.isLongClickable = true
+
         btnPrevStation.setOnClickListener {
             val step = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
                 FrequencyScaleView.FM_FREQUENCY_STEP
@@ -369,6 +374,16 @@ class MainActivity : AppCompatActivity() {
             frequencyScale.setFrequency(newFreq)
         }
 
+        // Long-Press: Seek zum vorherigen Sender mit Signal
+        btnPrevStation.setOnLongClickListener {
+            android.util.Log.i("fytFM", "Long-Press PREV detected!")
+            android.widget.Toast.makeText(this, "Seek ◀ gestartet...", android.widget.Toast.LENGTH_SHORT).show()
+            if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+                seekToStation(false)
+            }
+            true
+        }
+
         btnNextStation.setOnClickListener {
             val step = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
                 FrequencyScaleView.FM_FREQUENCY_STEP
@@ -377,6 +392,16 @@ class MainActivity : AppCompatActivity() {
             }
             val newFreq = frequencyScale.getFrequency() + step
             frequencyScale.setFrequency(newFreq)
+        }
+
+        // Long-Press: Seek zum nächsten Sender mit Signal
+        btnNextStation.setOnLongClickListener {
+            android.util.Log.i("fytFM", "Long-Press NEXT detected!")
+            android.widget.Toast.makeText(this, "Seek ▶ gestartet...", android.widget.Toast.LENGTH_SHORT).show()
+            if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+                seekToStation(true)
+            }
+            true
         }
 
         btnFavorite.setOnClickListener {
@@ -670,6 +695,22 @@ class MainActivity : AppCompatActivity() {
                 val frequency = frequencyScale.getFrequency()
                 android.util.Log.i("fytFM", "--- Powering ON at $frequency MHz ---")
 
+                // Schritt 0: FmService starten für Audio-Routing
+                android.util.Log.i("fytFM", "Step 0: Starting FmService for audio routing")
+                try {
+                    val serviceIntent = android.content.Intent()
+                    serviceIntent.setClassName("com.syu.music", "com.android.fmradio.FmService")
+                    startService(serviceIntent)
+                    android.util.Log.i("fytFM", "FmService start requested")
+                } catch (e: Exception) {
+                    android.util.Log.w("fytFM", "Could not start FmService: ${e.message}")
+                }
+
+                // Auch ACTION_OPEN_RADIO Broadcast senden
+                android.util.Log.i("fytFM", "Step 0b: Sending ACTION_OPEN_RADIO broadcast")
+                val radioIntent = android.content.Intent("com.action.ACTION_OPEN_RADIO")
+                sendBroadcast(radioIntent)
+
                 // Schritt 1+2: TWUtil (MCU + Audio)
                 if (twUtil?.isAvailable == true) {
                     android.util.Log.i("fytFM", "Step 1: TWUtil.initRadioSequence()")
@@ -677,6 +718,13 @@ class MainActivity : AppCompatActivity() {
 
                     android.util.Log.i("fytFM", "Step 2: TWUtil.radioOn()")
                     twUtil?.radioOn()
+
+                    // Schritt 2b: MCU Unmute
+                    android.util.Log.i("fytFM", "Step 2b: TWUtil.unmute()")
+                    twUtil?.unmute()
+
+                    // Kurze Pause damit MCU die Befehle verarbeiten kann
+                    Thread.sleep(100)
                 } else {
                     android.util.Log.w("fytFM", "TWUtil NOT available - skipping MCU init!")
                 }
@@ -693,6 +741,17 @@ class MainActivity : AppCompatActivity() {
                 android.util.Log.i("fytFM", "Step 5: FmNative.tune($frequency)")
                 val tuneResult = fmNative.tune(frequency)
                 android.util.Log.i("fytFM", "tune result: $tuneResult")
+
+                // Schritt 5b: Unmute - WICHTIG für Audio!
+                android.util.Log.i("fytFM", "Step 5b: FmNative.setMute(false)")
+                val muteResult = fmNative.setMute(false)
+                android.util.Log.i("fytFM", "setMute(false) result: $muteResult")
+
+                // Schritt 5c: Audio-Source nochmal setzen nach FM-Chip Init
+                if (twUtil?.isAvailable == true) {
+                    android.util.Log.i("fytFM", "Step 5c: TWUtil.setAudioSourceFm() (repeat)")
+                    twUtil?.setAudioSourceFm()
+                }
 
                 isRadioOn = openResult && powerResult
                 android.util.Log.i("fytFM", "isRadioOn = $isRadioOn")
@@ -728,6 +787,80 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Throwable) {
             android.util.Log.w("fytFM", "tune failed: ${e.message}")
         }
+    }
+
+    /**
+     * Seek zum nächsten/vorherigen Sender mit Signal.
+     * Manueller Seek da native seek() JNI-Bugs hat.
+     */
+    private fun seekToStation(seekUp: Boolean) {
+        val currentFreq = frequencyScale.getFrequency()
+        android.util.Log.i("fytFM", "Seek ${if (seekUp) "UP" else "DOWN"} from $currentFreq MHz")
+
+        // Seek in Background-Thread um UI nicht zu blockieren
+        Thread {
+            try {
+                val step = 0.1f
+                val minFreq = 87.5f
+                val maxFreq = 108.0f
+                val rssiMin = 25    // Minimum RSSI für gültigen Sender
+                val rssiMax = 245   // 246-255 = ungültig (Rauschen/nicht eingerastet)
+
+                var freq = if (seekUp) currentFreq + step else currentFreq - step
+                var foundFreq: Float? = null
+                var attempts = 0
+                val maxAttempts = 205  // Ganzes Band durchsuchen
+
+                while (attempts < maxAttempts && foundFreq == null) {
+                    // Wrap around
+                    if (freq > maxFreq) freq = minFreq
+                    if (freq < minFreq) freq = maxFreq
+
+                    // UI aktualisieren um Fortschritt zu zeigen (nur Anzeige, kein Tune)
+                    val displayFreq = freq
+                    runOnUiThread {
+                        tvFrequency.text = "%.1f".format(displayFreq)
+                        frequencyScale.setFrequencyVisualOnly(displayFreq)
+                    }
+
+                    // Tune und RSSI messen (2x für Stabilität)
+                    fmNative.tune(freq)
+                    Thread.sleep(100)
+                    val rssi1 = fmNative.getrssi()
+                    Thread.sleep(50)
+                    val rssi2 = fmNative.getrssi()
+
+                    android.util.Log.d("fytFM", "Seek: %.1f MHz -> RSSI %d/%d".format(freq, rssi1, rssi2))
+
+                    // Beide Messungen müssen im gültigen Bereich sein
+                    if (rssi1 in rssiMin..rssiMax && rssi2 in rssiMin..rssiMax) {
+                        foundFreq = freq
+                        android.util.Log.i("fytFM", "Seek found: %.1f MHz (RSSI: %d/%d)".format(freq, rssi1, rssi2))
+                    } else {
+                        freq = if (seekUp) freq + step else freq - step
+                        attempts++
+                    }
+                }
+
+                // Zurück zum UI-Thread
+                runOnUiThread {
+                    if (foundFreq != null) {
+                        rdsManager.clearRds()
+                        frequencyScale.setFrequency(foundFreq)
+                        saveLastFrequency(foundFreq)
+                    } else {
+                        android.util.Log.w("fytFM", "Seek: No station found")
+                        // Zurück zur ursprünglichen Frequenz
+                        frequencyScale.setFrequency(currentFreq)
+                    }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("fytFM", "Seek failed: ${e.message}")
+                runOnUiThread {
+                    frequencyScale.setFrequency(currentFreq)
+                }
+            }
+        }.start()
     }
 
     private fun updatePowerButton() {
