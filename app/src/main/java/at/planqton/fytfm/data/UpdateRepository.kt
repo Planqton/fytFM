@@ -10,8 +10,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.util.Log
-import androidx.core.content.FileProvider
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
@@ -37,7 +35,7 @@ sealed class UpdateState {
     data class UpdateAvailable(val info: UpdateInfo) : UpdateState()
     object NoUpdate : UpdateState()
     data class Downloading(val progress: Int) : UpdateState()
-    data class ReadyToInstall(val apkUri: Uri) : UpdateState()
+    object DownloadComplete : UpdateState()
     data class Error(val message: String) : UpdateState()
 }
 
@@ -100,13 +98,26 @@ class UpdateRepository(private val context: Context) {
     }
 
     fun checkForUpdates() {
-        setState(UpdateState.Checking)
+        checkForUpdatesInternal(silent = false)
+    }
+
+    /**
+     * Prüft still auf Updates - bei Fehler (kein Internet etc.) wird nichts angezeigt
+     */
+    fun checkForUpdatesSilent() {
+        checkForUpdatesInternal(silent = true)
+    }
+
+    private fun checkForUpdatesInternal(silent: Boolean) {
+        if (!silent) {
+            setState(UpdateState.Checking)
+        }
 
         executor.execute {
             try {
                 val release = fetchLatestRelease()
                 if (release == null) {
-                    setState(UpdateState.NoUpdate)
+                    if (!silent) setState(UpdateState.NoUpdate)
                     return@execute
                 }
 
@@ -125,30 +136,31 @@ class UpdateRepository(private val context: Context) {
                 }
 
                 if (apkAsset == null) {
-                    setState(UpdateState.Error("Keine APK im Release gefunden"))
+                    if (!silent) setState(UpdateState.Error("Keine APK im Release gefunden"))
                     return@execute
                 }
 
                 val isNewer = isVersionNewer(latestVersion, currentVersion)
 
-                val updateInfo = UpdateInfo(
-                    currentVersion = currentVersion,
-                    latestVersion = latestVersion,
-                    releaseNotes = release.optString("body", "").takeIf { it.isNotEmpty() },
-                    downloadUrl = apkAsset.getString("browser_download_url"),
-                    fileSize = apkAsset.getLong("size"),
-                    isUpdateAvailable = isNewer
-                )
-
-                setState(if (isNewer) {
-                    UpdateState.UpdateAvailable(updateInfo)
-                } else {
-                    UpdateState.NoUpdate
-                })
+                if (isNewer) {
+                    val updateInfo = UpdateInfo(
+                        currentVersion = currentVersion,
+                        latestVersion = latestVersion,
+                        releaseNotes = release.optString("body", "").takeIf { it.isNotEmpty() },
+                        downloadUrl = apkAsset.getString("browser_download_url"),
+                        fileSize = apkAsset.getLong("size"),
+                        isUpdateAvailable = true
+                    )
+                    setState(UpdateState.UpdateAvailable(updateInfo))
+                } else if (!silent) {
+                    setState(UpdateState.NoUpdate)
+                }
 
             } catch (e: Exception) {
                 Log.e(TAG, "Error checking for updates", e)
-                setState(UpdateState.Error("Fehler: ${e.message}"))
+                if (!silent) {
+                    setState(UpdateState.Error("Fehler: ${e.message}"))
+                }
             }
         }
     }
@@ -200,27 +212,30 @@ class UpdateRepository(private val context: Context) {
         }
     }
 
-    fun downloadUpdate(downloadUrl: String) {
+    fun downloadUpdate(downloadUrl: String, version: String) {
         try {
             setState(UpdateState.Downloading(0))
 
-            // Delete old APK files
-            val downloadDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
+            val fileName = "fytFM-v${version}.apk"
+
+            // Delete old APK files from public Downloads
+            val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
             downloadDir?.listFiles()?.filter { it.name.startsWith("fytFM") && it.name.endsWith(".apk") }
                 ?.forEach { it.delete() }
 
             val request = DownloadManager.Request(Uri.parse(downloadUrl))
-                .setTitle("fytFM Update")
-                .setDescription("Update wird heruntergeladen...")
+                .setTitle("fytFM Update v$version")
+                .setDescription("Tippe nach Download um zu installieren")
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "fytFM-update.apk")
+                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(true)
+                .setMimeType("application/vnd.android.package-archive")
 
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             currentDownloadId = downloadManager.enqueue(request)
 
-            Log.i(TAG, "Download started with ID: $currentDownloadId")
+            Log.i(TAG, "Download started with ID: $currentDownloadId -> $fileName")
 
         } catch (e: Exception) {
             Log.e(TAG, "Error starting download", e)
@@ -239,22 +254,8 @@ class UpdateRepository(private val context: Context) {
                 val status = cursor.getInt(statusIndex)
 
                 if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                    val apkFile = File(
-                        context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),
-                        "fytFM-update.apk"
-                    )
-
-                    if (apkFile.exists()) {
-                        val uri = FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            apkFile
-                        )
-                        setState(UpdateState.ReadyToInstall(uri))
-                        Log.i(TAG, "Download complete, ready to install")
-                    } else {
-                        setState(UpdateState.Error("APK-Datei nicht gefunden"))
-                    }
+                    setState(UpdateState.DownloadComplete)
+                    Log.i(TAG, "Download complete - tap notification to install")
                 } else {
                     setState(UpdateState.Error("Download fehlgeschlagen"))
                 }
@@ -263,19 +264,6 @@ class UpdateRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error handling download complete", e)
             setState(UpdateState.Error("Fehler: ${e.message}"))
-        }
-    }
-
-    fun installUpdate(uri: Uri) {
-        try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-            }
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error installing update", e)
-            setState(UpdateState.Error("Installation fehlgeschlagen: ${e.message}"))
         }
     }
 

@@ -13,7 +13,7 @@
         android:gravity="center"
         android:paddingTop="24dp"
         android:paddingBottom="20dp"
-        android:text="Radio Settings"
+        android:text="@string/settings_title"
         android:textColor="#333333"
         android:textSize="20sp"
         android:textStyle="bold" />
@@ -48,7 +48,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Radio Editor"
+                    android:text="@string/radio_editor"
                     android:textColor="#333333"
                     android:textSize="16sp" />
 
@@ -88,9 +88,18 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
-                    android:text="Power Radio on at Startup"
+                    android:text="@string/power_on_startup"
                     android:textColor="#333333"
                     android:textSize="16sp" />
+
+                <ImageButton
+                    android:id="@+id/btnPowerOnStartupInfo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/info"
+                    android:scaleType="centerInside"
+                    android:padding="8dp" />
 
             </LinearLayout>
 
@@ -122,9 +131,18 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
-                    android:text="Show Debug Infos"
+                    android:text="@string/show_debug_infos"
                     android:textColor="#333333"
                     android:textSize="16sp" />
+
+                <ImageButton
+                    android:id="@+id/btnShowDebugInfo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/info"
+                    android:scaleType="centerInside"
+                    android:padding="8dp" />
 
             </LinearLayout>
 
@@ -144,7 +162,7 @@
                 android:paddingEnd="24dp"
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
-                android:text="Tuner Settings"
+                android:text="@string/section_tuner"
                 android:textColor="#666666"
                 android:textSize="12sp"
                 android:textAllCaps="true"
@@ -175,18 +193,27 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="LOC Local Only"
+                        android:text="@string/loc_local_only"
                         android:textColor="#333333"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Only receive strong local stations"
+                        android:text="@string/loc_description"
                         android:textColor="#888888"
                         android:textSize="12sp" />
 
                 </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/btnLocalModeInfo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/info"
+                    android:scaleType="centerInside"
+                    android:padding="8dp" />
 
             </LinearLayout>
 
@@ -223,18 +250,27 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Mono / Noise Reduction"
+                        android:text="@string/mono_noise_reduction"
                         android:textColor="#333333"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Force mono for less noise on weak signals"
+                        android:text="@string/mono_description"
                         android:textColor="#888888"
                         android:textSize="12sp" />
 
                 </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/btnMonoModeInfo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/info"
+                    android:scaleType="centerInside"
+                    android:padding="8dp" />
 
             </LinearLayout>
 
@@ -269,7 +305,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Radio Area"
+                        android:text="@string/radio_area"
                         android:textColor="#333333"
                         android:textSize="16sp" />
 
@@ -277,7 +313,7 @@
                         android:id="@+id/textRadioAreaValue"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Europe"
+                        android:text="@string/area_europe"
                         android:textColor="#888888"
                         android:textSize="12sp" />
 
@@ -299,11 +335,54 @@
                 android:paddingEnd="24dp"
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
-                android:text="Scan Settings"
+                android:text="@string/section_scan"
                 android:textColor="#666666"
                 android:textSize="12sp"
                 android:textAllCaps="true"
                 android:letterSpacing="0.1" />
+
+            <!-- Auto Scan Sensitivity Toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="72dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchAutoScanSensitivity"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:text="@string/auto_scan_sensitivity"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+                <ImageButton
+                    android:id="@+id/btnAutoScanSensitivityInfo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/info"
+                    android:scaleType="centerInside"
+                    android:padding="8dp" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="#E0E0E0" />
 
             <!-- Overwrite Favorites Toggle -->
             <LinearLayout
@@ -330,18 +409,27 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Overwrite Favorites on Scan"
+                        android:text="@string/overwrite_favorites"
                         android:textColor="#333333"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Replace favorited stations when scanning"
+                        android:text="@string/overwrite_favorites_desc"
                         android:textColor="#888888"
                         android:textSize="12sp" />
 
                 </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/btnOverwriteFavoritesInfo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/info"
+                    android:scaleType="centerInside"
+                    android:padding="8dp" />
 
             </LinearLayout>
 
@@ -361,7 +449,7 @@
                 android:paddingEnd="24dp"
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
-                android:text="App"
+                android:text="@string/section_app"
                 android:textColor="#666666"
                 android:textSize="12sp"
                 android:textAllCaps="true"
@@ -390,7 +478,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="App Version"
+                        android:text="@string/app_version"
                         android:textColor="#333333"
                         android:textSize="16sp" />
 
@@ -428,6 +516,239 @@
                 android:layout_marginEnd="24dp"
                 android:background="#E0E0E0" />
 
+            <!-- Language Item (opens dialog) -->
+            <LinearLayout
+                android:id="@+id/itemLanguage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="72dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/language"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/textLanguageValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/language_system"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:alpha="0.5" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="#E0E0E0" />
+
+            <!-- Section Header: RDS Archive -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="8dp"
+                android:text="@string/section_rds_archive"
+                android:textColor="#666666"
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
+
+            <!-- RDS Logging Toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="72dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchRdsLogging"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/rds_logging"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/rds_logging_desc"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/btnRdsLoggingInfo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/info"
+                    android:scaleType="centerInside"
+                    android:padding="8dp" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="#E0E0E0" />
+
+            <!-- RDS Retention Item (opens dialog) -->
+            <LinearLayout
+                android:id="@+id/itemRdsRetention"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="72dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/archive_retention"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/textRdsRetentionValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/days_format"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <ImageButton
+                    android:id="@+id/btnArchiveRetentionInfo"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/info"
+                    android:scaleType="centerInside"
+                    android:padding="8dp" />
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:alpha="0.5" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="#E0E0E0" />
+
+            <!-- Clear Archive Button -->
+            <LinearLayout
+                android:id="@+id/itemClearArchive"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="72dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/clear_archive"
+                        android:textColor="#D32F2F"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/textArchiveCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/entries_format"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="#E0E0E0" />
+
             <!-- Close App Button -->
             <TextView
                 android:id="@+id/btnCloseApp"
@@ -442,7 +763,7 @@
                 android:clickable="true"
                 android:focusable="true"
                 android:foreground="?attr/selectableItemBackground"
-                android:text="Close App"
+                android:text="@string/close_app"
                 android:textColor="#D32F2F"
                 android:textSize="16sp"
                 android:textStyle="bold" />

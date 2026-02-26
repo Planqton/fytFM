@@ -32,9 +32,11 @@ class RadioScanner(private val rdsManager: RdsManager) {
         const val AM_STEP = 9f
 
         // Scan Settings
-        private const val SCAN_RSSI_THRESHOLD = 15
+        private const val SCAN_RSSI_OFFSET_NORMAL = 15  // Threshold = NoiseFloor + Offset (normal mode)
+        private const val SCAN_RSSI_OFFSET_SENSITIVE = 5  // Lower offset for sensitive mode (more weak stations)
         private const val SCAN_SETTLE_TIME_MS = 250L
         private const val SCAN_RSSI_SAMPLES = 3
+        private const val NOISE_FLOOR_SAMPLES = 10  // Anzahl Frequenzen für Noise Floor Messung
         private const val RDS_COLLECT_TIME_MS = 8000L  // 8 Sekunden pro Sender für RDS (optimiert für langsame Sender)
 
         // fmsyu_jni Command Codes (NavRadio-Stil)
@@ -57,18 +59,20 @@ class RadioScanner(private val rdsManager: RdsManager) {
 
     /**
      * FM-Scan mit 2 Durchgängen:
-     * 1. Alle Frequenzen mit RSSI >= Threshold finden
-     * 2. RDS-Daten sammeln und filtern (via RdsManager wie Debug-Display)
+     * 1. Tune+RDS-Check: Jede Frequenz prüfen ob Sender vorhanden
+     * 2. RDS-Verifizierung: PS/PI prüfen und nach Checkboxen filtern
      *
      * @param requirePs Sender ohne PS-Name werden gefiltert
      * @param requirePi Sender ohne PI-Code werden gefiltert
+     * @param highSensitivity Wenn true, werden auch schwächere Signale erkannt
      */
     fun scanFM(
         onProgress: (progress: Int, frequency: Float, remainingSeconds: Int, filteredCount: Int, phase: String) -> Unit,
         onStationFound: ((RadioStation) -> Unit)? = null,
         onComplete: (List<RadioStation>) -> Unit,
         requirePs: Boolean = false,
-        requirePi: Boolean = false
+        requirePi: Boolean = false,
+        highSensitivity: Boolean = false
     ) {
         if (isScanning) {
             Log.w(TAG, "Scan already running")
@@ -84,10 +88,42 @@ class RadioScanner(private val rdsManager: RdsManager) {
             var filteredCount = 0
 
             try {
-                // ==================== PHASE 1: RSSI SCAN ====================
+                // ==================== PHASE 1: SIGNAL SCAN ====================
                 Log.i(TAG, "════════════════════════════════════════════════════")
-                Log.i(TAG, "         PHASE 1: RSSI SCAN (87.5-108.0 MHz)")
+                Log.i(TAG, "         PHASE 1: SIGNAL SCAN (87.5-108.0 MHz)")
                 Log.i(TAG, "════════════════════════════════════════════════════")
+
+                val native = fmNative
+                if (native == null) {
+                    Log.e(TAG, "FmNative not available!")
+                    mainHandler.post { onComplete(emptyList()) }
+                    return@thread
+                }
+
+                // Radio muss eingeschaltet sein für RSSI-Messung!
+                // (Wird normalerweise von MainActivity gemacht, aber sicherheitshalber prüfen)
+                try {
+                    native.openDev()
+                    native.powerUp(FM_MIN)
+                    native.setRds(true)
+                    Log.i(TAG, "Radio initialized for scanning")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Radio init failed (may already be on): ${e.message}")
+                }
+
+                // ========== NOISE FLOOR MESSUNG ==========
+                Log.i(TAG, "Measuring noise floor...")
+                mainHandler.post { onProgress(0, FM_MIN, 120, 0, "Noise Floor") }
+
+                val noiseFloor = measureNoiseFloor(native)
+                val rssiOffset = if (highSensitivity) SCAN_RSSI_OFFSET_SENSITIVE else SCAN_RSSI_OFFSET_NORMAL
+                val dynamicThreshold = noiseFloor + rssiOffset
+
+                Log.i(TAG, "╔════════════════════════════════════════════════")
+                Log.i(TAG, "║ NOISE FLOOR: $noiseFloor dBm")
+                Log.i(TAG, "║ SENSITIVITY: ${if (highSensitivity) "HIGH" else "NORMAL"}")
+                Log.i(TAG, "║ THRESHOLD:   $dynamicThreshold dBm (floor + $rssiOffset)")
+                Log.i(TAG, "╚════════════════════════════════════════════════")
 
                 val totalSteps = ((FM_MAX - FM_MIN) / FM_STEP).toInt() + 1
                 var currentStep = 0
@@ -101,27 +137,34 @@ class RadioScanner(private val rdsManager: RdsManager) {
                     // Restzeit berechnen
                     val elapsedMs = System.currentTimeMillis() - scanStartTime
                     val remainingSeconds = if (progress > 0) {
-                        val totalEstimatedMs = (elapsedMs * 100) / progress
+                        val totalEstimatedMs = (elapsedMs * 50) / progress
                         ((totalEstimatedMs - elapsedMs) / 1000).toInt()
-                    } else 0
+                    } else 60
 
-                    mainHandler.post { onProgress(progress, currentFreq, remainingSeconds, filteredCount, "Phase 1: Signal") }
+                    mainHandler.post { onProgress(progress, currentFreq, remainingSeconds, 0, "Phase 1: Signal") }
 
                     // Tune zur Frequenz
-                    tuneToFrequency(currentFreq)
+                    try {
+                        native.tune(currentFreq)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Tune failed at %.1f".format(currentFreq))
+                        freq += FM_STEP
+                        continue
+                    }
 
-                    // Warten bis Signal stabil
+                    // Kurz warten bis Signal stabil
                     Thread.sleep(SCAN_SETTLE_TIME_MS)
 
                     // RSSI messen
                     val rssi = measureRssi(SCAN_RSSI_SAMPLES)
 
-                    if (rssi >= SCAN_RSSI_THRESHOLD) {
+                    if (rssi >= dynamicThreshold) {
                         val station = RadioStation(currentFreq, null, rssi, false)
                         foundStations.add(station)
                         Log.i(TAG, "★ FOUND: %.1f MHz | RSSI: %d".format(currentFreq, rssi))
-                        // Phase 1: Sofort anzeigen
                         mainHandler.post { onStationFound?.invoke(station) }
+                    } else if (rssi > 0) {
+                        Log.d(TAG, "  %.1f MHz: RSSI=%d (below threshold)".format(currentFreq, rssi))
                     }
 
                     freq += FM_STEP
@@ -140,6 +183,12 @@ class RadioScanner(private val rdsManager: RdsManager) {
                     Log.i(TAG, "════════════════════════════════════════════════════")
                     Log.i(TAG, "         PHASE 2: RDS VERIFICATION (PS=${requirePs}, PI=${requirePi})")
                     Log.i(TAG, "════════════════════════════════════════════════════")
+
+                    // Sicherstellen dass RdsManager Polling aktiv ist
+                    if (!rdsManager.isPolling) {
+                        Log.w(TAG, "RdsManager polling not active - starting...")
+                        rdsManager.startPolling(null)
+                    }
 
                     val verifiedStations = mutableListOf<RadioStation>()
                     val phase2StartTime = System.currentTimeMillis()
@@ -215,6 +264,12 @@ class RadioScanner(private val rdsManager: RdsManager) {
                     Log.i(TAG, "         PHASE 2: RDS NAMES SAMMELN (ohne Filter)")
                     Log.i(TAG, "════════════════════════════════════════════════════")
 
+                    // Sicherstellen dass RdsManager Polling aktiv ist
+                    if (!rdsManager.isPolling) {
+                        Log.w(TAG, "RdsManager polling not active - starting...")
+                        rdsManager.startPolling(null)
+                    }
+
                     val stationsWithNames = mutableListOf<RadioStation>()
                     val phase2StartTime = System.currentTimeMillis()
 
@@ -276,32 +331,41 @@ class RadioScanner(private val rdsManager: RdsManager) {
     }
 
     /**
-     * Sammelt RDS-Daten via RdsManager (wie Debug-Display)
-     * @return Quadruple(hasPs, hasPi, psName, piCode)
+     * Sammelt RDS-Daten über den RdsManager (nutzt dessen Polling mit allen Fallbacks)
+     * Der RdsManager hat 12x readRds() + multiple Fallback-Methoden für PI
+     * @return RdsResult mit PS und PI
      */
     private fun collectRdsViaManager(timeoutMs: Long): RdsResult {
         val startTime = System.currentTimeMillis()
         var foundPs = ""
         var foundPi = 0
 
-        // Warten und regelmäßig RDS-Manager abfragen
+        // RdsManager polling läuft bereits - wir warten einfach auf Daten
+        // RdsManager macht: 12x readRds() + fetchPs() + GETRDSSTATE für PI + Fallbacks
         while (System.currentTimeMillis() - startTime < timeoutMs && !isCancelled) {
-            Thread.sleep(250)
+            Thread.sleep(200)  // Etwas schneller als Polling-Intervall (150ms)
 
-            // PS vom RdsManager holen
-            val ps = rdsManager.ps
-            if (!ps.isNullOrEmpty() && ps.length >= 2) {
-                foundPs = ps
+            // PS vom RdsManager lesen (hat alle Fallback-Methoden)
+            if (foundPs.isEmpty()) {
+                val ps = rdsManager.ps
+                if (!ps.isNullOrEmpty() && ps.length >= 2 && ps.any { it.isLetter() }) {
+                    foundPs = ps
+                    Log.d(TAG, "RDS PS from RdsManager: '$ps'")
+                }
             }
 
-            // PI vom RdsManager holen
-            val pi = rdsManager.pi
-            if (pi != 0) {
-                foundPi = pi
+            // PI vom RdsManager lesen (hat FmService Fallback + PS-Lookup)
+            if (foundPi == 0) {
+                val pi = rdsManager.pi
+                if (pi != 0) {
+                    foundPi = pi
+                    Log.d(TAG, "RDS PI from RdsManager: 0x${pi.toString(16)}")
+                }
             }
 
             // Früh abbrechen wenn beides gefunden
             if (foundPs.isNotEmpty() && foundPi != 0) {
+                Log.i(TAG, "RDS complete: PS='$foundPs' PI=0x${foundPi.toString(16)}")
                 break
             }
         }
@@ -376,6 +440,48 @@ class RadioScanner(private val rdsManager: RdsManager) {
         }
     }
 
+    /**
+     * Misst den Noise Floor durch Sampling zufälliger Frequenzen.
+     * Nimmt den Durchschnitt der niedrigsten Werte als Baseline.
+     */
+    private fun measureNoiseFloor(native: FmNative): Int {
+        val measurements = mutableListOf<Int>()
+
+        // Sample über das Band verteilt
+        val stepSize = (FM_MAX - FM_MIN) / NOISE_FLOOR_SAMPLES
+        var freq = FM_MIN + stepSize / 2  // Start in der Mitte des ersten Segments
+
+        repeat(NOISE_FLOOR_SAMPLES) {
+            try {
+                native.tune(freq)
+                Thread.sleep(150)
+                val rssi = measureRssi(2)
+                if (rssi in 1..99) {
+                    measurements.add(rssi)
+                    Log.d(TAG, "Noise sample %.1f MHz: RSSI=%d".format(freq, rssi))
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Noise sample failed at %.1f".format(freq))
+            }
+            freq += stepSize
+        }
+
+        if (measurements.isEmpty()) {
+            Log.w(TAG, "No valid noise measurements, using default 25")
+            return 25  // Fallback
+        }
+
+        // Sortieren und untere Hälfte nehmen (die niedrigsten Werte = Noise)
+        val sorted = measurements.sorted()
+        val lowerHalf = sorted.take(maxOf(sorted.size / 2, 1))
+        val noiseFloor = lowerHalf.average().toInt()
+
+        Log.i(TAG, "Noise measurements: $sorted")
+        Log.i(TAG, "Lower half: $lowerHalf → Noise Floor: $noiseFloor")
+
+        return noiseFloor
+    }
+
     private fun measureRssi(samples: Int): Int {
         val native = fmNative ?: return 0
 
@@ -384,6 +490,7 @@ class RadioScanner(private val rdsManager: RdsManager) {
 
         repeat(samples) { i ->
             var rssi = 0
+            var method = ""
 
             // Methode 1: fmsyu_jni
             try {
@@ -391,18 +498,45 @@ class RadioScanner(private val rdsManager: RdsManager) {
                 val outBundle = Bundle()
                 val result = native.fmsyu_jni(CMD_GETRSSI, inBundle, outBundle)
                 if (result == 0) {
-                    rssi = outBundle.getInt("rssilevel", 0)
+                    val level = outBundle.getInt("rssilevel", 0)
+                    if (level > 0) {
+                        rssi = level
+                        method = "fmsyu_jni"
+                    }
                 }
-            } catch (e: Throwable) { }
+            } catch (e: Throwable) {
+                Log.w(TAG, "fmsyu_jni RSSI failed: ${e.message}")
+            }
 
             // Methode 2: getrssi()
             if (rssi == 0) {
-                try { rssi = native.getrssi() } catch (e: Throwable) { }
+                try {
+                    val level = native.getrssi()
+                    if (level > 0) {
+                        rssi = level
+                        method = "getrssi"
+                    }
+                } catch (e: Throwable) {
+                    Log.w(TAG, "getrssi failed: ${e.message}")
+                }
             }
 
-            // Methode 3: sql_getrssi()
+            // Methode 3: sql_getrssi() - hat binder errors, als letztes versuchen
             if (rssi == 0) {
-                try { rssi = native.sql_getrssi() } catch (e: Throwable) { }
+                try {
+                    val level = native.sql_getrssi()
+                    if (level > 0) {
+                        rssi = level
+                        method = "sql_getrssi"
+                    }
+                } catch (e: Throwable) {
+                    // Ignorieren - binder errors erwartet
+                }
+            }
+
+            // Log nur beim ersten Sample
+            if (i == 0 && rssi > 0) {
+                Log.d(TAG, "RSSI via $method: $rssi")
             }
 
             if (rssi in 1..99) {

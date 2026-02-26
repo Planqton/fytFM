@@ -42,18 +42,18 @@ public class RdsManager {
     private boolean isPolling = false;
     private boolean isRadioOn = false;
 
-    // Aktuelle RDS-Daten
-    private String currentPs = "";
-    private String currentRt = "";
-    private int currentRssi = 0;
-    private int currentPi = 0;
-    private int currentPty = 0;
-    private int currentTp = 0;
-    private int currentTa = 0;
-    private short[] currentAfList = null;
-    private boolean afEnabled = false;
-    private float hardwareFrequency = 0f;  // Echte Frequenz vom FM-Chip
-    private float uiFrequency = 0f;        // Vom User eingestellte Frequenz
+    // Aktuelle RDS-Daten (volatile für Thread-Sicherheit - Scanner liest aus Background-Thread)
+    private volatile String currentPs = "";
+    private volatile String currentRt = "";
+    private volatile int currentRssi = 0;
+    private volatile int currentPi = 0;
+    private volatile int currentPty = 0;
+    private volatile int currentTp = 0;
+    private volatile int currentTa = 0;
+    private volatile short[] currentAfList = null;
+    private volatile boolean afEnabled = false;
+    private volatile float hardwareFrequency = 0f;  // Echte Frequenz vom FM-Chip
+    private volatile float uiFrequency = 0f;        // Vom User eingestellte Frequenz
 
     // Timestamps für jeden RDS-Wert
     private long lastPsTimestamp = 0;

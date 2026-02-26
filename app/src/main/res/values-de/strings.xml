@@ -1,0 +1,115 @@
+<resources>
+    <string name="app_name">fytFM</string>
+
+    <!-- Main UI -->
+    <string name="default_frequency">FM 98.40</string>
+    <string name="prev_station">Vorheriger Sender</string>
+    <string name="next_station">Nächster Sender</string>
+    <string name="favorite">Favorit</string>
+    <string name="fm_mode">FM Modus</string>
+    <string name="search">Suche</string>
+    <string name="skip_previous">Vorheriger</string>
+    <string name="skip_next">Nächster</string>
+    <string name="play_pause">Play/Pause</string>
+    <string name="folder">Ordner</string>
+    <string name="settings">Einstellungen</string>
+    <string name="all_stations">Alle Sender</string>
+    <string name="favorites">Favoriten</string>
+    <string name="back">Zurück</string>
+    <string name="clear">Löschen</string>
+
+    <!-- Settings Dialog -->
+    <string name="settings_title">Radio Einstellungen</string>
+    <string name="radio_editor">Radio Editor</string>
+    <string name="power_on_startup">Radio beim Start einschalten</string>
+    <string name="show_debug_infos">Debug Infos anzeigen</string>
+    <string name="section_tuner">Tuner Einstellungen</string>
+    <string name="loc_local_only">LOC Nur Lokal</string>
+    <string name="loc_description">Nur starke lokale Sender empfangen</string>
+    <string name="mono_noise_reduction">Mono / Rauschunterdrückung</string>
+    <string name="mono_description">Mono erzwingen für weniger Rauschen bei schwachen Signalen</string>
+    <string name="radio_area">Radio Region</string>
+    <string name="section_scan">Scan Einstellungen</string>
+    <string name="overwrite_favorites">Favoriten beim Scan überschreiben</string>
+    <string name="overwrite_favorites_desc">Favorisierte Sender beim Scannen ersetzen</string>
+    <string name="auto_scan_sensitivity">Auto Scan Empfindlichkeit</string>
+    <string name="auto_scan_sensitivity_info">Radio-Empfindlichkeit bezieht sich auf die Fähigkeit des Radios, schwache Signale zu empfangen. Sender mit schwachen Signalen werden wahrscheinlich Rauschen enthalten.</string>
+    <string name="confirm">Bestätigen</string>
+    <string name="power_on_startup_info">Wenn aktiviert, schaltet sich das Radio automatisch ein wenn die App startet. Nützlich wenn das Radio sofort bereit sein soll.</string>
+    <string name="show_debug_infos_info">Zeigt ein Debug-Overlay mit RDS-Daten (PS, PI, PTY, RT, RSSI, AF) für Fehlersuche und Entwicklungszwecke.</string>
+    <string name="loc_local_only_info">LOC (Lokal) Modus filtert entfernte Sender und empfängt nur starke lokale Signale. Aktiviere dies bei Störungen durch weit entfernte Sender.</string>
+    <string name="mono_noise_reduction_info">Erzwingt Mono-Wiedergabe was Rauschen bei schwachen Signalen reduziert. Stereo benötigt stärkere Signale. Aktiviere dies für bessere Audioqualität bei entfernten Sendern.</string>
+    <string name="overwrite_favorites_info">Wenn aktiviert, werden favorisierte Sender beim Scannen ersetzt falls neue Daten gefunden werden. Wenn deaktiviert, bleiben Favoriten beim Scannen geschützt.</string>
+    <string name="rds_logging_info">Speichert Radio Text (RT) Änderungen ins Archiv. Bei jeder RT-Änderung wird ein neuer Eintrag mit Zeitstempel und allen RDS-Daten erstellt.</string>
+    <string name="archive_retention_info">Wie lange RDS-Archiveinträge aufbewahrt werden bevor sie automatisch gelöscht werden. Ältere Einträge werden beim App-Start entfernt um Speicherplatz zu sparen.</string>
+    <string name="section_app">App</string>
+    <string name="app_version">App Version</string>
+    <string name="tap_to_check">Tippen um nach Updates zu suchen</string>
+    <string name="checking_updates">Suche nach Updates…</string>
+    <string name="up_to_date">Aktuell</string>
+    <string name="update_available">Update verfügbar: v%s</string>
+    <string name="downloading">Wird heruntergeladen…</string>
+    <string name="download_complete">Download fertig - Tippe Benachrichtigung</string>
+    <string name="error_prefix">Fehler: %s</string>
+    <string name="section_rds_archive">RDS Archiv</string>
+    <string name="rds_logging">RDS Aufzeichnung</string>
+    <string name="rds_logging_desc">Radio Text Änderungen ins Archiv speichern</string>
+    <string name="archive_retention">Archiv Aufbewahrung</string>
+    <string name="days_format">%d Tage</string>
+    <string name="clear_archive">Archiv löschen</string>
+    <string name="entries_format">%d Einträge</string>
+    <string name="section_language">Sprache</string>
+    <string name="language">Sprache</string>
+    <string name="close_app">App beenden</string>
+
+    <!-- Language Options -->
+    <string name="language_system">Systemstandard</string>
+    <string name="language_english">English</string>
+    <string name="language_german">Deutsch</string>
+
+    <!-- Radio Area Options -->
+    <string name="area_usa_korea">USA, Korea</string>
+    <string name="area_latin_america">Lateinamerika</string>
+    <string name="area_europe">Europa</string>
+    <string name="area_russia">Russland</string>
+    <string name="area_japan">Japan</string>
+
+    <!-- Archive -->
+    <string name="rds_archive">RDS Archiv</string>
+    <string name="search_radio_text">Radio Text suchen…</string>
+    <string name="all">Alle</string>
+    <string name="no_rds_data">Noch keine RDS Daten aufgezeichnet</string>
+    <string name="turn_on_radio">Radio einschalten um RDS zu empfangen</string>
+    <string name="no_radio_text">(kein Radio Text)</string>
+
+    <!-- Dialogs -->
+    <string name="clear_archive_title">Archiv löschen</string>
+    <string name="clear_archive_message">Alle RDS Einträge löschen?</string>
+    <string name="delete">Löschen</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="archive_cleared">Archiv gelöscht</string>
+    <string name="update_available_title">Update verfügbar</string>
+    <string name="update_message">Version %s ist verfügbar.\n\nJetzt herunterladen?</string>
+    <string name="download">Herunterladen</string>
+    <string name="later">Später</string>
+    <string name="delete_station_title">Sender löschen</string>
+    <string name="delete_station_message">%s wirklich löschen?</string>
+    <string name="yes">Ja</string>
+    <string name="no">Nein</string>
+    <string name="edit_station">Sender bearbeiten</string>
+    <string name="station_name_hint">Sendername</string>
+    <string name="save">Speichern</string>
+
+    <!-- Toasts -->
+    <string name="added_to_favorites">Sender zu Favoriten hinzugefügt</string>
+    <string name="removed_from_favorites">Sender aus Favoriten entfernt</string>
+    <string name="seek_started_prev">Seek ◀ gestartet…</string>
+    <string name="seek_started_next">Seek ▶ gestartet…</string>
+
+    <!-- Scan Dialog -->
+    <string name="station_scan">Sendersuche</string>
+    <string name="scanning">Suche läuft…</string>
+    <string name="stations_found">%d Sender gefunden</string>
+    <string name="start_scan">Suche starten</string>
+    <string name="add_all">Alle hinzufügen</string>
+</resources>

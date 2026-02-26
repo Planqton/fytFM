@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name">fytFM</string>
+
+    <!-- Main UI -->
     <string name="default_frequency">FM 98.40</string>
     <string name="prev_station">Previous station</string>
     <string name="next_station">Next station</string>
@@ -11,4 +13,103 @@
     <string name="play_pause">Play/Pause</string>
     <string name="folder">Folder</string>
     <string name="settings">Settings</string>
+    <string name="all_stations">All Stations</string>
+    <string name="favorites">Favorites</string>
+    <string name="back">Back</string>
+    <string name="clear">Clear</string>
+
+    <!-- Settings Dialog -->
+    <string name="settings_title">Radio Settings</string>
+    <string name="radio_editor">Radio Editor</string>
+    <string name="power_on_startup">Power Radio on at Startup</string>
+    <string name="show_debug_infos">Show Debug Infos</string>
+    <string name="section_tuner">Tuner Settings</string>
+    <string name="loc_local_only">LOC Local Only</string>
+    <string name="loc_description">Only receive strong local stations</string>
+    <string name="mono_noise_reduction">Mono / Noise Reduction</string>
+    <string name="mono_description">Force mono for less noise on weak signals</string>
+    <string name="radio_area">Radio Area</string>
+    <string name="section_scan">Scan Settings</string>
+    <string name="overwrite_favorites">Overwrite Favorites on Scan</string>
+    <string name="overwrite_favorites_desc">Replace favorited stations when scanning</string>
+    <string name="auto_scan_sensitivity">Auto Scan Sensitivity</string>
+    <string name="auto_scan_sensitivity_info">Radio sensitivity refers to the radio\'s ability to receive weak signals. Stations with weak signals will likely contain noise.</string>
+    <string name="confirm">Confirm</string>
+    <string name="power_on_startup_info">When enabled, the radio will automatically turn on when the app starts. Useful if you want the radio ready immediately.</string>
+    <string name="show_debug_infos_info">Shows a debug overlay with RDS data (PS, PI, PTY, RT, RSSI, AF) for troubleshooting and development purposes.</string>
+    <string name="loc_local_only_info">LOC (Local) mode filters out distant stations and only receives strong local signals. Enable this if you experience interference from far away stations.</string>
+    <string name="mono_noise_reduction_info">Forces mono playback which reduces static noise on weak signals. Stereo requires stronger signals. Enable this for better audio quality on distant stations.</string>
+    <string name="overwrite_favorites_info">When enabled, scanning will replace favorited stations if new data is found. When disabled, favorites are protected during scans.</string>
+    <string name="rds_logging_info">Logs Radio Text (RT) changes to the archive. Each time the RT changes, a new entry is created with timestamp and all RDS data.</string>
+    <string name="archive_retention_info">How long RDS archive entries are kept before automatic deletion. Older entries are removed on app start to save storage.</string>
+    <string name="section_app">App</string>
+    <string name="app_version">App Version</string>
+    <string name="tap_to_check">Tap to check for updates</string>
+    <string name="checking_updates">Checking for updates…</string>
+    <string name="up_to_date">Up to date</string>
+    <string name="update_available">Update available: v%s</string>
+    <string name="downloading">Downloading…</string>
+    <string name="download_complete">Download complete - Tap notification</string>
+    <string name="error_prefix">Error: %s</string>
+    <string name="section_rds_archive">RDS Archive</string>
+    <string name="rds_logging">RDS Logging</string>
+    <string name="rds_logging_desc">Log Radio Text changes to archive</string>
+    <string name="archive_retention">Archive Retention</string>
+    <string name="days_format">%d days</string>
+    <string name="clear_archive">Clear Archive</string>
+    <string name="entries_format">%d entries</string>
+    <string name="section_language">Language</string>
+    <string name="language">Language</string>
+    <string name="close_app">Close App</string>
+
+    <!-- Language Options -->
+    <string name="language_system">System Default</string>
+    <string name="language_english">English</string>
+    <string name="language_german">Deutsch</string>
+
+    <!-- Radio Area Options -->
+    <string name="area_usa_korea">USA, Korea</string>
+    <string name="area_latin_america">Latin America</string>
+    <string name="area_europe">Europe</string>
+    <string name="area_russia">Russia</string>
+    <string name="area_japan">Japan</string>
+
+    <!-- Archive -->
+    <string name="rds_archive">RDS Archive</string>
+    <string name="search_radio_text">Search Radio Text…</string>
+    <string name="all">All</string>
+    <string name="no_rds_data">No RDS data recorded yet</string>
+    <string name="turn_on_radio">Turn on radio to receive RDS</string>
+    <string name="no_radio_text">(no Radio Text)</string>
+
+    <!-- Dialogs -->
+    <string name="clear_archive_title">Clear Archive</string>
+    <string name="clear_archive_message">Delete all RDS log entries?</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="archive_cleared">Archive cleared</string>
+    <string name="update_available_title">Update available</string>
+    <string name="update_message">Version %s is available.\n\nDownload now?</string>
+    <string name="download">Download</string>
+    <string name="later">Later</string>
+    <string name="delete_station_title">Delete Station</string>
+    <string name="delete_station_message">Really delete %s?</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="edit_station">Edit Station</string>
+    <string name="station_name_hint">Station name</string>
+    <string name="save">Save</string>
+
+    <!-- Toasts -->
+    <string name="added_to_favorites">Station added to favorites</string>
+    <string name="removed_from_favorites">Station removed from favorites</string>
+    <string name="seek_started_prev">Seek ◀ started…</string>
+    <string name="seek_started_next">Seek ▶ started…</string>
+
+    <!-- Scan Dialog -->
+    <string name="station_scan">Station Scan</string>
+    <string name="scanning">Scanning…</string>
+    <string name="stations_found">%d stations found</string>
+    <string name="start_scan">Start Scan</string>
+    <string name="add_all">Add All</string>
 </resources>
