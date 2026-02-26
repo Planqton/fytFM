@@ -207,6 +207,36 @@ class PresetRepository(context: Context) {
         settingsPrefs.edit().putBoolean("auto_scan_sensitivity", enabled).apply()
     }
 
+    // Spotify API Credentials
+    fun getSpotifyClientId(): String {
+        return settingsPrefs.getString("spotify_client_id", "") ?: ""
+    }
+
+    fun setSpotifyClientId(clientId: String) {
+        settingsPrefs.edit().putString("spotify_client_id", clientId).apply()
+    }
+
+    fun getSpotifyClientSecret(): String {
+        return settingsPrefs.getString("spotify_client_secret", "") ?: ""
+    }
+
+    fun setSpotifyClientSecret(clientSecret: String) {
+        settingsPrefs.edit().putString("spotify_client_secret", clientSecret).apply()
+    }
+
+    fun hasSpotifyCredentials(): Boolean {
+        return getSpotifyClientId().isNotBlank() && getSpotifyClientSecret().isNotBlank()
+    }
+
+    // Spotify Local Cache Setting
+    fun isSpotifyCacheEnabled(): Boolean {
+        return settingsPrefs.getBoolean("spotify_cache_enabled", true) // Default: enabled
+    }
+
+    fun setSpotifyCacheEnabled(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("spotify_cache_enabled", enabled).apply()
+    }
+
     /**
      * Fügt gescannte Sender zur Liste hinzu.
      * Favorisierte Sender werden nur überschrieben wenn isOverwriteFavorites() true ist.

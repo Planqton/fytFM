@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#FFFFFF">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical"
+        android:background="#1DB954">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Spotify Cache"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvCacheCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="0 Tracks"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+    <!-- Search -->
+    <EditText
+        android:id="@+id/etCacheSearch"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_margin="12dp"
+        android:background="@drawable/edittext_background"
+        android:hint="Suchen..."
+        android:inputType="text"
+        android:padding="12dp"
+        android:textSize="14sp"
+        android:drawableStart="@android:drawable/ic_menu_search"
+        android:drawablePadding="8dp" />
+
+    <!-- Track List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvCacheTracks"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:padding="8dp" />
+
+    <!-- Empty State -->
+    <TextView
+        android:id="@+id/tvCacheEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="Keine Tracks im Cache"
+        android:textColor="#999999"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
+    <!-- Close Button -->
+    <TextView
+        android:id="@+id/btnCloseCache"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_margin="16dp"
+        android:background="@drawable/button_outline"
+        android:gravity="center"
+        android:text="Schließen"
+        android:textColor="#1DB954"
+        android:textSize="16sp" />
+
+</LinearLayout>

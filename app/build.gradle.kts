@@ -15,8 +15,8 @@ android {
         applicationId = "at.planqton.fytfm"
         minSdk = 29
         targetSdk = 36
-        versionCode = 10103
-        versionName = "1.1.3"
+        versionCode = 10200
+        versionName = "1.2.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -73,6 +73,12 @@ dependencies {
     // Media3 (MediaSession für Car Launcher)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.exoplayer)
+
+    // OkHttp for Spotify API
+    implementation(libs.okhttp)
+
+    // NanoHTTPD for local cover image server
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

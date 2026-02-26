@@ -36,7 +36,7 @@ class RdsLogRepository(context: Context) {
         set(value) = prefs.edit().putInt("retention_days", value).apply()
 
     var loggingEnabled: Boolean
-        get() = prefs.getBoolean("logging_enabled", true)
+        get() = prefs.getBoolean("logging_enabled", false)
         set(value) = prefs.edit().putBoolean("logging_enabled", value).apply()
 
     /**

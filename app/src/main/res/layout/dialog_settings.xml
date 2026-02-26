@@ -749,6 +749,205 @@
                 android:layout_marginEnd="24dp"
                 android:background="#E0E0E0" />
 
+            <!-- Section Header: Spotify API -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="8dp"
+                android:text="SPOTIFY API"
+                android:textColor="#666666"
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
+
+            <!-- Spotify Client ID -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="72dp"
+                android:orientation="vertical"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Client ID"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+                <EditText
+                    android:id="@+id/editSpotifyClientId"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/edittext_background"
+                    android:hint="Spotify Client ID eingeben"
+                    android:inputType="text"
+                    android:padding="12dp"
+                    android:textColor="#333333"
+                    android:textColorHint="#999999"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
+            <!-- Spotify Client Secret -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="72dp"
+                android:orientation="vertical"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Client Secret"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+                <EditText
+                    android:id="@+id/editSpotifyClientSecret"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:background="@drawable/edittext_background"
+                    android:hint="Spotify Client Secret eingeben"
+                    android:inputType="textPassword"
+                    android:padding="12dp"
+                    android:textColor="#333333"
+                    android:textColorHint="#999999"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
+            <!-- Spotify Cache Enable Toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Lokaler Cache"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Tracks lokal speichern für Offline-Nutzung"
+                        android:textColor="#666666"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <Switch
+                    android:id="@+id/switchSpotifyCache"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true" />
+
+            </LinearLayout>
+
+            <!-- Spotify Cache Stats -->
+            <TextView
+                android:id="@+id/tvSpotifyCacheStats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="8dp"
+                android:text="Cache: 0 Tracks"
+                android:textColor="#666666"
+                android:textSize="12sp" />
+
+            <!-- Spotify Cache Export/Import Buttons -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="16dp">
+
+                <TextView
+                    android:id="@+id/btnExportSpotifyCache"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/button_outline"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:text="Export Cache"
+                    android:textColor="#1DB954"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/btnImportSpotifyCache"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/button_outline"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:foreground="?attr/selectableItemBackground"
+                    android:text="Import Cache"
+                    android:textColor="#1DB954"
+                    android:textSize="14sp" />
+
+            </LinearLayout>
+
+            <!-- View Cache Button -->
+            <TextView
+                android:id="@+id/btnViewSpotifyCache"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:layout_marginBottom="16dp"
+                android:background="@drawable/button_outline"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
+                android:text="Cache anzeigen"
+                android:textColor="#1DB954"
+                android:textSize="14sp" />
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="#E0E0E0" />
+
             <!-- Close App Button -->
             <TextView
                 android:id="@+id/btnCloseApp"

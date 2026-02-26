@@ -2,6 +2,7 @@ package at.planqton.fytfm.media
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import android.os.Binder
 import android.os.IBinder
 import android.os.Looper
@@ -43,6 +44,7 @@ class FytFMMediaService : MediaLibraryService() {
     private lateinit var player: FmRadioPlayer
     private lateinit var presetRepository: PresetRepository
     private var fmNative: FmNative? = null
+    private var coverServer: CoverHttpServer? = null
 
     // Callbacks für Radio-Steuerung (werden von MainActivity gesetzt)
     var onPlayCallback: (() -> Unit)? = null
@@ -108,6 +110,8 @@ class FytFMMediaService : MediaLibraryService() {
     override fun onDestroy() {
         Log.i(TAG, "onDestroy")
         instance = null
+        coverServer?.stop()
+        coverServer = null
         mediaSession?.run {
             player.release()
             release()
@@ -119,16 +123,41 @@ class FytFMMediaService : MediaLibraryService() {
     // === Public API für MainActivity ===
 
     /**
-     * Aktualisiert die Metadaten (Station-Name, Radio-Text, etc.)
+     * Aktualisiert die Metadaten (Station-Name, Radio-Text, Cover, etc.)
      * Struktur basierend auf transistor-App für Car-Launcher Kompatibilität
+     *
+     * @param coverUrl Spotify Cover URL (online)
+     * @param localCoverPath Lokaler Pfad zum gecachten Cover (Fallback wenn Cache aktiv)
      */
-    fun updateMetadata(frequency: Float, ps: String?, rt: String?, isAM: Boolean = false) {
+    fun updateMetadata(
+        frequency: Float,
+        ps: String?,
+        rt: String?,
+        isAM: Boolean = false,
+        coverUrl: String? = null,
+        localCoverPath: String? = null
+    ) {
         val freqDisplay = if (isAM) {
             "AM ${frequency.toInt()}"
         } else {
             "FM %.1f".format(frequency)
         }
         val stationName = ps ?: freqDisplay
+
+        // Cover-URI bestimmen
+        val artworkUri: Uri? = when {
+            // 1. Spotify URL verfügbar → direkt nutzen
+            !coverUrl.isNullOrBlank() && coverUrl.startsWith("http") -> {
+                Uri.parse(coverUrl)
+            }
+            // 2. Lokaler Pfad + Cache aktiviert → über lokalen Server
+            !localCoverPath.isNullOrBlank() && presetRepository.isSpotifyCacheEnabled() -> {
+                ensureCoverServerRunning()
+                coverServer?.setCoverPath(localCoverPath)
+                coverServer?.getCoverUrl()?.let { Uri.parse(it) }
+            }
+            else -> null
+        }
 
         val metadata = MediaMetadata.Builder()
             .setTitle(rt?.takeIf { it.isNotBlank() } ?: stationName)  // RT oder Stationsname
@@ -139,10 +168,32 @@ class FytFMMediaService : MediaLibraryService() {
             .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION)
             .setIsPlayable(true)
             .setIsBrowsable(false)
+            .apply {
+                if (artworkUri != null) {
+                    setArtworkUri(artworkUri)
+                }
+            }
             .build()
 
         player.updateMetadata(metadata)
-        Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt")
+        Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt | cover=$artworkUri")
+    }
+
+    /**
+     * Startet den Cover-Server wenn nötig (nur wenn Cache aktiviert)
+     */
+    private fun ensureCoverServerRunning() {
+        if (coverServer == null) {
+            coverServer = CoverHttpServer().also { it.start() }
+        }
+    }
+
+    /**
+     * Stoppt den Cover-Server (z.B. wenn Cache deaktiviert wird)
+     */
+    fun stopCoverServer() {
+        coverServer?.stop()
+        coverServer = null
     }
 
     /**

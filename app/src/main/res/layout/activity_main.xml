@@ -319,6 +319,16 @@
             android:textSize="13sp"
             android:buttonTint="#FFFFFF"
             android:checked="false" />
+
+        <CheckBox
+            android:id="@+id/checkSpotifyInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Spotify Info"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:buttonTint="#FFFFFF"
+            android:checked="false" />
     </LinearLayout>
 
     <!-- Layout Info Debug Overlay -->
@@ -579,6 +589,308 @@
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:fontFamily="monospace" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Spotify Debug Overlay -->
+    <LinearLayout
+        android:id="@+id/debugSpotifyOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|bottom"
+        android:layout_margin="16dp"
+        android:background="@drawable/debug_overlay_background"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:minWidth="380dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Spotify Info"
+            android:textColor="#1DB954"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Status -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Status:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Waiting..."
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <!-- RT Input -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="RT Input:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyRtInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:maxLines="2"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="6dp"
+            android:background="#333333" />
+
+        <!-- Cover + Quelle Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Cover Image -->
+            <ImageView
+                android:id="@+id/debugSpotifyCoverImage"
+                android:layout_width="64dp"
+                android:layout_height="64dp"
+                android:scaleType="centerCrop"
+                android:background="#222222"
+                android:contentDescription="Cover" />
+
+            <!-- Quelle Info -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:layout_marginStart="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Quelle:"
+                    android:textColor="#AAAAAA"
+                    android:textSize="10sp" />
+
+                <TextView
+                    android:id="@+id/debugSpotifySource"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="--"
+                    android:textColor="#1DB954"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:fontFamily="monospace" />
+
+                <TextView
+                    android:id="@+id/debugSpotifySourceDetail"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#888888"
+                    android:textSize="9sp"
+                    android:fontFamily="monospace"
+                    android:maxLines="1"
+                    android:ellipsize="middle" />
+
+            </LinearLayout>
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="6dp"
+            android:background="#333333" />
+
+        <!-- Track Info Section -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Artist:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyArtist"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#1DB954"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Title:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="--"
+                android:textColor="#1DB954"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:maxLines="2"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Album:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyAlbum"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="--"
+                android:textColor="#1DB954"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:maxLines="1"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Duration:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Popularity:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyPopularity"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Released:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyReleaseDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="6dp"
+            android:background="#333333" />
+
+        <!-- Result -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Result:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugSpotifyResult"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="--"
+                android:textColor="#00FF88"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace"
+                android:maxLines="2"
+                android:ellipsize="end" />
         </LinearLayout>
     </LinearLayout>
 

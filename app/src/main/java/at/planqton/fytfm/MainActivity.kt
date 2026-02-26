@@ -33,6 +33,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.fmradio.FmNative
 import com.syu.jni.SyuJniNative
+import at.planqton.fytfm.spotify.SpotifyClient
+import at.planqton.fytfm.spotify.SpotifyCache
+import at.planqton.fytfm.spotify.RtCombiner
+import at.planqton.fytfm.spotify.TrackInfo
 
 class MainActivity : AppCompatActivity() {
 
@@ -65,8 +69,10 @@ class MainActivity : AppCompatActivity() {
     private var checkRdsInfo: CheckBox? = null
     private var checkLayoutInfo: CheckBox? = null
     private var checkBuildInfo: CheckBox? = null
+    private var checkSpotifyInfo: CheckBox? = null
     private var debugLayoutOverlay: View? = null
     private var debugBuildOverlay: View? = null
+    private var debugSpotifyOverlay: View? = null
     private var debugScreenInfo: TextView? = null
     private var debugDensityInfo: TextView? = null
 
@@ -80,6 +86,32 @@ class MainActivity : AppCompatActivity() {
     private lateinit var updateBadge: View
     private var settingsUpdateListener: ((UpdateState) -> Unit)? = null
     private var twUtil: TWUtilHelper? = null
+
+    // Spotify Integration
+    private var spotifyClient: SpotifyClient? = null
+    private var spotifyCache: SpotifyCache? = null
+    private var rtCombiner: RtCombiner? = null
+
+    // Spotify Cache Export/Import launchers
+    private val spotifyCacheExportLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                exportSpotifyCacheToUri(uri)
+            }
+        }
+    }
+
+    private val spotifyCacheImportLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                importSpotifyCacheFromUri(uri)
+            }
+        }
+    }
 
     private var isPlaying = true
     private var isRadioOn = false
@@ -145,6 +177,9 @@ class MainActivity : AppCompatActivity() {
         rdsLogRepository = RdsLogRepository(this)
         rdsLogRepository.performCleanup()  // Cleanup old entries on app start
 
+        // Initialize Spotify Integration
+        initSpotifyIntegration()
+
         // Update Badge auf Settings-Button
         updateBadge = findViewById(R.id.updateBadge)
         updateRepository.setStateListener { state ->
@@ -198,6 +233,63 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Initialisiert Spotify Client und RT Combiner wenn Credentials vorhanden
+     */
+    private fun initSpotifyIntegration() {
+        val clientId = presetRepository.getSpotifyClientId()
+        val clientSecret = presetRepository.getSpotifyClientSecret()
+
+        // Always create cache (for offline fallback)
+        if (spotifyCache == null) {
+            spotifyCache = SpotifyCache(this)
+        }
+
+        if (clientId.isNotBlank() && clientSecret.isNotBlank()) {
+            spotifyClient = SpotifyClient(clientId, clientSecret)
+            rtCombiner = RtCombiner(
+                spotifyClient = spotifyClient,
+                spotifyCache = spotifyCache,
+                isCacheEnabled = { presetRepository.isSpotifyCacheEnabled() },
+                isNetworkAvailable = { isNetworkAvailable() }
+            ) { status, rtInput, query, trackInfo ->
+                runOnUiThread {
+                    updateSpotifyDebugInfo(status, rtInput, query, trackInfo)
+                }
+            }
+            android.util.Log.i("fytFM", "Spotify integration initialized")
+        } else {
+            spotifyClient = null
+            // Still create RtCombiner with cache only for offline mode
+            rtCombiner = RtCombiner(
+                spotifyClient = null,
+                spotifyCache = spotifyCache,
+                isCacheEnabled = { presetRepository.isSpotifyCacheEnabled() },
+                isNetworkAvailable = { isNetworkAvailable() }
+            ) { status, rtInput, query, trackInfo ->
+                runOnUiThread {
+                    updateSpotifyDebugInfo(status, rtInput, query, trackInfo)
+                }
+            }
+            android.util.Log.i("fytFM", "Spotify credentials not configured, using cache only")
+        }
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        return capabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
+    /**
+     * Reinitialize Spotify integration (called when credentials change)
+     */
+    fun reinitSpotifyIntegration() {
+        rtCombiner?.destroy()
+        initSpotifyIntegration()
+    }
+
+    /**
      * Startet das RDS-Polling mit Callback für PS, RT, RSSI, PI, PTY, TP, TA, AF.
      */
     private fun startRdsPolling() {
@@ -206,14 +298,39 @@ class MainActivity : AppCompatActivity() {
                 // Log RDS data (only on RT change)
                 rdsLogRepository.onRdsUpdate(ps, rt, pi, pty, tp, ta, rssi, afList)
 
-                // Update MediaService metadata for Car Launcher
-                val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
-                FytFMMediaService.instance?.updateMetadata(
-                    frequency = frequencyScale.getFrequency(),
-                    ps = ps,
-                    rt = rt,
-                    isAM = isAM
-                )
+                // Process RT through Spotify integration if available
+                val combiner = rtCombiner
+                if (combiner != null && !rt.isNullOrBlank()) {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val combinedRt = combiner.processRt(pi, rt)
+                        val finalRt = combinedRt ?: rt
+
+                        // Get track info for cover art
+                        val trackInfo = combiner.getLastTrackInfo(pi)
+
+                        // Update MediaService with combined RT (must be on Main thread!)
+                        withContext(Dispatchers.Main) {
+                            val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                            FytFMMediaService.instance?.updateMetadata(
+                                frequency = frequencyScale.getFrequency(),
+                                ps = ps,
+                                rt = finalRt,
+                                isAM = isAM,
+                                coverUrl = trackInfo?.coverUrlMedium,  // Spotify URL (300px)
+                                localCoverPath = trackInfo?.coverUrl   // Local cached path
+                            )
+                        }
+                    }
+                } else {
+                    // No Spotify - use raw RT, no cover
+                    val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                    FytFMMediaService.instance?.updateMetadata(
+                        frequency = frequencyScale.getFrequency(),
+                        ps = ps,
+                        rt = rt,
+                        isAM = isAM
+                    )
+                }
 
                 runOnUiThread {
                     // Alter für jeden Wert holen
@@ -347,13 +464,16 @@ class MainActivity : AppCompatActivity() {
         checkRdsInfo = findViewById(R.id.checkRdsInfo)
         checkLayoutInfo = findViewById(R.id.checkLayoutInfo)
         checkBuildInfo = findViewById(R.id.checkBuildInfo)
+        checkSpotifyInfo = findViewById(R.id.checkSpotifyInfo)
         debugLayoutOverlay = findViewById(R.id.debugLayoutOverlay)
         debugBuildOverlay = findViewById(R.id.debugBuildOverlay)
+        debugSpotifyOverlay = findViewById(R.id.debugSpotifyOverlay)
         debugScreenInfo = findViewById(R.id.debugScreenInfo)
         debugDensityInfo = findViewById(R.id.debugDensityInfo)
 
         setupDebugOverlayDrag()
         setupDebugBuildOverlayDrag()
+        setupDebugSpotifyOverlayDrag()
         setupDebugChecklistDrag()
         setupDebugChecklistListeners()
         updateDebugOverlayVisibility()
@@ -415,6 +535,9 @@ class MainActivity : AppCompatActivity() {
             if (isChecked) {
                 updateBuildDebugInfo()
             }
+        }
+        checkSpotifyInfo?.setOnCheckedChangeListener { _, isChecked ->
+            debugSpotifyOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
         }
     }
 
@@ -484,6 +607,131 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupDebugSpotifyOverlayDrag() {
+        val overlay = debugSpotifyOverlay ?: return
+        var dX = 0f
+        var dY = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (view.parent as View).width - view.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
+                    view.x = newX
+                    view.y = newY
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    // Methode zum Aktualisieren der Spotify Debug-Anzeige
+    fun updateSpotifyDebugInfo(status: String, rtInput: String?, query: String?, trackInfo: TrackInfo?) {
+        if (debugSpotifyOverlay?.visibility != View.VISIBLE) return
+
+        // Status und Input immer setzen
+        findViewById<TextView>(R.id.debugSpotifyStatus)?.text = status
+        findViewById<TextView>(R.id.debugSpotifyRtInput)?.text = rtInput ?: "--"
+
+        // Determine source based on status
+        val isFromLocalCache = status.contains("Cached", ignoreCase = true) ||
+                               status.contains("offline", ignoreCase = true)
+        val isFromSpotifyOnline = status == "Found!"
+
+        // Track-Info Felder: Bei Processing clearen, sonst setzen
+        if (trackInfo != null) {
+            // Source info
+            val sourceText = when {
+                isFromLocalCache -> "LOKAL"
+                isFromSpotifyOnline -> "SPOTIFY ONLINE"
+                else -> status
+            }
+            val sourceColor = when {
+                isFromLocalCache -> android.graphics.Color.parseColor("#FFAA00")  // Orange
+                isFromSpotifyOnline -> android.graphics.Color.parseColor("#1DB954")  // Spotify Green
+                else -> android.graphics.Color.parseColor("#AAAAAA")
+            }
+            findViewById<TextView>(R.id.debugSpotifySource)?.text = sourceText
+            findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(sourceColor)
+
+            // Source detail (URL or local path)
+            val sourceDetail = if (isFromLocalCache) {
+                trackInfo.coverUrl ?: "lokal"
+            } else {
+                trackInfo.coverUrlMedium ?: trackInfo.spotifyUrl ?: "--"
+            }
+            findViewById<TextView>(R.id.debugSpotifySourceDetail)?.text = sourceDetail
+
+            // Load cover image
+            val coverImageView = findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)
+            coverImageView?.let { imageView ->
+                val coverPath = trackInfo.coverUrl
+                if (coverPath != null && coverPath.startsWith("/")) {
+                    // Local file path
+                    val file = java.io.File(coverPath)
+                    if (file.exists()) {
+                        val bitmap = android.graphics.BitmapFactory.decodeFile(coverPath)
+                        imageView.setImageBitmap(bitmap)
+                    } else {
+                        imageView.setImageResource(android.R.drawable.ic_menu_gallery)
+                    }
+                } else if (!coverPath.isNullOrBlank()) {
+                    // URL - load in background
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                        try {
+                            val url = java.net.URL(coverPath)
+                            val bitmap = android.graphics.BitmapFactory.decodeStream(url.openStream())
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                imageView.setImageBitmap(bitmap)
+                            }
+                        } catch (e: Exception) {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                imageView.setImageResource(android.R.drawable.ic_menu_gallery)
+                            }
+                        }
+                    }
+                } else {
+                    imageView.setImageResource(android.R.drawable.ic_menu_gallery)
+                }
+            }
+
+            // Track info
+            findViewById<TextView>(R.id.debugSpotifyArtist)?.text = trackInfo.artist
+            findViewById<TextView>(R.id.debugSpotifyTitle)?.text = trackInfo.title
+            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = trackInfo.album ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyDuration)?.text = formatDuration(trackInfo.durationMs)
+            findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "${trackInfo.popularity}/100"
+            findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = trackInfo.releaseDate ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyResult)?.text = "${trackInfo.artist} - ${trackInfo.title}"
+        } else {
+            // Clear all fields when no track info
+            findViewById<TextView>(R.id.debugSpotifySource)?.text = "--"
+            findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+            findViewById<TextView>(R.id.debugSpotifySourceDetail)?.text = ""
+            findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)?.setImageResource(android.R.drawable.ic_menu_gallery)
+            findViewById<TextView>(R.id.debugSpotifyArtist)?.text = "--"
+            findViewById<TextView>(R.id.debugSpotifyTitle)?.text = "--"
+            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = "--"
+            findViewById<TextView>(R.id.debugSpotifyDuration)?.text = "--"
+            findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "--"
+            findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = "--"
+            findViewById<TextView>(R.id.debugSpotifyResult)?.text = "--"
+        }
+    }
+
+    private fun formatDuration(ms: Long): String {
+        if (ms <= 0) return "--"
+        val seconds = (ms / 1000) % 60
+        val minutes = (ms / 1000) / 60
+        return String.format("%d:%02d", minutes, seconds)
+    }
+
     private fun updateDebugOverlayVisibility() {
         val showDebug = presetRepository.isShowDebugInfos()
         debugChecklist?.visibility = if (showDebug) View.VISIBLE else View.GONE
@@ -531,6 +779,9 @@ class MainActivity : AppCompatActivity() {
             stationAdapter.setSelectedFrequency(frequency)
             // Clear RDS data on frequency change for fresh data
             rdsManager.clearRds()
+            rtCombiner?.clearAll()
+            // Reset Spotify debug overlay
+            updateSpotifyDebugInfo("Waiting...", null, null, null)
             // Log station change
             val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
             rdsLogRepository.onStationChange(frequency, isAM)
@@ -1128,6 +1379,93 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
 
+        // Spotify API Credentials
+        val editSpotifyClientId = dialogView.findViewById<android.widget.EditText>(R.id.editSpotifyClientId)
+        val editSpotifyClientSecret = dialogView.findViewById<android.widget.EditText>(R.id.editSpotifyClientSecret)
+
+        // Flag to prevent saving during initial load
+        var isLoadingSpotifyCredentials = true
+
+        // Add TextWatchers BEFORE setting text (they won't trigger during load due to flag)
+        editSpotifyClientId?.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (!isLoadingSpotifyCredentials) {
+                    presetRepository.setSpotifyClientId(s?.toString() ?: "")
+                    android.util.Log.d("fytFM", "Saved Spotify Client ID: ${s?.toString()?.take(8)}...")
+                }
+            }
+        })
+        editSpotifyClientSecret?.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                if (!isLoadingSpotifyCredentials) {
+                    presetRepository.setSpotifyClientSecret(s?.toString() ?: "")
+                    android.util.Log.d("fytFM", "Saved Spotify Client Secret")
+                }
+            }
+        })
+
+        // Load saved values (TextWatchers won't save due to flag being true)
+        editSpotifyClientId?.setText(presetRepository.getSpotifyClientId())
+        editSpotifyClientSecret?.setText(presetRepository.getSpotifyClientSecret())
+
+        // Enable saving after initial load
+        isLoadingSpotifyCredentials = false
+
+        // Spotify Cache Enable Switch
+        val switchSpotifyCache = dialogView.findViewById<android.widget.Switch>(R.id.switchSpotifyCache)
+        switchSpotifyCache?.isChecked = presetRepository.isSpotifyCacheEnabled()
+        switchSpotifyCache?.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setSpotifyCacheEnabled(isChecked)
+        }
+
+        // Spotify Cache Stats and Export/Import
+        val tvSpotifyCacheStats = dialogView.findViewById<TextView>(R.id.tvSpotifyCacheStats)
+        val btnExportCache = dialogView.findViewById<TextView>(R.id.btnExportSpotifyCache)
+        val btnImportCache = dialogView.findViewById<TextView>(R.id.btnImportSpotifyCache)
+
+        // Update cache stats display
+        fun updateCacheStats() {
+            spotifyCache?.let { cache ->
+                val (trackCount, coverSize) = cache.getCacheStats()
+                val sizeStr = if (coverSize > 1024 * 1024) {
+                    "%.1f MB".format(coverSize / 1024.0 / 1024.0)
+                } else {
+                    "%.1f KB".format(coverSize / 1024.0)
+                }
+                tvSpotifyCacheStats?.text = "Cache: $trackCount Tracks ($sizeStr)"
+            }
+        }
+        updateCacheStats()
+
+        // Export cache button
+        btnExportCache?.setOnClickListener {
+            val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
+                addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                type = "application/zip"
+                putExtra(android.content.Intent.EXTRA_TITLE, "spotify_cache_${System.currentTimeMillis()}.zip")
+            }
+            spotifyCacheExportLauncher.launch(intent)
+        }
+
+        // Import cache button
+        btnImportCache?.setOnClickListener {
+            val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(android.content.Intent.CATEGORY_OPENABLE)
+                type = "application/zip"
+            }
+            spotifyCacheImportLauncher.launch(intent)
+        }
+
+        // View cache button
+        dialogView.findViewById<TextView>(R.id.btnViewSpotifyCache)?.setOnClickListener {
+            dialog.dismiss()
+            showSpotifyCacheDialog()
+        }
+
         // Language item (opens dialog)
         val textLanguageValue = dialogView.findViewById<TextView>(R.id.textLanguageValue)
         textLanguageValue.text = LocaleHelper.getLanguageDisplayName(this, LocaleHelper.getLanguage(this))
@@ -1167,6 +1505,150 @@ class MainActivity : AppCompatActivity() {
 
         // Prozess beenden
         android.os.Process.killProcess(android.os.Process.myPid())
+    }
+
+    private fun exportSpotifyCacheToUri(uri: android.net.Uri) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Create temp file for zip
+                val tempFile = java.io.File(cacheDir, "spotify_cache_export.zip")
+                val success = spotifyCache?.exportToZip(tempFile) ?: false
+
+                if (success) {
+                    // Copy temp file to user-selected location
+                    contentResolver.openOutputStream(uri)?.use { output ->
+                        tempFile.inputStream().use { input ->
+                            input.copyTo(output)
+                        }
+                    }
+                    tempFile.delete()
+
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            "Cache exported successfully",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            "Export failed",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("fytFM", "Export failed", e)
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "Export failed: ${e.message}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun importSpotifyCacheFromUri(uri: android.net.Uri) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Copy user file to temp location
+                val tempFile = java.io.File(cacheDir, "spotify_cache_import.zip")
+                contentResolver.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+
+                val importedCount = spotifyCache?.importFromZip(tempFile) ?: -1
+                tempFile.delete()
+
+                withContext(Dispatchers.Main) {
+                    if (importedCount >= 0) {
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            "Imported $importedCount tracks",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    } else {
+                        android.widget.Toast.makeText(
+                            this@MainActivity,
+                            "Import failed",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("fytFM", "Import failed", e)
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "Import failed: ${e.message}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    private fun showSpotifyCacheDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_spotify_cache, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        val tvCount = dialogView.findViewById<TextView>(R.id.tvCacheCount)
+        val etSearch = dialogView.findViewById<android.widget.EditText>(R.id.etCacheSearch)
+        val rvTracks = dialogView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvCacheTracks)
+        val tvEmpty = dialogView.findViewById<TextView>(R.id.tvCacheEmpty)
+        val btnClose = dialogView.findViewById<TextView>(R.id.btnCloseCache)
+
+        val adapter = at.planqton.fytfm.spotify.CachedTrackAdapter { track ->
+            // On track click - open Spotify URL if available
+            track.spotifyUrl?.let { url ->
+                try {
+                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(this, "Kann Spotify nicht öffnen", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+
+        rvTracks.layoutManager = androidx.recyclerview.widget.LinearLayoutManager(this)
+        rvTracks.adapter = adapter
+
+        // Load tracks
+        val tracks = spotifyCache?.getAllCachedTracks() ?: emptyList()
+        tvCount.text = "${tracks.size} Tracks"
+
+        if (tracks.isEmpty()) {
+            rvTracks.visibility = View.GONE
+            tvEmpty.visibility = View.VISIBLE
+        } else {
+            rvTracks.visibility = View.VISIBLE
+            tvEmpty.visibility = View.GONE
+            adapter.setTracks(tracks)
+        }
+
+        // Search filter
+        etSearch.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                adapter.filter(s?.toString() ?: "")
+            }
+        })
+
+        btnClose.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
     }
 
     private fun getRadioAreaName(area: Int): String {
@@ -1662,6 +2144,7 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     if (foundFreq != null) {
                         rdsManager.clearRds()
+                        rtCombiner?.clearAll()
                         frequencyScale.setFrequency(foundFreq)
                         saveLastFrequency(foundFreq)
                     } else {
