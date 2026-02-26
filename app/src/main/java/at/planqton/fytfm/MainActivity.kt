@@ -1,7 +1,11 @@
 package at.planqton.fytfm
 
 import android.app.AlertDialog
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
@@ -17,11 +21,23 @@ import android.widget.ProgressBar
 import at.planqton.fytfm.data.PresetRepository
 import at.planqton.fytfm.data.UpdateRepository
 import at.planqton.fytfm.data.UpdateState
+import at.planqton.fytfm.data.rdslog.RdsLogRepository
+import at.planqton.fytfm.ui.RdsLogAdapter
 import at.planqton.fytfm.ui.StationAdapter
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.android.fmradio.FmNative
 import com.syu.jni.SyuJniNative
 
 class MainActivity : AppCompatActivity() {
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleHelper.onAttach(newBase))
+    }
 
     private lateinit var tvFrequency: TextView
     private lateinit var frequencyScale: FrequencyScaleView
@@ -57,11 +73,62 @@ class MainActivity : AppCompatActivity() {
     private lateinit var rdsManager: RdsManager
     private lateinit var radioScanner: at.planqton.fytfm.scanner.RadioScanner
     private lateinit var updateRepository: UpdateRepository
+    private lateinit var rdsLogRepository: RdsLogRepository
+    private lateinit var updateBadge: View
+    private var settingsUpdateListener: ((UpdateState) -> Unit)? = null
     private var twUtil: TWUtilHelper? = null
 
     private var isPlaying = true
     private var isRadioOn = false
     private var showFavoritesOnly = false
+
+    // Archive UI
+    private lateinit var archiveAdapter: RdsLogAdapter
+    private var archiveJob: Job? = null
+    private var archiveSearchQuery: String = ""
+    private var archiveFilterFrequency: Float? = null  // null = all
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        // Silently ignore com.syu.radio intents - we're already the active radio app
+        if (intent?.action == "com.syu.radio") {
+            android.util.Log.d("fytFM", "Received com.syu.radio intent - ignoring (already active)")
+        }
+    }
+
+    /**
+     * Setzt uns als bevorzugte App für com.syu.radio Intent.
+     * Funktioniert nur als System-App.
+     */
+    private fun setAsPreferredRadioApp() {
+        try {
+            val pm = packageManager
+
+            // Erst alle bestehenden Präferenzen für diesen Intent löschen
+            val intent = Intent("com.syu.radio")
+            pm.clearPackagePreferredActivities(packageName)
+
+            // IntentFilter für com.syu.radio
+            val filter = IntentFilter("com.syu.radio")
+            filter.addCategory(Intent.CATEGORY_DEFAULT)
+
+            // Alle Activities die diesen Intent handeln können
+            val resolveInfos = pm.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            val componentNames = resolveInfos.map {
+                ComponentName(it.activityInfo.packageName, it.activityInfo.name)
+            }.toTypedArray()
+
+            // Uns als bevorzugte Activity setzen
+            val myComponent = ComponentName(this, MainActivity::class.java)
+
+            @Suppress("DEPRECATION")
+            pm.addPreferredActivity(filter, IntentFilter.MATCH_CATEGORY_EMPTY, componentNames, myComponent)
+
+            android.util.Log.i("fytFM", "Set as preferred activity for com.syu.radio")
+        } catch (e: Exception) {
+            android.util.Log.w("fytFM", "Could not set preferred activity: ${e.message}")
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,6 +139,20 @@ class MainActivity : AppCompatActivity() {
         rdsManager = RdsManager(fmNative)
         radioScanner = at.planqton.fytfm.scanner.RadioScanner(rdsManager)
         updateRepository = UpdateRepository(this)
+        rdsLogRepository = RdsLogRepository(this)
+        rdsLogRepository.performCleanup()  // Cleanup old entries on app start
+
+        // Update Badge auf Settings-Button
+        updateBadge = findViewById(R.id.updateBadge)
+        updateRepository.setStateListener { state ->
+            runOnUiThread {
+                // Badge anzeigen wenn Update verfügbar
+                updateBadge.visibility = if (state is UpdateState.UpdateAvailable) View.VISIBLE else View.GONE
+                // Settings-Dialog Listener aufrufen falls aktiv
+                settingsUpdateListener?.invoke(state)
+            }
+        }
+        updateRepository.checkForUpdatesSilent()  // Prüft still auf Updates beim Start
 
         // Initialize TWUtil for MCU communication - critical for RDS!
         twUtil = TWUtilHelper()
@@ -85,6 +166,9 @@ class MainActivity : AppCompatActivity() {
         // Pass TWUtil to DebugReceiver for ADB debugging
         DebugReceiver.setTwUtil(twUtil)
 
+        // Als bevorzugte Radio-App setzen (verhindert Chooser-Dialog)
+        setAsPreferredRadioApp()
+
         initViews()
         setupStationList()
         setupListeners()
@@ -93,6 +177,7 @@ class MainActivity : AppCompatActivity() {
         val lastFreq = loadLastFrequency()
         frequencyScale.setFrequency(lastFreq)
         rdsManager.setUiFrequency(lastFreq)  // Für AF-Vergleich
+        rdsLogRepository.setInitialFrequency(lastFreq, frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM)
         updateFrequencyDisplay(lastFreq)
         updateModeButton()
         loadFavoritesFilterState()
@@ -112,6 +197,9 @@ class MainActivity : AppCompatActivity() {
     private fun startRdsPolling() {
         rdsManager.startPolling(object : RdsManager.RdsCallback {
             override fun onRdsUpdate(ps: String?, rt: String?, rssi: Int, pi: Int, pty: Int, tp: Int, ta: Int, afList: ShortArray?) {
+                // Log RDS data (only on RT change)
+                rdsLogRepository.onRdsUpdate(ps, rt, pi, pty, tp, ta, rssi, afList)
+
                 runOnUiThread {
                     // Alter für jeden Wert holen
                     val psAge = rdsManager.psAgeMs
@@ -383,6 +471,9 @@ class MainActivity : AppCompatActivity() {
             stationAdapter.setSelectedFrequency(frequency)
             // Clear RDS data on frequency change for fresh data
             rdsManager.clearRds()
+            // Log station change
+            val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+            rdsLogRepository.onStationChange(frequency, isAM)
             // Actually tune the radio hardware!
             tuneToFrequency(frequency)
             // Save frequency to SharedPreferences
@@ -512,6 +603,12 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
             showSettingsDialog()
         }
+        findViewById<ImageButton>(R.id.btnArchive).setOnClickListener {
+            showArchiveOverlay()
+        }
+        findViewById<ImageButton>(R.id.btnArchiveBack).setOnClickListener {
+            hideArchiveOverlay()
+        }
 
         // Long press on FM button for debug tune
         btnFM.setOnLongClickListener {
@@ -538,6 +635,125 @@ class MainActivity : AppCompatActivity() {
         android.util.Log.i("fytFM", "=== DEBUG COMPLETE ===")
     }
 
+    /**
+     * Zeigt das Archiv-Overlay an
+     */
+    private fun showArchiveOverlay() {
+        findViewById<View>(R.id.archiveOverlay).visibility = View.VISIBLE
+
+        // Initialize adapter if needed
+        if (!::archiveAdapter.isInitialized) {
+            archiveAdapter = RdsLogAdapter()
+            val recycler = findViewById<RecyclerView>(R.id.archiveRecycler)
+            recycler.layoutManager = LinearLayoutManager(this)
+            recycler.adapter = archiveAdapter
+        }
+
+        // Setup archive UI
+        setupArchiveUI()
+
+        // Start collecting data
+        loadArchiveData()
+    }
+
+    /**
+     * Versteckt das Archiv-Overlay
+     */
+    private fun hideArchiveOverlay() {
+        findViewById<View>(R.id.archiveOverlay).visibility = View.GONE
+        archiveJob?.cancel()
+        archiveJob = null
+    }
+
+    private fun setupArchiveUI() {
+        // Search toggle
+        val searchContainer = findViewById<View>(R.id.archiveSearchContainer)
+        val etSearch = findViewById<android.widget.EditText>(R.id.etArchiveSearch)
+
+        findViewById<ImageButton>(R.id.btnArchiveSearch).setOnClickListener {
+            if (searchContainer.visibility == View.VISIBLE) {
+                searchContainer.visibility = View.GONE
+                archiveSearchQuery = ""
+                loadArchiveData()
+            } else {
+                searchContainer.visibility = View.VISIBLE
+                etSearch.requestFocus()
+            }
+        }
+
+        // Search text change listener
+        etSearch.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                archiveSearchQuery = s?.toString() ?: ""
+                loadArchiveData()
+            }
+        })
+
+        // Clear button
+        findViewById<ImageButton>(R.id.btnArchiveClear).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.clear_archive_title)
+                .setMessage(R.string.clear_archive_message)
+                .setPositiveButton(R.string.delete) { _, _ ->
+                    rdsLogRepository.clearAll()
+                    android.widget.Toast.makeText(this, R.string.archive_cleared, android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+
+        // "All" chip click
+        findViewById<TextView>(R.id.chipAllFrequencies).setOnClickListener {
+            archiveFilterFrequency = null
+            updateFilterChipSelection()
+            loadArchiveData()
+        }
+    }
+
+    private fun loadArchiveData() {
+        archiveJob?.cancel()
+
+        val flow = when {
+            archiveSearchQuery.isNotBlank() -> rdsLogRepository.searchRt(archiveSearchQuery)
+            archiveFilterFrequency != null -> rdsLogRepository.getEntriesForFrequency(archiveFilterFrequency!!)
+            else -> rdsLogRepository.getAllEntries()
+        }
+
+        archiveJob = CoroutineScope(Dispatchers.Main).launch {
+            flow.collectLatest { entries ->
+                archiveAdapter.setEntries(entries)
+
+                // Update stats
+                findViewById<TextView>(R.id.tvArchiveStats).text = getString(R.string.entries_format, entries.size)
+
+                // Toggle empty state
+                val recycler = findViewById<RecyclerView>(R.id.archiveRecycler)
+                val emptyState = findViewById<View>(R.id.archiveEmptyState)
+                if (entries.isEmpty()) {
+                    recycler.visibility = View.GONE
+                    emptyState.visibility = View.VISIBLE
+                } else {
+                    recycler.visibility = View.VISIBLE
+                    emptyState.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    private fun updateFilterChipSelection() {
+        val chipAll = findViewById<TextView>(R.id.chipAllFrequencies)
+
+        if (archiveFilterFrequency == null) {
+            chipAll.setBackgroundResource(R.drawable.chip_selected)
+            chipAll.setTextColor(resources.getColor(android.R.color.white, null))
+        } else {
+            chipAll.setBackgroundResource(R.drawable.chip_unselected)
+            chipAll.setTextColor(resources.getColor(android.R.color.black, null))
+        }
+    }
+
     private fun showSettingsDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_settings, null)
 
@@ -557,6 +773,13 @@ class MainActivity : AppCompatActivity() {
         switchPower.setOnCheckedChangeListener { _, isChecked ->
             presetRepository.setPowerOnStartup(isChecked)
         }
+        dialogView.findViewById<ImageButton>(R.id.btnPowerOnStartupInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.power_on_startup)
+                .setMessage(R.string.power_on_startup_info)
+                .setPositiveButton(R.string.confirm, null)
+                .show()
+        }
 
         // Show debug infos toggle
         val switchDebug = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchShowDebug)
@@ -564,6 +787,13 @@ class MainActivity : AppCompatActivity() {
         switchDebug.setOnCheckedChangeListener { _, isChecked ->
             presetRepository.setShowDebugInfos(isChecked)
             updateDebugOverlayVisibility()
+        }
+        dialogView.findViewById<ImageButton>(R.id.btnShowDebugInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.show_debug_infos)
+                .setMessage(R.string.show_debug_infos_info)
+                .setPositiveButton(R.string.confirm, null)
+                .show()
         }
 
         // LOC Local Mode toggle
@@ -573,6 +803,13 @@ class MainActivity : AppCompatActivity() {
             presetRepository.setLocalMode(isChecked)
             fmNative?.setLocalMode(isChecked)
         }
+        dialogView.findViewById<ImageButton>(R.id.btnLocalModeInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.loc_local_only)
+                .setMessage(R.string.loc_local_only_info)
+                .setPositiveButton(R.string.confirm, null)
+                .show()
+        }
 
         // Mono Mode toggle
         val switchMonoMode = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchMonoMode)
@@ -580,6 +817,13 @@ class MainActivity : AppCompatActivity() {
         switchMonoMode.setOnCheckedChangeListener { _, isChecked ->
             presetRepository.setMonoMode(isChecked)
             fmNative?.setMonoMode(isChecked)
+        }
+        dialogView.findViewById<ImageButton>(R.id.btnMonoModeInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.mono_noise_reduction)
+                .setMessage(R.string.mono_noise_reduction_info)
+                .setPositiveButton(R.string.confirm, null)
+                .show()
         }
 
         // Radio Area item (opens selection dialog)
@@ -593,11 +837,34 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Auto Scan Sensitivity toggle
+        val switchAutoScanSensitivity = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchAutoScanSensitivity)
+        switchAutoScanSensitivity.isChecked = presetRepository.isAutoScanSensitivity()
+        switchAutoScanSensitivity.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setAutoScanSensitivity(isChecked)
+        }
+
+        // Auto Scan Sensitivity info button
+        dialogView.findViewById<ImageButton>(R.id.btnAutoScanSensitivityInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.auto_scan_sensitivity)
+                .setMessage(R.string.auto_scan_sensitivity_info)
+                .setPositiveButton(R.string.confirm, null)
+                .show()
+        }
+
         // Overwrite Favorites toggle
         val switchOverwriteFavorites = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchOverwriteFavorites)
         switchOverwriteFavorites.isChecked = presetRepository.isOverwriteFavorites()
         switchOverwriteFavorites.setOnCheckedChangeListener { _, isChecked ->
             presetRepository.setOverwriteFavorites(isChecked)
+        }
+        dialogView.findViewById<ImageButton>(R.id.btnOverwriteFavoritesInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.overwrite_favorites)
+                .setMessage(R.string.overwrite_favorites_info)
+                .setPositiveButton(R.string.confirm, null)
+                .show()
         }
 
         // App Version / Update
@@ -606,51 +873,52 @@ class MainActivity : AppCompatActivity() {
         val progressUpdate = dialogView.findViewById<ProgressBar>(R.id.progressUpdate)
         val ivVersionChevron = dialogView.findViewById<ImageView>(R.id.ivVersionChevron)
 
-        // Aktuelle Version anzeigen
-        textVersionValue.text = "v${updateRepository.getCurrentVersion()} - Tippen zum Prüfen"
-
-        // State Listener für UI-Updates
-        updateRepository.setStateListener { state ->
-            runOnUiThread {
-                when (state) {
-                    is UpdateState.Idle -> {
-                        progressUpdate.visibility = View.GONE
-                        ivVersionChevron.visibility = View.VISIBLE
-                        textVersionValue.text = "v${updateRepository.getCurrentVersion()} - Tippen zum Prüfen"
-                    }
-                    is UpdateState.Checking -> {
-                        progressUpdate.visibility = View.VISIBLE
-                        ivVersionChevron.visibility = View.GONE
-                        textVersionValue.text = "Prüfe auf Updates..."
-                    }
-                    is UpdateState.NoUpdate -> {
-                        progressUpdate.visibility = View.GONE
-                        ivVersionChevron.visibility = View.VISIBLE
-                        textVersionValue.text = "Aktuell (v${updateRepository.getCurrentVersion()})"
-                    }
-                    is UpdateState.UpdateAvailable -> {
-                        progressUpdate.visibility = View.GONE
-                        ivVersionChevron.visibility = View.VISIBLE
-                        textVersionValue.text = "Update verfügbar: v${state.info.latestVersion}"
-                    }
-                    is UpdateState.Downloading -> {
-                        progressUpdate.visibility = View.VISIBLE
-                        ivVersionChevron.visibility = View.GONE
-                        textVersionValue.text = "Wird heruntergeladen..."
-                    }
-                    is UpdateState.ReadyToInstall -> {
-                        progressUpdate.visibility = View.GONE
-                        ivVersionChevron.visibility = View.VISIBLE
-                        textVersionValue.text = "Update bereit - Tippen zum Installieren"
-                    }
-                    is UpdateState.Error -> {
-                        progressUpdate.visibility = View.GONE
-                        ivVersionChevron.visibility = View.VISIBLE
-                        textVersionValue.text = "Fehler: ${state.message}"
-                    }
+        // Hilfsfunktion für UI-Update basierend auf State
+        fun updateVersionUI(state: UpdateState) {
+            when (state) {
+                is UpdateState.Idle -> {
+                    progressUpdate.visibility = View.GONE
+                    ivVersionChevron.visibility = View.VISIBLE
+                    textVersionValue.text = "v${updateRepository.getCurrentVersion()} - Tippen zum Prüfen"
+                }
+                is UpdateState.Checking -> {
+                    progressUpdate.visibility = View.VISIBLE
+                    ivVersionChevron.visibility = View.GONE
+                    textVersionValue.text = "Prüfe auf Updates..."
+                }
+                is UpdateState.NoUpdate -> {
+                    progressUpdate.visibility = View.GONE
+                    ivVersionChevron.visibility = View.VISIBLE
+                    textVersionValue.text = "Aktuell (v${updateRepository.getCurrentVersion()})"
+                }
+                is UpdateState.UpdateAvailable -> {
+                    progressUpdate.visibility = View.GONE
+                    ivVersionChevron.visibility = View.VISIBLE
+                    textVersionValue.text = "Update verfügbar: v${state.info.latestVersion}"
+                }
+                is UpdateState.Downloading -> {
+                    progressUpdate.visibility = View.VISIBLE
+                    ivVersionChevron.visibility = View.GONE
+                    textVersionValue.text = "Wird heruntergeladen..."
+                }
+                is UpdateState.DownloadComplete -> {
+                    progressUpdate.visibility = View.GONE
+                    ivVersionChevron.visibility = View.GONE
+                    textVersionValue.text = "Download fertig - Tippe Benachrichtigung"
+                }
+                is UpdateState.Error -> {
+                    progressUpdate.visibility = View.GONE
+                    ivVersionChevron.visibility = View.VISIBLE
+                    textVersionValue.text = "Fehler: ${state.message}"
                 }
             }
         }
+
+        // Aktuellen State anzeigen (falls schon ein Update gefunden wurde)
+        updateVersionUI(updateRepository.updateState)
+
+        // Dialog-Listener für UI-Updates setzen
+        settingsUpdateListener = { state -> updateVersionUI(state) }
 
         itemAppVersion.setOnClickListener {
             when (val state = updateRepository.updateState) {
@@ -663,17 +931,80 @@ class MainActivity : AppCompatActivity() {
                         .setTitle("Update verfügbar")
                         .setMessage("Version ${state.info.latestVersion} ist verfügbar.\n\nJetzt herunterladen?")
                         .setPositiveButton("Herunterladen") { _, _ ->
-                            updateRepository.downloadUpdate(state.info.downloadUrl)
+                            updateRepository.downloadUpdate(state.info.downloadUrl, state.info.latestVersion)
                         }
                         .setNegativeButton("Später", null)
                         .show()
                 }
-                is UpdateState.ReadyToInstall -> {
-                    updateRepository.installUpdate(state.apkUri)
+                is UpdateState.DownloadComplete -> {
+                    // Download fertig - Benachrichtigung tippen zum Installieren
+                    updateRepository.resetState()
                 }
                 else -> {
                     // Checking or Downloading - nichts tun
                 }
+            }
+        }
+
+        // RDS Logging toggle
+        val switchRdsLogging = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchRdsLogging)
+        switchRdsLogging.isChecked = rdsLogRepository.loggingEnabled
+        switchRdsLogging.setOnCheckedChangeListener { _, isChecked ->
+            rdsLogRepository.loggingEnabled = isChecked
+        }
+        dialogView.findViewById<ImageButton>(R.id.btnRdsLoggingInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.rds_logging)
+                .setMessage(R.string.rds_logging_info)
+                .setPositiveButton(R.string.confirm, null)
+                .show()
+        }
+
+        // RDS Retention item (opens dialog)
+        val textRdsRetentionValue = dialogView.findViewById<TextView>(R.id.textRdsRetentionValue)
+        textRdsRetentionValue.text = getString(R.string.days_format, rdsLogRepository.retentionDays)
+        dialogView.findViewById<View>(R.id.itemRdsRetention).setOnClickListener {
+            showRdsRetentionDialog { selectedDays ->
+                rdsLogRepository.retentionDays = selectedDays
+                textRdsRetentionValue.text = getString(R.string.days_format, selectedDays)
+                rdsLogRepository.performCleanup()
+            }
+        }
+        dialogView.findViewById<ImageButton>(R.id.btnArchiveRetentionInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.archive_retention)
+                .setMessage(R.string.archive_retention_info)
+                .setPositiveButton(R.string.confirm, null)
+                .show()
+        }
+
+        // Clear Archive item
+        val textArchiveCount = dialogView.findViewById<TextView>(R.id.textArchiveCount)
+        CoroutineScope(Dispatchers.Main).launch {
+            val count = withContext(Dispatchers.IO) { rdsLogRepository.getEntryCount() }
+            textArchiveCount.text = getString(R.string.entries_format, count)
+        }
+        dialogView.findViewById<View>(R.id.itemClearArchive).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.clear_archive_title)
+                .setMessage(R.string.clear_archive_message)
+                .setPositiveButton(R.string.delete) { _, _ ->
+                    rdsLogRepository.clearAll()
+                    textArchiveCount.text = getString(R.string.entries_format, 0)
+                    android.widget.Toast.makeText(this, R.string.archive_cleared, android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+
+        // Language item (opens dialog)
+        val textLanguageValue = dialogView.findViewById<TextView>(R.id.textLanguageValue)
+        textLanguageValue.text = LocaleHelper.getLanguageDisplayName(this, LocaleHelper.getLanguage(this))
+        dialogView.findViewById<View>(R.id.itemLanguage).setOnClickListener {
+            showLanguageDialog { selectedLanguage ->
+                LocaleHelper.setLocale(this, selectedLanguage)
+                dialog.dismiss()
+                recreate() // Restart activity to apply new language
             }
         }
 
@@ -684,6 +1015,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.setOnDismissListener { settingsUpdateListener = null }
         dialog.show()
     }
 
@@ -715,6 +1047,46 @@ class MainActivity : AppCompatActivity() {
             4 -> "Japan"
             else -> "Europe"
         }
+    }
+
+    private fun showLanguageDialog(onSelected: (String) -> Unit) {
+        val options = arrayOf(
+            getString(R.string.language_system),
+            getString(R.string.language_english),
+            getString(R.string.language_german)
+        )
+        val values = arrayOf(
+            LocaleHelper.LANGUAGE_SYSTEM,
+            LocaleHelper.LANGUAGE_ENGLISH,
+            LocaleHelper.LANGUAGE_GERMAN
+        )
+        val currentLang = LocaleHelper.getLanguage(this)
+        val currentIndex = values.indexOfFirst { it == currentLang }.coerceAtLeast(0)
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.language)
+            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
+                onSelected(values[which])
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun showRdsRetentionDialog(onSelected: (Int) -> Unit) {
+        val values = intArrayOf(7, 14, 30, 90)
+        val options = values.map { getString(R.string.days_format, it) }.toTypedArray()
+        val currentDays = rdsLogRepository.retentionDays
+        val currentIndex = values.indexOfFirst { it == currentDays }.coerceAtLeast(0)
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.archive_retention)
+            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
+                onSelected(values[which])
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun showRadioAreaDialog(onSelected: (Int) -> Unit) {
@@ -840,6 +1212,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showStationScanDialog() {
+        val isFmMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM
+        val highSensitivity = presetRepository.isAutoScanSensitivity()
         val dialog = at.planqton.fytfm.ui.StationListDialog(
             this,
             radioScanner,
@@ -854,7 +1228,9 @@ class MainActivity : AppCompatActivity() {
                 frequencyScale.setFrequency(station.frequency)
                 updateFrequencyDisplay(station.frequency)
                 rdsManager.tune(station.frequency)
-            }
+            },
+            initialMode = isFmMode,
+            highSensitivity = highSensitivity
         )
         dialog.show()
     }
@@ -1204,8 +1580,9 @@ class MainActivity : AppCompatActivity() {
      */
     private fun updateFolderButton() {
         val btnFolder = findViewById<ImageButton>(R.id.btnFolder)
-        val iconRes = if (showFavoritesOnly) R.drawable.ic_folder_star else R.drawable.ic_folder
+        val iconRes = if (showFavoritesOnly) R.drawable.ic_folder else R.drawable.ic_folder_all
         btnFolder.setImageResource(iconRes)
+        tvAllList.text = if (showFavoritesOnly) "Favoriten" else "Alle Sender"
     }
 
     /**
@@ -1257,6 +1634,7 @@ class MainActivity : AppCompatActivity() {
         stopRdsPolling()
         twUtil?.close()
         updateRepository.destroy()
+        rdsLogRepository.destroy()
         // Turn off radio when app closes
         if (isRadioOn) {
             fmNative.powerOff()

@@ -21,11 +21,14 @@ class StationListDialog(
     context: Context,
     private val radioScanner: RadioScanner,
     private val onStationsAdded: (List<RadioStation>) -> Unit,
-    private val onStationSelected: (RadioStation) -> Unit
+    private val onStationSelected: (RadioStation) -> Unit,
+    private val initialMode: Boolean = true,  // true = FM, false = AM
+    private val highSensitivity: Boolean = false  // true = detect weak signals
 ) : Dialog(context) {
 
     private lateinit var btnFmTab: Button
     private lateinit var btnAmTab: Button
+    private lateinit var tabContainer: View
     private lateinit var stationRecycler: RecyclerView
     private lateinit var tvEmptyState: TextView
     private lateinit var scanProgressContainer: LinearLayout
@@ -43,7 +46,7 @@ class StationListDialog(
         dismiss()
     }
 
-    private var isShowingFM = true
+    private var isShowingFM = initialMode
     private var fmStations: List<RadioStation> = emptyList()
     private var amStations: List<RadioStation> = emptyList()
     private val scanResultsLive = mutableListOf<RadioStation>()
@@ -75,6 +78,7 @@ class StationListDialog(
     }
 
     private fun initViews() {
+        tabContainer = findViewById(R.id.tabContainer)
         btnFmTab = findViewById(R.id.btnFmTab)
         btnAmTab = findViewById(R.id.btnAmTab)
         stationRecycler = findViewById(R.id.stationRecycler)
@@ -92,6 +96,13 @@ class StationListDialog(
         // Checkboxen standardmäßig aktiviert
         cbRequirePs.isChecked = true
         cbRequirePi.isChecked = true
+
+        // Nur den aktuellen Modus-Tab anzeigen, anderen verstecken
+        if (isShowingFM) {
+            btnAmTab.visibility = View.GONE
+        } else {
+            btnFmTab.visibility = View.GONE
+        }
 
         stationRecycler.layoutManager = LinearLayoutManager(
             context, LinearLayoutManager.VERTICAL, false
@@ -168,6 +179,7 @@ class StationListDialog(
             currentPhase = ""
             tvScanStatus.text = "Phase 1: Signal..."
             radioScanner.scanFM(
+                highSensitivity = highSensitivity,
                 onProgress = { progress, frequency, remainingSec, filteredCount, phase ->
                     // Bei Phasenwechsel Liste leeren
                     if (phase != currentPhase) {

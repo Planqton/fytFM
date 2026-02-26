@@ -198,6 +198,15 @@ class PresetRepository(context: Context) {
         settingsPrefs.edit().putBoolean("overwrite_favorites", enabled).apply()
     }
 
+    // Auto Scan Sensitivity (empfängt auch schwache Sender)
+    fun isAutoScanSensitivity(): Boolean {
+        return settingsPrefs.getBoolean("auto_scan_sensitivity", false)
+    }
+
+    fun setAutoScanSensitivity(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("auto_scan_sensitivity", enabled).apply()
+    }
+
     /**
      * Fügt gescannte Sender zur Liste hinzu.
      * Favorisierte Sender werden nur überschrieben wenn isOverwriteFavorites() true ist.

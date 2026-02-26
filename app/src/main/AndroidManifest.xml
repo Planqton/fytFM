@@ -22,10 +22,19 @@
             android:exported="true"
             android:screenOrientation="landscape"
             android:supportsPictureInPicture="true"
+            android:launchMode="singleTask"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- FYT System Radio Intent abfangen -->
+            <intent-filter android:priority="1000">
+                <action android:name="com.syu.radio" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter android:priority="1000">
+                <action android:name="com.syu.radio" />
             </intent-filter>
         </activity>
 

@@ -147,6 +147,15 @@ public class DebugReceiver extends BroadcastReceiver {
             case "rds_probe":
                 cmdProbeRdsCommands();
                 break;
+            case "scan_test":
+                cmdScanTest();
+                break;
+            case "autoscan":
+                cmdAutoScan();
+                break;
+            case "native_scan":
+                cmdNativeScan();
+                break;
             default:
                 log("Unknown command: " + cmd);
                 log("Available: status, poweron, poweroff, tune, rds, rds_enable, rssi, seek_up, seek_down, mute, unmute, test_all, twutil, sqlfm, sqlfm_probe, sqlfm_ps, rds_af, rds_ct, rds_probe");
@@ -1044,6 +1053,213 @@ public class DebugReceiver extends BroadcastReceiver {
             if (c < 32 && c != '\n' && c != '\r' && c != '\t') return false;
         }
         return true;
+    }
+
+    /**
+     * Testet Signal-Erkennung auf ein paar Frequenzen
+     */
+    private void cmdScanTest() {
+        log("--- SCAN TEST ---");
+
+        if (!FmNative.isLibraryLoaded()) {
+            log("ERROR: Library not loaded!");
+            return;
+        }
+
+        FmNative fm = FmNative.getInstance();
+
+        // Initialize radio if not already on
+        log("Initializing radio...");
+        try {
+            fm.openDev();
+            fm.powerUp(87.5f);
+            fm.setRds(true);
+            radioOn = true;
+            log("Radio initialized");
+        } catch (Throwable e) {
+            log("Radio init (may already be on): " + e.getMessage());
+        }
+
+        // Wait for radio to stabilize
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException e) {
+            // ignore
+        }
+
+        float[] testFreqs = {88.6f, 90.4f, 92.0f, 95.8f, 98.3f, 101.3f, 103.8f, 105.8f};
+
+        for (float freq : testFreqs) {
+            log("Testing " + freq + " MHz...");
+
+            // Tune
+            try {
+                fm.tune(freq);
+                Thread.sleep(300);
+            } catch (Throwable e) {
+                log("  tune FAILED: " + e.getMessage());
+                continue;
+            }
+
+            // RSSI via fmsyu_jni
+            int rssi = 0;
+            try {
+                Bundle inBundle = new Bundle();
+                Bundle outBundle = new Bundle();
+                int result = fm.fmsyu_jni(CMD_GETRSSI, inBundle, outBundle);
+                if (result == 0) {
+                    rssi = outBundle.getInt("rssilevel", 0);
+                }
+            } catch (Throwable e) {
+                // ignore
+            }
+
+            // PS check (kurz warten auf RDS)
+            String ps = "";
+            try {
+                Thread.sleep(500);
+                Bundle inBundle = new Bundle();
+                Bundle outBundle = new Bundle();
+                int result = fm.fmsyu_jni(CMD_RDSGETPS, inBundle, outBundle);
+                if (result == 0) {
+                    byte[] psData = outBundle.getByteArray("PSname");
+                    if (psData != null && psData.length > 0) {
+                        ps = new String(psData, StandardCharsets.US_ASCII).trim();
+                    }
+                }
+            } catch (Throwable e) {
+                // ignore
+            }
+
+            String status = rssi >= 20 ? "SIGNAL" : "weak";
+            log(String.format("  %.1f MHz: RSSI=%d %s PS='%s'", freq, rssi, status, ps));
+        }
+
+        log("Scan test complete");
+    }
+
+    /**
+     * Testet native FmNative Scan-Funktionen
+     */
+    private void cmdNativeScan() {
+        log("--- NATIVE SCAN TEST ---");
+
+        if (!FmNative.isLibraryLoaded()) {
+            log("ERROR: Library not loaded!");
+            return;
+        }
+
+        FmNative fm = FmNative.getInstance();
+
+        // Radio initialisieren
+        log("Initializing radio...");
+        try {
+            fm.openDev();
+            fm.powerUp(87.5f);
+            fm.setRds(true);
+            Thread.sleep(500);
+            log("Radio initialized");
+        } catch (Exception e) {
+            log("Radio init: " + e.getMessage());
+        }
+
+        // Test 1: FmNative.autoScan(band)
+        log("=== Test 1: FmNative.autoScan(0) ===");
+        try {
+            long start = System.currentTimeMillis();
+            short[] freqs = FmNative.autoScan(0);  // band 0 = EU
+            long duration = System.currentTimeMillis() - start;
+
+            if (freqs != null && freqs.length > 0) {
+                log("autoScan found " + freqs.length + " stations in " + duration + "ms:");
+                for (int i = 0; i < Math.min(freqs.length, 20); i++) {
+                    log(String.format("  [%d] %.1f MHz", i+1, freqs[i]/10.0f));
+                }
+            } else {
+                log("autoScan returned null/empty (duration: " + duration + "ms)");
+            }
+        } catch (Throwable e) {
+            log("autoScan EXCEPTION: " + e.getMessage());
+        }
+
+        // Test 2: fm.sqlautoScan(band, freqList, rssiList)
+        log("=== Test 2: fm.sqlautoScan(0, ...) ===");
+        try {
+            short[] freqList = new short[50];
+            short[] rssiList = new short[50];
+
+            long start = System.currentTimeMillis();
+            int count = fm.sqlautoScan(0, freqList, rssiList);
+            long duration = System.currentTimeMillis() - start;
+
+            log("sqlautoScan returned count=" + count + " in " + duration + "ms");
+
+            if (count > 0) {
+                log("Found stations:");
+                for (int i = 0; i < Math.min(count, 20); i++) {
+                    log(String.format("  [%d] %.1f MHz (RSSI: %d)", i+1, freqList[i]/10.0f, rssiList[i]));
+                }
+            }
+        } catch (Throwable e) {
+            log("sqlautoScan EXCEPTION: " + e.getMessage());
+        }
+
+        log("Native scan test complete");
+    }
+
+    /**
+     * Testet sqlfmservice AutoScan - so wie SYU Radio es macht
+     */
+    private void cmdAutoScan() {
+        log("--- AUTOSCAN VIA SQLFMSERVICE ---");
+
+        SqlFMServiceClient sqlFm = new SqlFMServiceClient();
+
+        if (!sqlFm.isConnected()) {
+            log("ERROR: Could not connect to sqlfmservice");
+            return;
+        }
+
+        log("Connected to sqlfmservice!");
+
+        // Erst Radio über sqlfmservice initialisieren
+        log("Step 1: Testing openDev via sqlfmservice...");
+        boolean openResult = sqlFm.testTransact(4);  // OPEN_DEV
+        log("  openDev result: " + openResult);
+
+        log("Step 2: Testing powerUp via sqlfmservice...");
+        boolean powerResult = sqlFm.powerUpSql(87.5f);
+        log("  powerUp result: " + powerResult);
+
+        log("Step 3: Enable RDS...");
+        boolean rdsResult = sqlFm.enableRds();
+        log("  enableRds result: " + rdsResult);
+
+        // Warten bis Radio stabil
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e) {}
+
+        log("Step 4: Starting autoscan...");
+        long startTime = System.currentTimeMillis();
+        short[] freqs = sqlFm.autoScan();
+        long duration = System.currentTimeMillis() - startTime;
+
+        if (freqs != null && freqs.length > 0) {
+            log("AutoScan found " + freqs.length + " stations in " + duration + "ms:");
+            for (int i = 0; i < freqs.length; i++) {
+                float mhz = freqs[i] / 10.0f;
+                log(String.format("  [%d] %.1f MHz", i+1, mhz));
+            }
+        } else {
+            log("AutoScan returned no stations (duration: " + duration + "ms)");
+            log("Trying alternative: Reading cached station list...");
+
+            // Vielleicht gibt es eine gespeicherte Liste?
+            sqlFm.probeService();
+        }
+
+        log("AutoScan complete");
     }
 
     private void log(String msg) {

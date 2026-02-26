@@ -573,6 +573,39 @@ public class SqlFMServiceClient {
     }
 
     /**
+     * PowerUp über sqlfmservice
+     */
+    public boolean powerUpSql(float freqMHz) {
+        if (!isConnected()) return false;
+
+        int freqKhz10 = (int)(freqMHz * 100);
+
+        try {
+            Parcel data = Parcel.obtain();
+            Parcel reply = Parcel.obtain();
+
+            try {
+                data.writeInterfaceToken("sqlfmserver.ISqlFMService");
+                data.writeInt(freqKhz10);
+
+                boolean success = mService.transact(TRANSACTION_POWER_UP, data, reply, 0);
+                Log.i(TAG, "powerUpSql(" + freqMHz + ") = " + success);
+
+                if (success) {
+                    reply.readException();
+                    return true;
+                }
+            } finally {
+                data.recycle();
+                reply.recycle();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "powerUpSql failed: " + e.getMessage());
+        }
+        return false;
+    }
+
+    /**
      * Tune über sqlfmservice
      */
     public boolean tune(float freqMHz) {
