@@ -45,6 +45,10 @@ class SpotifyClient(
 ) {
     companion object {
         private const val TAG = "SpotifyClient"
+
+        // Debug: Simuliert fehlende Internetverbindung
+        @Volatile
+        var debugInternetDisabled = false
     }
 
     private val client = OkHttpClient.Builder()
@@ -125,6 +129,12 @@ class SpotifyClient(
      * @return TrackInfo if found, null otherwise
      */
     suspend fun searchTrack(query: String): TrackInfo? = withContext(Dispatchers.IO) {
+        // Debug: Simulierte Netzwerkstörung
+        if (debugInternetDisabled) {
+            Log.d(TAG, "searchTrack: Internet disabled (debug)")
+            return@withContext null
+        }
+
         val token = getAccessToken() ?: return@withContext null
 
         // Try simple search first
@@ -148,6 +158,12 @@ class SpotifyClient(
      * Search with specific artist and title parameters
      */
     suspend fun searchTrackByParts(artist: String?, title: String?): TrackInfo? = withContext(Dispatchers.IO) {
+        // Debug: Simulierte Netzwerkstörung
+        if (debugInternetDisabled) {
+            Log.d(TAG, "searchTrackByParts: Internet disabled (debug)")
+            return@withContext null
+        }
+
         val token = getAccessToken() ?: return@withContext null
 
         // Build query with Spotify's search syntax
@@ -195,6 +211,162 @@ class SpotifyClient(
         }
 
         result
+    }
+
+    /**
+     * Search for tracks excluding specific trackIds
+     * @param query Search query
+     * @param skipTrackIds List of track IDs to skip
+     * @return First non-skipped track or null
+     */
+    suspend fun searchTrackWithSkip(query: String, skipTrackIds: List<String>): TrackInfo? = withContext(Dispatchers.IO) {
+        if (debugInternetDisabled) {
+            Log.d(TAG, "searchTrackWithSkip: Internet disabled (debug)")
+            return@withContext null
+        }
+        if (skipTrackIds.isEmpty()) {
+            return@withContext searchTrack(query)
+        }
+
+        val token = getAccessToken() ?: return@withContext null
+
+        // Get multiple results and filter
+        val tracks = doSearchMultiple(token, query, "with_skip", limit = skipTrackIds.size + 3)
+        tracks.firstOrNull { it.trackId !in skipTrackIds }
+    }
+
+    private fun doSearchMultiple(token: String, query: String, step: String, limit: Int = 5): List<TrackInfo> {
+        Log.d(TAG, "Searching multiple [$step]: $query (limit=$limit)")
+
+        val searchUrl = HttpUrl.Builder()
+            .scheme("https")
+            .host("api.spotify.com")
+            .addPathSegments("v1/search")
+            .addQueryParameter("q", query)
+            .addQueryParameter("type", "track")
+            .addQueryParameter("limit", limit.toString())
+            .build()
+
+        val request = Request.Builder()
+            .url(searchUrl)
+            .header("Authorization", "Bearer $token")
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    Log.e(TAG, "Search error ($step): ${response.code}")
+                    return emptyList()
+                }
+
+                val responseBody = response.body?.string()
+                if (responseBody.isNullOrBlank()) {
+                    Log.e(TAG, "Empty response ($step)")
+                    return emptyList()
+                }
+
+                val json = JSONObject(responseBody)
+                val items = json.getJSONObject("tracks").getJSONArray("items")
+                val results = mutableListOf<TrackInfo>()
+
+                for (i in 0 until items.length()) {
+                    val trackItem = items.optJSONObject(i) ?: continue
+                    parseTrackItem(trackItem, step)?.let { results.add(it) }
+                }
+
+                Log.d(TAG, "Found ${results.size} tracks for [$step]")
+                return results
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Search multiple failed ($step)", e)
+            return emptyList()
+        }
+    }
+
+    private fun parseTrackItem(trackItem: JSONObject, step: String): TrackInfo? {
+        try {
+            val trackName = trackItem.getString("name")
+            val trackId = trackItem.optString("id")
+            val durationMs = trackItem.optLong("duration_ms", 0)
+            val popularity = trackItem.optInt("popularity", 0)
+            val explicit = trackItem.optBoolean("explicit", false)
+            val previewUrl = trackItem.optString("preview_url", null)?.takeIf { it.isNotBlank() && it != "null" }
+            val trackNumber = trackItem.optInt("track_number", 0)
+            val discNumber = trackItem.optInt("disc_number", 0)
+
+            val externalIds = trackItem.optJSONObject("external_ids")
+            val isrc = externalIds?.optString("isrc", null)?.takeIf { it.isNotBlank() && it != "null" }
+
+            val externalUrls = trackItem.optJSONObject("external_urls")
+            val spotifyUrl = externalUrls?.optString("spotify")
+
+            val artistArray = trackItem.getJSONArray("artists")
+            val allArtists = mutableListOf<String>()
+            val allArtistIds = mutableListOf<String>()
+            for (j in 0 until artistArray.length()) {
+                val artistObj = artistArray.getJSONObject(j)
+                allArtists.add(artistObj.getString("name"))
+                artistObj.optString("id")?.takeIf { it.isNotBlank() }?.let { allArtistIds.add(it) }
+            }
+            val artistName = allArtists.firstOrNull() ?: "Unknown Artist"
+
+            val album = trackItem.optJSONObject("album")
+            val albumName = album?.optString("name")
+            val albumId = album?.optString("id")
+            val albumExternalUrls = album?.optJSONObject("external_urls")
+            val albumUrl = albumExternalUrls?.optString("spotify")
+            val albumType = album?.optString("album_type")
+            val totalTracks = album?.optInt("total_tracks", 0) ?: 0
+            val releaseDate = album?.optString("release_date")
+
+            val images = album?.optJSONArray("images")
+            var coverUrl: String? = null
+            var coverUrlMedium: String? = null
+            var coverUrlSmall: String? = null
+            if (images != null) {
+                for (i in 0 until images.length()) {
+                    val img = images.getJSONObject(i)
+                    val url = img.optString("url")
+                    val width = img.optInt("width", 0)
+                    when {
+                        width >= 600 && coverUrl == null -> coverUrl = url
+                        width in 200..400 && coverUrlMedium == null -> coverUrlMedium = url
+                        width in 50..100 && coverUrlSmall == null -> coverUrlSmall = url
+                    }
+                }
+                if (coverUrl == null && images.length() > 0) {
+                    coverUrl = images.getJSONObject(0).optString("url")
+                }
+            }
+
+            return TrackInfo(
+                artist = artistName,
+                title = trackName,
+                trackId = trackId,
+                spotifyUrl = spotifyUrl,
+                durationMs = durationMs,
+                popularity = popularity,
+                explicit = explicit,
+                previewUrl = previewUrl,
+                trackNumber = trackNumber,
+                discNumber = discNumber,
+                isrc = isrc,
+                allArtists = allArtists,
+                allArtistIds = allArtistIds,
+                album = albumName,
+                albumId = albumId,
+                albumUrl = albumUrl,
+                albumType = albumType,
+                totalTracks = totalTracks,
+                releaseDate = releaseDate,
+                coverUrl = coverUrl,
+                coverUrlMedium = coverUrlMedium,
+                coverUrlSmall = coverUrlSmall
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse track item ($step)", e)
+            return null
+        }
     }
 
     private fun doSearch(token: String, query: String, step: String): TrackInfo? {

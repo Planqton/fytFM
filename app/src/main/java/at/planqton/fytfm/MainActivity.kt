@@ -22,9 +22,17 @@ import at.planqton.fytfm.data.PresetRepository
 import at.planqton.fytfm.data.UpdateRepository
 import at.planqton.fytfm.data.UpdateState
 import at.planqton.fytfm.data.rdslog.RdsLogRepository
+import at.planqton.fytfm.data.rdslog.RdsDatabase
+import at.planqton.fytfm.data.rdslog.RtCorrection
+import at.planqton.fytfm.data.rdslog.RtCorrectionDao
+import at.planqton.fytfm.data.rdslog.EditString
+import at.planqton.fytfm.data.rdslog.EditStringDao
 import at.planqton.fytfm.media.FytFMMediaService
+import at.planqton.fytfm.ui.CorrectionsAdapter
+import at.planqton.fytfm.ui.EditStringsAdapter
 import at.planqton.fytfm.ui.RdsLogAdapter
 import at.planqton.fytfm.ui.StationAdapter
+import android.widget.EditText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -37,6 +45,7 @@ import at.planqton.fytfm.spotify.SpotifyClient
 import at.planqton.fytfm.spotify.SpotifyCache
 import at.planqton.fytfm.spotify.RtCombiner
 import at.planqton.fytfm.spotify.TrackInfo
+import coil.load
 
 class MainActivity : AppCompatActivity() {
 
@@ -75,6 +84,28 @@ class MainActivity : AppCompatActivity() {
     private var debugSpotifyOverlay: View? = null
     private var debugScreenInfo: TextView? = null
     private var debugDensityInfo: TextView? = null
+    private var checkDebugButtons: CheckBox? = null
+    private var debugButtonsOverlay: View? = null
+
+    // Now Playing Bar
+    private var nowPlayingBar: View? = null
+    private var nowPlayingCover: ImageView? = null
+    private var nowPlayingArtist: TextView? = null
+    private var nowPlayingTitle: TextView? = null
+    private var nowPlayingRawRt: TextView? = null
+    private var lastDisplayedTrackId: String? = null
+    private var lastDebugTrackId: String? = null
+
+    // Correction Helper Buttons
+    private var nowPlayingCorrectionButtons: View? = null
+    private var btnCorrectionRefresh: ImageButton? = null
+    private var btnCorrectionTrash: ImageButton? = null
+    private var rtCorrectionDao: RtCorrectionDao? = null
+    private var editStringDao: EditStringDao? = null
+
+    // Debug: Internet-Simulation deaktivieren
+    var debugInternetDisabled = false
+        private set
 
     private lateinit var presetRepository: PresetRepository
     private lateinit var stationAdapter: StationAdapter
@@ -172,6 +203,19 @@ class MainActivity : AppCompatActivity() {
         presetRepository = PresetRepository(this)
         fmNative = FmNative.getInstance()
         rdsManager = RdsManager(fmNative)
+
+        // Root-Fallback Listener für UIS7870/DUDU7 Geräte
+        // Zeigt einmalige Meldung wenn Root für FM-Zugriff benötigt wird
+        rdsManager.setRootRequiredListener {
+            runOnUiThread {
+                android.widget.Toast.makeText(
+                    this,
+                    getString(R.string.root_required_message),
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
         radioScanner = at.planqton.fytfm.scanner.RadioScanner(rdsManager)
         updateRepository = UpdateRepository(this)
         rdsLogRepository = RdsLogRepository(this)
@@ -244,16 +288,28 @@ class MainActivity : AppCompatActivity() {
             spotifyCache = SpotifyCache(this)
         }
 
+        // Initialize correction DAOs
+        if (rtCorrectionDao == null) {
+            rtCorrectionDao = RdsDatabase.getInstance(this).rtCorrectionDao()
+        }
+        if (editStringDao == null) {
+            editStringDao = RdsDatabase.getInstance(this).editStringDao()
+        }
+
         if (clientId.isNotBlank() && clientSecret.isNotBlank()) {
             spotifyClient = SpotifyClient(clientId, clientSecret)
             rtCombiner = RtCombiner(
                 spotifyClient = spotifyClient,
                 spotifyCache = spotifyCache,
                 isCacheEnabled = { presetRepository.isSpotifyCacheEnabled() },
-                isNetworkAvailable = { isNetworkAvailable() }
-            ) { status, rtInput, query, trackInfo ->
+                isNetworkAvailable = { isNetworkAvailable() },
+                correctionDao = rtCorrectionDao,
+                editStringDao = editStringDao
+            ) { status, originalRt, strippedRt, query, trackInfo ->
                 runOnUiThread {
-                    updateSpotifyDebugInfo(status, rtInput, query, trackInfo)
+                    updateSpotifyDebugInfo(status, originalRt, strippedRt, query, trackInfo)
+                    updateNowPlaying(trackInfo)
+                    nowPlayingRawRt?.text = strippedRt ?: ""
                 }
             }
             android.util.Log.i("fytFM", "Spotify integration initialized")
@@ -264,10 +320,14 @@ class MainActivity : AppCompatActivity() {
                 spotifyClient = null,
                 spotifyCache = spotifyCache,
                 isCacheEnabled = { presetRepository.isSpotifyCacheEnabled() },
-                isNetworkAvailable = { isNetworkAvailable() }
-            ) { status, rtInput, query, trackInfo ->
+                isNetworkAvailable = { isNetworkAvailable() },
+                correctionDao = rtCorrectionDao,
+                editStringDao = editStringDao
+            ) { status, originalRt, strippedRt, query, trackInfo ->
                 runOnUiThread {
-                    updateSpotifyDebugInfo(status, rtInput, query, trackInfo)
+                    updateSpotifyDebugInfo(status, originalRt, strippedRt, query, trackInfo)
+                    updateNowPlaying(trackInfo)
+                    nowPlayingRawRt?.text = strippedRt ?: ""
                 }
             }
             android.util.Log.i("fytFM", "Spotify credentials not configured, using cache only")
@@ -301,8 +361,9 @@ class MainActivity : AppCompatActivity() {
                 // Process RT through Spotify integration if available
                 val combiner = rtCombiner
                 if (combiner != null && !rt.isNullOrBlank()) {
+                    val currentFrequency = frequencyScale.getFrequency()
                     CoroutineScope(Dispatchers.IO).launch {
-                        val combinedRt = combiner.processRt(pi, rt)
+                        val combinedRt = combiner.processRt(pi, rt, currentFrequency)
                         val finalRt = combinedRt ?: rt
 
                         // Get track info for cover art
@@ -470,12 +531,31 @@ class MainActivity : AppCompatActivity() {
         debugSpotifyOverlay = findViewById(R.id.debugSpotifyOverlay)
         debugScreenInfo = findViewById(R.id.debugScreenInfo)
         debugDensityInfo = findViewById(R.id.debugDensityInfo)
+        checkDebugButtons = findViewById(R.id.checkDebugButtons)
+        debugButtonsOverlay = findViewById(R.id.debugButtonsOverlay)
+
+        // Now Playing Bar
+        nowPlayingBar = findViewById(R.id.nowPlayingBar)
+        nowPlayingCover = findViewById(R.id.nowPlayingCover)
+        nowPlayingArtist = findViewById(R.id.nowPlayingArtist)
+        nowPlayingTitle = findViewById(R.id.nowPlayingTitle)
+        nowPlayingRawRt = findViewById(R.id.nowPlayingRawRt)
+
+        // Correction Helper Buttons
+        nowPlayingCorrectionButtons = findViewById(R.id.nowPlayingCorrectionButtons)
+        btnCorrectionRefresh = findViewById(R.id.btnCorrectionRefresh)
+        btnCorrectionTrash = findViewById(R.id.btnCorrectionTrash)
+        setupCorrectionHelpers()
 
         setupDebugOverlayDrag()
         setupDebugBuildOverlayDrag()
+        setupDebugLayoutOverlayDrag()
         setupDebugSpotifyOverlayDrag()
+        setupDebugButtonsOverlayDrag()
         setupDebugChecklistDrag()
         setupDebugChecklistListeners()
+        setupDebugButtonsListeners()
+        restoreDebugWindowStates()
         updateDebugOverlayVisibility()
     }
 
@@ -515,6 +595,10 @@ class MainActivity : AppCompatActivity() {
                     view.y = newY
                     true
                 }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("checklist", view)
+                    true
+                }
                 else -> false
             }
         }
@@ -523,22 +607,61 @@ class MainActivity : AppCompatActivity() {
     private fun setupDebugChecklistListeners() {
         checkRdsInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("rds", isChecked)
         }
         checkLayoutInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugLayoutOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("layout", isChecked)
             if (isChecked) {
                 updateLayoutDebugInfo()
             }
         }
         checkBuildInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugBuildOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("build", isChecked)
             if (isChecked) {
                 updateBuildDebugInfo()
             }
         }
         checkSpotifyInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugSpotifyOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("spotify", isChecked)
         }
+        checkDebugButtons?.setOnCheckedChangeListener { _, isChecked ->
+            debugButtonsOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("buttons", isChecked)
+        }
+    }
+
+    private fun restoreDebugWindowStates() {
+        // Restore checkbox states (this will trigger the listeners which set visibility)
+        checkRdsInfo?.isChecked = presetRepository.isDebugWindowOpen("rds", false)
+        checkLayoutInfo?.isChecked = presetRepository.isDebugWindowOpen("layout", false)
+        checkBuildInfo?.isChecked = presetRepository.isDebugWindowOpen("build", false)
+        checkSpotifyInfo?.isChecked = presetRepository.isDebugWindowOpen("spotify", false)
+        checkDebugButtons?.isChecked = presetRepository.isDebugWindowOpen("buttons", false)
+
+        // Restore positions (post to ensure views are laid out)
+        debugOverlay?.post { restoreDebugWindowPosition("rds", debugOverlay) }
+        debugLayoutOverlay?.post { restoreDebugWindowPosition("layout", debugLayoutOverlay) }
+        debugBuildOverlay?.post { restoreDebugWindowPosition("build", debugBuildOverlay) }
+        debugSpotifyOverlay?.post { restoreDebugWindowPosition("spotify", debugSpotifyOverlay) }
+        debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
+        debugChecklist?.post { restoreDebugWindowPosition("checklist", debugChecklist) }
+    }
+
+    private fun restoreDebugWindowPosition(windowId: String, view: View?) {
+        view ?: return
+        val x = presetRepository.getDebugWindowPositionX(windowId)
+        val y = presetRepository.getDebugWindowPositionY(windowId)
+        if (x >= 0 && y >= 0) {
+            view.x = x
+            view.y = y
+        }
+    }
+
+    private fun saveDebugWindowPosition(windowId: String, view: View) {
+        presetRepository.setDebugWindowPosition(windowId, view.x, view.y)
     }
 
     private fun updateBuildDebugInfo() {
@@ -578,6 +701,10 @@ class MainActivity : AppCompatActivity() {
                     view.y = newY
                     true
                 }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("rds", view)
+                    true
+                }
                 else -> false
             }
         }
@@ -600,6 +727,38 @@ class MainActivity : AppCompatActivity() {
                     val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
                     view.x = newX
                     view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("build", view)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun setupDebugLayoutOverlayDrag() {
+        val overlay = debugLayoutOverlay ?: return
+        var dX = 0f
+        var dY = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (view.parent as View).width - view.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
+                    view.x = newX
+                    view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("layout", view)
                     true
                 }
                 else -> false
@@ -626,31 +785,106 @@ class MainActivity : AppCompatActivity() {
                     view.y = newY
                     true
                 }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("spotify", view)
+                    true
+                }
                 else -> false
             }
         }
     }
 
+    private fun setupDebugButtonsOverlayDrag() {
+        val overlay = debugButtonsOverlay ?: return
+        var dX = 0f
+        var dY = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (view.parent as View).width - view.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
+                    view.x = newX
+                    view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("buttons", view)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun setupDebugButtonsListeners() {
+        findViewById<android.widget.Button>(R.id.btnDebugKillInternet)?.setOnClickListener {
+            debugInternetDisabled = !debugInternetDisabled
+            // SpotifyClient Flag synchronisieren
+            SpotifyClient.debugInternetDisabled = debugInternetDisabled
+            val btn = it as android.widget.Button
+            if (debugInternetDisabled) {
+                btn.text = "App Internet: OFF"
+                btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF666666.toInt())
+                android.widget.Toast.makeText(this, "App Internet disabled (debug)", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                btn.text = "Kill App Internet Connection"
+                btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFCC3333.toInt())
+                android.widget.Toast.makeText(this, "App Internet enabled", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // Methode zum Aktualisieren der Spotify Debug-Anzeige
-    fun updateSpotifyDebugInfo(status: String, rtInput: String?, query: String?, trackInfo: TrackInfo?) {
+    fun updateSpotifyDebugInfo(status: String, originalRt: String?, strippedRt: String?, query: String?, trackInfo: TrackInfo?) {
         if (debugSpotifyOverlay?.visibility != View.VISIBLE) return
 
         // Status und Input immer setzen
         findViewById<TextView>(R.id.debugSpotifyStatus)?.text = status
-        findViewById<TextView>(R.id.debugSpotifyRtInput)?.text = rtInput ?: "--"
+        // Show both original and stripped RT
+        val rtDisplay = if (originalRt != null && strippedRt != null) {
+            "$originalRt\n→ $strippedRt"
+        } else {
+            originalRt ?: strippedRt ?: "--"
+        }
+        findViewById<TextView>(R.id.debugSpotifyRtInput)?.text = rtDisplay
+
+        // Bei "Waiting..." explizit alles clearen (Senderwechsel)
+        if (status == "Waiting...") {
+            lastDebugTrackId = null
+            clearSpotifyDebugFields()
+            return
+        }
+
+        // Ignoriere null trackInfo (während "Processing...", "Searching..." etc.)
+        // Behalte den letzten angezeigten Track
+        if (trackInfo == null) {
+            return
+        }
+
+        // Prüfen ob sich der Track geändert hat
+        val newTrackId = trackInfo.trackId
+        if (newTrackId == lastDebugTrackId) {
+            return // Gleicher Track, keine Aktualisierung der Track-Details nötig
+        }
+        lastDebugTrackId = newTrackId
 
         // Determine source based on status
         val isFromLocalCache = status.contains("Cached", ignoreCase = true) ||
                                status.contains("offline", ignoreCase = true)
         val isFromSpotifyOnline = status == "Found!"
 
-        // Track-Info Felder: Bei Processing clearen, sonst setzen
         if (trackInfo != null) {
-            // Source info
+            // Source Header
             val sourceText = when {
                 isFromLocalCache -> "LOKAL"
-                isFromSpotifyOnline -> "SPOTIFY ONLINE"
-                else -> status
+                isFromSpotifyOnline -> "SPOTIFY"
+                else -> "..."
             }
             val sourceColor = when {
                 isFromLocalCache -> android.graphics.Color.parseColor("#FFAA00")  // Orange
@@ -660,69 +894,97 @@ class MainActivity : AppCompatActivity() {
             findViewById<TextView>(R.id.debugSpotifySource)?.text = sourceText
             findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(sourceColor)
 
-            // Source detail (URL or local path)
-            val sourceDetail = if (isFromLocalCache) {
-                trackInfo.coverUrl ?: "lokal"
-            } else {
-                trackInfo.coverUrlMedium ?: trackInfo.spotifyUrl ?: "--"
-            }
-            findViewById<TextView>(R.id.debugSpotifySourceDetail)?.text = sourceDetail
-
             // Load cover image
-            val coverImageView = findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)
-            coverImageView?.let { imageView ->
-                val coverPath = trackInfo.coverUrl
-                if (coverPath != null && coverPath.startsWith("/")) {
-                    // Local file path
-                    val file = java.io.File(coverPath)
-                    if (file.exists()) {
-                        val bitmap = android.graphics.BitmapFactory.decodeFile(coverPath)
-                        imageView.setImageBitmap(bitmap)
-                    } else {
-                        imageView.setImageResource(android.R.drawable.ic_menu_gallery)
-                    }
-                } else if (!coverPath.isNullOrBlank()) {
-                    // URL - load in background
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                        try {
-                            val url = java.net.URL(coverPath)
-                            val bitmap = android.graphics.BitmapFactory.decodeStream(url.openStream())
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                imageView.setImageBitmap(bitmap)
-                            }
-                        } catch (e: Exception) {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                imageView.setImageResource(android.R.drawable.ic_menu_gallery)
-                            }
-                        }
-                    }
-                } else {
-                    imageView.setImageResource(android.R.drawable.ic_menu_gallery)
-                }
-            }
+            loadCoverImage(trackInfo.coverUrl ?: trackInfo.coverUrlMedium)
 
-            // Track info
+            // TRACK Section
             findViewById<TextView>(R.id.debugSpotifyArtist)?.text = trackInfo.artist
             findViewById<TextView>(R.id.debugSpotifyTitle)?.text = trackInfo.title
-            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = trackInfo.album ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyAllArtists)?.text =
+                if (trackInfo.allArtists.isNotEmpty()) trackInfo.allArtists.joinToString(", ") else "--"
             findViewById<TextView>(R.id.debugSpotifyDuration)?.text = formatDuration(trackInfo.durationMs)
             findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "${trackInfo.popularity}/100"
+            findViewById<TextView>(R.id.debugSpotifyExplicit)?.text = if (trackInfo.explicit) "Yes" else "No"
+            findViewById<TextView>(R.id.debugSpotifyTrackDisc)?.text = "${trackInfo.trackNumber}/${trackInfo.discNumber}"
+            findViewById<TextView>(R.id.debugSpotifyISRC)?.text = trackInfo.isrc ?: "--"
+
+            // ALBUM Section
+            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = trackInfo.album ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyAlbumType)?.text = trackInfo.albumType ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyTotalTracks)?.text =
+                if (trackInfo.totalTracks > 0) trackInfo.totalTracks.toString() else "--"
             findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = trackInfo.releaseDate ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyResult)?.text = "${trackInfo.artist} - ${trackInfo.title}"
-        } else {
-            // Clear all fields when no track info
-            findViewById<TextView>(R.id.debugSpotifySource)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
-            findViewById<TextView>(R.id.debugSpotifySourceDetail)?.text = ""
-            findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)?.setImageResource(android.R.drawable.ic_menu_gallery)
-            findViewById<TextView>(R.id.debugSpotifyArtist)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyTitle)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyDuration)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyResult)?.text = "--"
+
+            // IDs & URLs Section
+            findViewById<TextView>(R.id.debugSpotifyTrackId)?.text = trackInfo.trackId ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyAlbumId)?.text = trackInfo.albumId ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyUrl)?.text = trackInfo.spotifyUrl ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyAlbumUrl)?.text = trackInfo.albumUrl ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyPreviewUrl)?.text = trackInfo.previewUrl ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyCoverUrl)?.text = trackInfo.coverUrl ?: trackInfo.coverUrlMedium ?: "--"
         }
+    }
+
+    private fun loadCoverImage(coverPath: String?) {
+        val coverImageView = findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage) ?: return
+
+        if (coverPath != null && coverPath.startsWith("/")) {
+            // Local file path
+            val file = java.io.File(coverPath)
+            if (file.exists()) {
+                val bitmap = android.graphics.BitmapFactory.decodeFile(coverPath)
+                coverImageView.setImageBitmap(bitmap)
+            } else {
+                coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
+            }
+        } else if (!coverPath.isNullOrBlank()) {
+            // URL - load in background
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val url = java.net.URL(coverPath)
+                    val bitmap = android.graphics.BitmapFactory.decodeStream(url.openStream())
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        coverImageView.setImageBitmap(bitmap)
+                    }
+                } catch (e: Exception) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
+                    }
+                }
+            }
+        } else {
+            coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
+        }
+    }
+
+    private fun clearSpotifyDebugFields() {
+        findViewById<TextView>(R.id.debugSpotifySource)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+        findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)?.setImageResource(android.R.drawable.ic_menu_gallery)
+
+        // Track fields
+        findViewById<TextView>(R.id.debugSpotifyArtist)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyTitle)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyAllArtists)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyDuration)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyExplicit)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyTrackDisc)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyISRC)?.text = "--"
+
+        // Album fields
+        findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyAlbumType)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyTotalTracks)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = "--"
+
+        // IDs & URLs
+        findViewById<TextView>(R.id.debugSpotifyTrackId)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyAlbumId)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyAlbumUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyPreviewUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyCoverUrl)?.text = "--"
     }
 
     private fun formatDuration(ms: Long): String {
@@ -730,6 +992,191 @@ class MainActivity : AppCompatActivity() {
         val seconds = (ms / 1000) % 60
         val minutes = (ms / 1000) / 60
         return String.format("%d:%02d", minutes, seconds)
+    }
+
+    /**
+     * Aktualisiert die Now Playing Bar mit Track-Informationen.
+     * Ignoriert null (behält letzten Track). Nur hideNowPlayingBarExplicit() versteckt die Bar.
+     */
+    fun updateNowPlaying(trackInfo: TrackInfo?) {
+        val bar = nowPlayingBar ?: return
+
+        // Ignoriere null - behalte letzten Track
+        // (null kommt während "Processing..." oder zwischen RT-Teilen)
+        if (trackInfo == null) {
+            return
+        }
+
+        // Prüfen ob sich der Track geändert hat
+        val newTrackId = trackInfo.trackId
+        if (newTrackId == lastDisplayedTrackId) {
+            return // Gleicher Track, keine Aktualisierung nötig
+        }
+        lastDisplayedTrackId = newTrackId
+
+        if (trackInfo != null) {
+            // Update text
+            nowPlayingArtist?.text = trackInfo.artist
+            nowPlayingTitle?.text = trackInfo.title
+
+            // Load cover image with Coil
+            val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
+            if (!coverUrl.isNullOrBlank()) {
+                if (coverUrl.startsWith("/")) {
+                    // Local file
+                    nowPlayingCover?.load(java.io.File(coverUrl)) {
+                        crossfade(true)
+                        placeholder(android.R.drawable.ic_menu_gallery)
+                        error(android.R.drawable.ic_menu_gallery)
+                    }
+                } else {
+                    // URL
+                    nowPlayingCover?.load(coverUrl) {
+                        crossfade(true)
+                        placeholder(android.R.drawable.ic_menu_gallery)
+                        error(android.R.drawable.ic_menu_gallery)
+                    }
+                }
+            } else {
+                nowPlayingCover?.setImageResource(android.R.drawable.ic_menu_gallery)
+            }
+
+            // Show with animation
+            if (bar.visibility != View.VISIBLE) {
+                showNowPlayingBar(bar)
+            }
+        }
+    }
+
+    /**
+     * Versteckt die Now Playing Bar explizit (z.B. bei Senderwechsel)
+     */
+    fun hideNowPlayingBarExplicit() {
+        val bar = nowPlayingBar ?: return
+        lastDisplayedTrackId = null
+        if (bar.visibility == View.VISIBLE) {
+            hideNowPlayingBar(bar)
+        }
+    }
+
+    private fun showNowPlayingBar(bar: View) {
+        val animationType = presetRepository.getNowPlayingAnimation()
+        when (animationType) {
+            0 -> { // None
+                bar.visibility = View.VISIBLE
+            }
+            1 -> { // Slide
+                bar.visibility = View.VISIBLE
+                bar.translationY = bar.height.toFloat()
+                bar.alpha = 0f
+                bar.animate()
+                    .translationY(0f)
+                    .alpha(1f)
+                    .setDuration(300)
+                    .start()
+            }
+            2 -> { // Fade
+                bar.visibility = View.VISIBLE
+                bar.alpha = 0f
+                bar.animate()
+                    .alpha(1f)
+                    .setDuration(300)
+                    .start()
+            }
+        }
+    }
+
+    private fun hideNowPlayingBar(bar: View) {
+        val animationType = presetRepository.getNowPlayingAnimation()
+        when (animationType) {
+            0 -> { // None
+                bar.visibility = View.GONE
+            }
+            1 -> { // Slide
+                bar.animate()
+                    .translationY(bar.height.toFloat())
+                    .alpha(0f)
+                    .setDuration(300)
+                    .withEndAction { bar.visibility = View.GONE }
+                    .start()
+            }
+            2 -> { // Fade
+                bar.animate()
+                    .alpha(0f)
+                    .setDuration(300)
+                    .withEndAction { bar.visibility = View.GONE }
+                    .start()
+            }
+        }
+    }
+
+    private fun setupCorrectionHelpers() {
+        // Show/hide correction buttons based on setting
+        updateCorrectionHelpersVisibility()
+
+        // Trash button - ignore this RT completely
+        btnCorrectionTrash?.setOnClickListener {
+            val currentRt = rtCombiner?.getCurrentRt() ?: return@setOnClickListener
+            val dao = rtCorrectionDao ?: return@setOnClickListener
+
+            CoroutineScope(Dispatchers.IO).launch {
+                val correction = RtCorrection(
+                    rtNormalized = RtCorrection.normalizeRt(currentRt),
+                    rtOriginal = currentRt,
+                    type = RtCorrection.TYPE_IGNORED
+                )
+                dao.insert(correction)
+                android.util.Log.i("fytFM", "RT ignored: $currentRt")
+
+                withContext(Dispatchers.Main) {
+                    // Hide the Now Playing bar
+                    hideNowPlayingBarExplicit()
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "RT wird ignoriert",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+
+        // Refresh button - skip this track and search for another
+        btnCorrectionRefresh?.setOnClickListener {
+            val currentRt = rtCombiner?.getCurrentRt() ?: return@setOnClickListener
+            val currentTrack = rtCombiner?.getCurrentTrackInfo() ?: return@setOnClickListener
+            val dao = rtCorrectionDao ?: return@setOnClickListener
+
+            CoroutineScope(Dispatchers.IO).launch {
+                val correction = RtCorrection(
+                    rtNormalized = RtCorrection.normalizeRt(currentRt),
+                    rtOriginal = currentRt,
+                    type = RtCorrection.TYPE_SKIP_TRACK,
+                    skipTrackId = currentTrack.trackId,
+                    skipTrackArtist = currentTrack.artist,
+                    skipTrackTitle = currentTrack.title
+                )
+                dao.insert(correction)
+                android.util.Log.i("fytFM", "Track skipped: ${currentTrack.artist} - ${currentTrack.title} for RT: $currentRt")
+
+                withContext(Dispatchers.Main) {
+                    // Force re-process to find a different track
+                    rtCombiner?.forceReprocess()
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "Suche anderen Track...",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+    }
+
+    /**
+     * Update visibility of correction helper buttons based on setting
+     */
+    fun updateCorrectionHelpersVisibility() {
+        val enabled = presetRepository.isCorrectionHelpersEnabled()
+        nowPlayingCorrectionButtons?.visibility = if (enabled) View.VISIBLE else View.GONE
     }
 
     private fun updateDebugOverlayVisibility() {
@@ -780,8 +1227,9 @@ class MainActivity : AppCompatActivity() {
             // Clear RDS data on frequency change for fresh data
             rdsManager.clearRds()
             rtCombiner?.clearAll()
-            // Reset Spotify debug overlay
-            updateSpotifyDebugInfo("Waiting...", null, null, null)
+            // Reset Spotify debug overlay and Now Playing Bar
+            updateSpotifyDebugInfo("Waiting...", null, null, null, null)
+            hideNowPlayingBarExplicit()
             // Log station change
             val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
             rdsLogRepository.onStationChange(frequency, isAM)
@@ -1394,6 +1842,8 @@ class MainActivity : AppCompatActivity() {
                 if (!isLoadingSpotifyCredentials) {
                     presetRepository.setSpotifyClientId(s?.toString() ?: "")
                     android.util.Log.d("fytFM", "Saved Spotify Client ID: ${s?.toString()?.take(8)}...")
+                    // Spotify sofort neu initialisieren
+                    initSpotifyIntegration()
                 }
             }
         })
@@ -1404,6 +1854,8 @@ class MainActivity : AppCompatActivity() {
                 if (!isLoadingSpotifyCredentials) {
                     presetRepository.setSpotifyClientSecret(s?.toString() ?: "")
                     android.util.Log.d("fytFM", "Saved Spotify Client Secret")
+                    // Spotify sofort neu initialisieren
+                    initSpotifyIntegration()
                 }
             }
         })
@@ -1475,6 +1927,46 @@ class MainActivity : AppCompatActivity() {
                 dialog.dismiss()
                 recreate() // Restart activity to apply new language
             }
+        }
+
+        // Now Playing Animation item
+        val textNowPlayingAnimationValue = dialogView.findViewById<TextView>(R.id.textNowPlayingAnimationValue)
+        textNowPlayingAnimationValue.text = getNowPlayingAnimationName(presetRepository.getNowPlayingAnimation())
+        dialogView.findViewById<View>(R.id.itemNowPlayingAnimation).setOnClickListener {
+            showNowPlayingAnimationDialog { selectedAnimation ->
+                presetRepository.setNowPlayingAnimation(selectedAnimation)
+                textNowPlayingAnimationValue.text = getNowPlayingAnimationName(selectedAnimation)
+            }
+        }
+
+        // Correction Helpers toggle
+        val switchCorrectionHelpers = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchCorrectionHelpers)
+        switchCorrectionHelpers.isChecked = presetRepository.isCorrectionHelpersEnabled()
+        switchCorrectionHelpers.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setCorrectionHelpersEnabled(isChecked)
+            updateCorrectionHelpersVisibility()
+        }
+        dialogView.findViewById<ImageButton>(R.id.btnCorrectionHelpersInfo).setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Correction Helpers")
+                .setMessage("Zeigt Trash und Refresh Buttons in der Now Playing Bar.\n\n" +
+                    "Trash: Ignoriert diesen RT-Text komplett (keine Suche mehr)\n\n" +
+                    "Refresh: Überspringt den aktuellen Track und sucht einen anderen")
+                .setPositiveButton(R.string.confirm, null)
+                .show()
+        }
+
+        // View Corrections item
+        val textCorrectionsCount = dialogView.findViewById<TextView>(R.id.textCorrectionsCount)
+        CoroutineScope(Dispatchers.IO).launch {
+            val count = rtCorrectionDao?.getCount() ?: 0
+            withContext(Dispatchers.Main) {
+                textCorrectionsCount.text = "$count Korrekturen"
+            }
+        }
+        dialogView.findViewById<View>(R.id.itemViewCorrections).setOnClickListener {
+            dialog.dismiss()
+            showCorrectionsViewerDialog()
         }
 
         // Close App button
@@ -1681,6 +2173,313 @@ class MainActivity : AppCompatActivity() {
             .setSingleChoiceItems(options, currentIndex) { dialog, which ->
                 onSelected(values[which])
                 dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun getNowPlayingAnimationName(type: Int): String {
+        return when (type) {
+            0 -> "Keine"
+            1 -> "Slide"
+            2 -> "Fade"
+            else -> "Slide"
+        }
+    }
+
+    private fun showNowPlayingAnimationDialog(onSelected: (Int) -> Unit) {
+        val options = arrayOf("Keine", "Slide", "Fade")
+        val currentType = presetRepository.getNowPlayingAnimation()
+
+        AlertDialog.Builder(this)
+            .setTitle("Now Playing Animation")
+            .setSingleChoiceItems(options, currentType) { dialog, which ->
+                onSelected(which)
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun showCorrectionsViewerDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_corrections_viewer, null)
+
+        val dialog = AlertDialog.Builder(this, R.style.TransparentDialog)
+            .setView(dialogView)
+            .create()
+
+        // Edit strings section
+        val recyclerEditStrings = dialogView.findViewById<RecyclerView>(R.id.recyclerEditStrings)
+        val textEmptyEditStrings = dialogView.findViewById<TextView>(R.id.textEmptyEditStrings)
+        val btnAddEditString = dialogView.findViewById<ImageButton>(R.id.btnAddEditString)
+
+        recyclerEditStrings.layoutManager = LinearLayoutManager(this)
+        val editStringsAdapter = EditStringsAdapter(
+            onEditClick = { editString -> showEditStringDialog(editString) },
+            onDeleteClick = { editString ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    editStringDao?.delete(editString)
+                }
+            },
+            onToggleEnabled = { editString, enabled ->
+                CoroutineScope(Dispatchers.IO).launch {
+                    editStringDao?.setEnabled(editString.id, enabled)
+                }
+            }
+        )
+        recyclerEditStrings.adapter = editStringsAdapter
+
+        // Corrections section
+        val recyclerCorrections = dialogView.findViewById<RecyclerView>(R.id.recyclerCorrections)
+        val textEmptyCorrections = dialogView.findViewById<TextView>(R.id.textEmptyCorrections)
+        val btnClearAll = dialogView.findViewById<TextView>(R.id.btnClearAllCorrections)
+
+        recyclerCorrections.layoutManager = LinearLayoutManager(this)
+        val correctionsAdapter = CorrectionsAdapter { correction ->
+            CoroutineScope(Dispatchers.IO).launch {
+                rtCorrectionDao?.delete(correction)
+            }
+        }
+        recyclerCorrections.adapter = correctionsAdapter
+
+        // Add edit string button
+        btnAddEditString.setOnClickListener {
+            showEditStringDialog(null)
+        }
+
+        // Observe edit strings
+        val job1 = CoroutineScope(Dispatchers.Main).launch {
+            editStringDao?.getAll()?.collectLatest { editStrings ->
+                editStringsAdapter.submitList(editStrings)
+                if (editStrings.isEmpty()) {
+                    textEmptyEditStrings.visibility = View.VISIBLE
+                    recyclerEditStrings.visibility = View.GONE
+                } else {
+                    textEmptyEditStrings.visibility = View.GONE
+                    recyclerEditStrings.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        // Observe corrections
+        val job2 = CoroutineScope(Dispatchers.Main).launch {
+            rtCorrectionDao?.getAllCorrections()?.collectLatest { corrections ->
+                correctionsAdapter.submitList(corrections)
+                if (corrections.isEmpty()) {
+                    textEmptyCorrections.visibility = View.VISIBLE
+                    recyclerCorrections.visibility = View.GONE
+                } else {
+                    textEmptyCorrections.visibility = View.GONE
+                    recyclerCorrections.visibility = View.VISIBLE
+                }
+            }
+        }
+
+        // Clear all button
+        btnClearAll.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Alle löschen?")
+                .setMessage("Alle Edit Strings und RT-Korrekturen werden gelöscht.")
+                .setPositiveButton("Löschen") { _, _ ->
+                    CoroutineScope(Dispatchers.IO).launch {
+                        editStringDao?.deleteAll()
+                        rtCorrectionDao?.deleteAll()
+                    }
+                }
+                .setNegativeButton(R.string.cancel, null)
+                .show()
+        }
+
+        dialog.setOnDismissListener {
+            job1.cancel()
+            job2.cancel()
+        }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+    }
+
+    private fun showEditStringDialog(existingEditString: EditString?) {
+        val isEdit = existingEditString != null
+        val title = if (isEdit) "Edit Regel bearbeiten" else "Edit Regel hinzufügen"
+
+        // Create scrollable container
+        val scrollView = android.widget.ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+
+        // Create custom layout
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 32, 48, 16)
+        }
+        scrollView.addView(layout)
+
+        // Find text input
+        val findLabel = TextView(this).apply {
+            text = "Suchen nach:"
+            setTextColor(android.graphics.Color.parseColor("#666666"))
+        }
+        layout.addView(findLabel)
+
+        val inputFind = EditText(this).apply {
+            hint = "z.B. \"Jetzt On Air:\" oder \" mit \""
+            setText(existingEditString?.textOriginal ?: "")
+        }
+        layout.addView(inputFind)
+
+        // Case sensitive checkbox for find text (small)
+        val checkCaseSensitiveFind = android.widget.CheckBox(this).apply {
+            text = "Groß-/Kleinschreibung"
+            textSize = 12f
+            setTextColor(android.graphics.Color.parseColor("#888888"))
+            isChecked = existingEditString?.caseSensitiveFind ?: false
+        }
+        layout.addView(checkCaseSensitiveFind)
+
+        // Replace text input
+        val replaceLabel = TextView(this).apply {
+            text = "Ersetzen durch:"
+            setPadding(0, 24, 0, 0)
+            setTextColor(android.graphics.Color.parseColor("#666666"))
+        }
+        layout.addView(replaceLabel)
+
+        val inputReplace = EditText(this).apply {
+            hint = "(leer = löschen, oder z.B. \" - \")"
+            setText(existingEditString?.replaceWith ?: "")
+        }
+        layout.addView(inputReplace)
+
+        // Position label
+        val positionLabel = TextView(this).apply {
+            text = "Position:"
+            setPadding(0, 24, 0, 8)
+            setTextColor(android.graphics.Color.parseColor("#666666"))
+        }
+        layout.addView(positionLabel)
+
+        // RadioGroup for position selection
+        val radioGroup = android.widget.RadioGroup(this).apply {
+            orientation = android.widget.RadioGroup.VERTICAL
+        }
+
+        val positions = listOf(
+            EditString.POSITION_PREFIX to "Am Anfang",
+            EditString.POSITION_SUFFIX to "Am Ende",
+            EditString.POSITION_EITHER to "Anfang oder Ende",
+            EditString.POSITION_ANYWHERE to "Überall"
+        )
+
+        positions.forEachIndexed { index, (_, label) ->
+            val radioButton = android.widget.RadioButton(this).apply {
+                text = label
+                id = index
+            }
+            radioGroup.addView(radioButton)
+        }
+
+        // Set current position
+        val currentPositionIndex = positions.indexOfFirst { it.first == existingEditString?.position }
+        radioGroup.check(if (currentPositionIndex >= 0) currentPositionIndex else 0)
+        layout.addView(radioGroup)
+
+        // Condition: RT contains
+        val conditionLabel = TextView(this).apply {
+            text = "Nur wenn RT enthält (optional):"
+            setPadding(0, 24, 0, 0)
+            setTextColor(android.graphics.Color.parseColor("#666666"))
+        }
+        layout.addView(conditionLabel)
+
+        val inputCondition = EditText(this).apply {
+            hint = "z.B. \"Jetzt On Air:\" (leer = immer)"
+            setText(existingEditString?.conditionContains ?: "")
+        }
+        layout.addView(inputCondition)
+
+        // Case sensitive checkbox for condition (small)
+        val checkCaseSensitiveCondition = android.widget.CheckBox(this).apply {
+            text = "Groß-/Kleinschreibung"
+            textSize = 12f
+            setTextColor(android.graphics.Color.parseColor("#888888"))
+            isChecked = existingEditString?.caseSensitiveCondition ?: false
+        }
+        layout.addView(checkCaseSensitiveCondition)
+
+        // Frequency filter
+        val frequencyLabel = TextView(this).apply {
+            text = "Nur für Frequenz (optional):"
+            setPadding(0, 24, 0, 0)
+            setTextColor(android.graphics.Color.parseColor("#666666"))
+        }
+        layout.addView(frequencyLabel)
+
+        val inputFrequency = EditText(this).apply {
+            hint = "z.B. 93.4 (leer = alle)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+            existingEditString?.forFrequency?.let { setText(it.toString()) }
+        }
+        layout.addView(inputFrequency)
+
+        // Fallback checkbox
+        val checkFallback = android.widget.CheckBox(this).apply {
+            text = "Nur wenn nichts gefunden (Fallback)"
+            setPadding(0, 24, 0, 0)
+            isChecked = existingEditString?.onlyIfNotFound ?: false
+        }
+        layout.addView(checkFallback)
+
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setView(scrollView)
+            .setPositiveButton(if (isEdit) "Speichern" else "Hinzufügen") { _, _ ->
+                val findText = inputFind.text.toString().trim()
+                if (findText.isNotEmpty()) {
+                    val replaceText = inputReplace.text.toString()
+                    val selectedPosition = positions.getOrNull(radioGroup.checkedRadioButtonId)?.first
+                        ?: EditString.POSITION_PREFIX
+                    val isFallback = checkFallback.isChecked
+                    val isCaseSensitiveFind = checkCaseSensitiveFind.isChecked
+                    val isCaseSensitiveCondition = checkCaseSensitiveCondition.isChecked
+                    val condition = inputCondition.text.toString().trim().takeIf { it.isNotEmpty() }
+                    val frequency = inputFrequency.text.toString().toFloatOrNull()
+
+                    CoroutineScope(Dispatchers.IO).launch {
+                        if (isEdit && existingEditString != null) {
+                            // Update existing
+                            val updated = existingEditString.copy(
+                                textOriginal = findText,
+                                textNormalized = EditString.normalize(findText),
+                                replaceWith = replaceText,
+                                position = selectedPosition,
+                                onlyIfNotFound = isFallback,
+                                conditionContains = condition,
+                                caseSensitiveFind = isCaseSensitiveFind,
+                                caseSensitiveCondition = isCaseSensitiveCondition,
+                                forFrequency = frequency
+                            )
+                            editStringDao?.update(updated)
+                        } else {
+                            // Insert new
+                            editStringDao?.insert(
+                                EditString.create(
+                                    text = findText,
+                                    replaceWith = replaceText,
+                                    position = selectedPosition,
+                                    onlyIfNotFound = isFallback,
+                                    conditionContains = condition,
+                                    caseSensitiveFind = isCaseSensitiveFind,
+                                    caseSensitiveCondition = isCaseSensitiveCondition,
+                                    forFrequency = frequency
+                                )
+                            )
+                        }
+                    }
+                }
             }
             .setNegativeButton(R.string.cancel, null)
             .show()
@@ -2145,6 +2944,7 @@ class MainActivity : AppCompatActivity() {
                     if (foundFreq != null) {
                         rdsManager.clearRds()
                         rtCombiner?.clearAll()
+                        hideNowPlayingBarExplicit()
                         frequencyScale.setFrequency(foundFreq)
                         saveLastFrequency(foundFreq)
                     } else {

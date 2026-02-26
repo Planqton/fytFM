@@ -287,4 +287,47 @@ class PresetRepository(context: Context) {
 
         return mergedStations
     }
+
+    // Debug Window States
+    fun setDebugWindowOpen(windowId: String, isOpen: Boolean) {
+        settingsPrefs.edit().putBoolean("debug_window_open_$windowId", isOpen).apply()
+    }
+
+    fun isDebugWindowOpen(windowId: String, default: Boolean = false): Boolean {
+        return settingsPrefs.getBoolean("debug_window_open_$windowId", default)
+    }
+
+    fun setDebugWindowPosition(windowId: String, x: Float, y: Float) {
+        settingsPrefs.edit()
+            .putFloat("debug_window_x_$windowId", x)
+            .putFloat("debug_window_y_$windowId", y)
+            .apply()
+    }
+
+    fun getDebugWindowPositionX(windowId: String): Float {
+        return settingsPrefs.getFloat("debug_window_x_$windowId", -1f)
+    }
+
+    fun getDebugWindowPositionY(windowId: String): Float {
+        return settingsPrefs.getFloat("debug_window_y_$windowId", -1f)
+    }
+
+    // Now Playing Animation Setting
+    // 0 = None, 1 = Slide, 2 = Fade
+    fun getNowPlayingAnimation(): Int {
+        return settingsPrefs.getInt("now_playing_animation", 1) // Default: Slide
+    }
+
+    fun setNowPlayingAnimation(type: Int) {
+        settingsPrefs.edit().putInt("now_playing_animation", type).apply()
+    }
+
+    // Correction Helpers Setting (Trash + Refresh buttons in Now Playing bar)
+    fun isCorrectionHelpersEnabled(): Boolean {
+        return settingsPrefs.getBoolean("correction_helpers_enabled", false)
+    }
+
+    fun setCorrectionHelpersEnabled(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("correction_helpers_enabled", enabled).apply()
+    }
 }

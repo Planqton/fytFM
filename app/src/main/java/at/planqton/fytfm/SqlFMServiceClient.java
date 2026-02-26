@@ -6,6 +6,9 @@ import android.os.Parcel;
 import android.os.RemoteException;
 import android.util.Log;
 import java.lang.reflect.Method;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.DataOutputStream;
 
 /**
  * Client für den sqlfmservice Binder-Service
@@ -38,6 +41,11 @@ public class SqlFMServiceClient {
     private CallbackBinder mCallbackBinder;
     private String mCurrentPs = "";
     private String mCurrentRt = "";
+
+    // Root-Fallback für UIS7870/DUDU7 Geräte
+    private boolean mUseRootFallback = false;
+    private boolean mRootNotificationShown = false;
+    private RootRequiredListener mRootListener;
 
     /**
      * Callback Binder - empfängt RDS Events vom sqlfmservice
@@ -238,6 +246,21 @@ public class SqlFMServiceClient {
         void onRdsPs(String ps);
         void onRdsRt(String rt);
         void onRdsEvent(int type, int p1, int p2, int p3);
+    }
+
+    /**
+     * Listener für Root-Benachrichtigung (UIS7870/DUDU7 Geräte)
+     */
+    public interface RootRequiredListener {
+        void onRootRequired();
+    }
+
+    public void setRootRequiredListener(RootRequiredListener listener) {
+        mRootListener = listener;
+    }
+
+    public boolean isUsingRootFallback() {
+        return mUseRootFallback;
     }
 
     public SqlFMServiceClient() {
@@ -609,7 +632,20 @@ public class SqlFMServiceClient {
      * Tune über sqlfmservice
      */
     public boolean tune(float freqMHz) {
-        if (!isConnected()) return false;
+        // Root-Fallback Modus (UIS7870/DUDU7)
+        if (mUseRootFallback) {
+            return tuneViaSu(freqMHz);
+        }
+
+        if (!isConnected()) {
+            // Versuche Root-Fallback wenn nicht verbunden
+            if (isRootAvailable()) {
+                Log.i(TAG, "Binder nicht verbunden, versuche Root-Fallback...");
+                enableRootFallback();
+                return tuneViaSu(freqMHz);
+            }
+            return false;
+        }
 
         int freqKhz10 = (int)(freqMHz * 100); // 90.4 -> 9040
 
@@ -633,8 +669,20 @@ public class SqlFMServiceClient {
                 data.recycle();
                 reply.recycle();
             }
+        } catch (SecurityException e) {
+            // Binder-Zugriff verweigert - versuche Root-Fallback
+            Log.w(TAG, "tune: SecurityException, versuche Root-Fallback...");
+            if (isRootAvailable()) {
+                enableRootFallback();
+                return tuneViaSu(freqMHz);
+            }
         } catch (Exception e) {
             Log.e(TAG, "tune failed: " + e.getMessage());
+            // Bei anderen Fehlern auch Root-Fallback versuchen
+            if (isRootAvailable()) {
+                enableRootFallback();
+                return tuneViaSu(freqMHz);
+            }
         }
         return false;
     }
@@ -1045,5 +1093,125 @@ public class SqlFMServiceClient {
     public void disconnect() {
         mService = null;
         mConnected = false;
+    }
+
+    // ============================================================
+    // Root-Fallback Methoden für UIS7870/DUDU7 Geräte
+    // ============================================================
+
+    /**
+     * Aktiviert den Root-Fallback Modus
+     */
+    public void enableRootFallback() {
+        mUseRootFallback = true;
+        Log.i(TAG, "Root-Fallback aktiviert für sqlfmservice Zugriff");
+
+        // Einmalige Benachrichtigung an die App
+        if (!mRootNotificationShown && mRootListener != null) {
+            mRootNotificationShown = true;
+            mRootListener.onRootRequired();
+        }
+    }
+
+    /**
+     * Führt einen service call über su aus
+     * @param transactionCode Der Binder Transaction Code
+     * @param args Optionale int32 Argumente
+     * @return Das Ergebnis als String oder null bei Fehler
+     */
+    private String executeServiceCallViaSu(int transactionCode, int... args) {
+        try {
+            StringBuilder cmd = new StringBuilder();
+            cmd.append("service call sqlfmservice ").append(transactionCode);
+            for (int arg : args) {
+                cmd.append(" i32 ").append(arg);
+            }
+
+            Process process = Runtime.getRuntime().exec("su");
+            DataOutputStream os = new DataOutputStream(process.getOutputStream());
+            os.writeBytes(cmd.toString() + "\n");
+            os.writeBytes("exit\n");
+            os.flush();
+
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            StringBuilder output = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                output.append(line);
+            }
+
+            process.waitFor();
+            reader.close();
+            os.close();
+
+            return output.toString();
+        } catch (Exception e) {
+            Log.e(TAG, "executeServiceCallViaSu failed: " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Parst Parcel-Output von service call (z.B. "Result: Parcel(00000000 '....')")
+     * Extrahiert String-Daten aus dem Hex-Teil
+     */
+    private String parseParcelOutput(String output) {
+        if (output == null || output.isEmpty()) return "";
+
+        // Format: Result: Parcel(HEXDATA 'ASCII')
+        // Wir extrahieren den ASCII-Teil zwischen den Quotes
+        int quoteStart = output.indexOf("'");
+        int quoteEnd = output.lastIndexOf("'");
+
+        if (quoteStart >= 0 && quoteEnd > quoteStart) {
+            String ascii = output.substring(quoteStart + 1, quoteEnd);
+            // Filtere nur druckbare Zeichen
+            StringBuilder result = new StringBuilder();
+            for (char c : ascii.toCharArray()) {
+                if (c >= 32 && c < 127 && c != '.') {
+                    result.append(c);
+                }
+            }
+            return result.toString().trim();
+        }
+
+        return "";
+    }
+
+    /**
+     * Tune über Root-Fallback
+     */
+    public boolean tuneViaSu(float freqMHz) {
+        int freqKhz10 = (int)(freqMHz * 100);
+        String result = executeServiceCallViaSu(TRANSACTION_TUNE, freqKhz10, 0);
+        boolean success = result != null && !result.contains("error");
+        Log.i(TAG, "tuneViaSu(" + freqMHz + ") = " + success);
+        return success;
+    }
+
+    /**
+     * RDS aktivieren über Root-Fallback
+     */
+    public boolean enableRdsViaSu() {
+        String result = executeServiceCallViaSu(TRANSACTION_RDS_ONOFF, 1);
+        boolean success = result != null && !result.contains("error");
+        Log.i(TAG, "enableRdsViaSu() = " + success);
+        return success;
+    }
+
+    /**
+     * Prüft ob Root verfügbar ist
+     */
+    public static boolean isRootAvailable() {
+        try {
+            Process process = Runtime.getRuntime().exec("su -c whoami");
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            String result = reader.readLine();
+            process.waitFor();
+            reader.close();
+            return "root".equals(result);
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
