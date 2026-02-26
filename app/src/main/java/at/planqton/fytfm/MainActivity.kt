@@ -75,6 +75,12 @@ class MainActivity : AppCompatActivity() {
     private var debugSpotifyOverlay: View? = null
     private var debugScreenInfo: TextView? = null
     private var debugDensityInfo: TextView? = null
+    private var checkDebugButtons: CheckBox? = null
+    private var debugButtonsOverlay: View? = null
+
+    // Debug: Internet-Simulation deaktivieren
+    var debugInternetDisabled = false
+        private set
 
     private lateinit var presetRepository: PresetRepository
     private lateinit var stationAdapter: StationAdapter
@@ -172,6 +178,19 @@ class MainActivity : AppCompatActivity() {
         presetRepository = PresetRepository(this)
         fmNative = FmNative.getInstance()
         rdsManager = RdsManager(fmNative)
+
+        // Root-Fallback Listener für UIS7870/DUDU7 Geräte
+        // Zeigt einmalige Meldung wenn Root für FM-Zugriff benötigt wird
+        rdsManager.setRootRequiredListener {
+            runOnUiThread {
+                android.widget.Toast.makeText(
+                    this,
+                    getString(R.string.root_required_message),
+                    android.widget.Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
         radioScanner = at.planqton.fytfm.scanner.RadioScanner(rdsManager)
         updateRepository = UpdateRepository(this)
         rdsLogRepository = RdsLogRepository(this)
@@ -470,12 +489,18 @@ class MainActivity : AppCompatActivity() {
         debugSpotifyOverlay = findViewById(R.id.debugSpotifyOverlay)
         debugScreenInfo = findViewById(R.id.debugScreenInfo)
         debugDensityInfo = findViewById(R.id.debugDensityInfo)
+        checkDebugButtons = findViewById(R.id.checkDebugButtons)
+        debugButtonsOverlay = findViewById(R.id.debugButtonsOverlay)
 
         setupDebugOverlayDrag()
         setupDebugBuildOverlayDrag()
+        setupDebugLayoutOverlayDrag()
         setupDebugSpotifyOverlayDrag()
+        setupDebugButtonsOverlayDrag()
         setupDebugChecklistDrag()
         setupDebugChecklistListeners()
+        setupDebugButtonsListeners()
+        restoreDebugWindowStates()
         updateDebugOverlayVisibility()
     }
 
@@ -515,6 +540,10 @@ class MainActivity : AppCompatActivity() {
                     view.y = newY
                     true
                 }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("checklist", view)
+                    true
+                }
                 else -> false
             }
         }
@@ -523,22 +552,61 @@ class MainActivity : AppCompatActivity() {
     private fun setupDebugChecklistListeners() {
         checkRdsInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("rds", isChecked)
         }
         checkLayoutInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugLayoutOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("layout", isChecked)
             if (isChecked) {
                 updateLayoutDebugInfo()
             }
         }
         checkBuildInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugBuildOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("build", isChecked)
             if (isChecked) {
                 updateBuildDebugInfo()
             }
         }
         checkSpotifyInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugSpotifyOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("spotify", isChecked)
         }
+        checkDebugButtons?.setOnCheckedChangeListener { _, isChecked ->
+            debugButtonsOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("buttons", isChecked)
+        }
+    }
+
+    private fun restoreDebugWindowStates() {
+        // Restore checkbox states (this will trigger the listeners which set visibility)
+        checkRdsInfo?.isChecked = presetRepository.isDebugWindowOpen("rds", false)
+        checkLayoutInfo?.isChecked = presetRepository.isDebugWindowOpen("layout", false)
+        checkBuildInfo?.isChecked = presetRepository.isDebugWindowOpen("build", false)
+        checkSpotifyInfo?.isChecked = presetRepository.isDebugWindowOpen("spotify", false)
+        checkDebugButtons?.isChecked = presetRepository.isDebugWindowOpen("buttons", false)
+
+        // Restore positions (post to ensure views are laid out)
+        debugOverlay?.post { restoreDebugWindowPosition("rds", debugOverlay) }
+        debugLayoutOverlay?.post { restoreDebugWindowPosition("layout", debugLayoutOverlay) }
+        debugBuildOverlay?.post { restoreDebugWindowPosition("build", debugBuildOverlay) }
+        debugSpotifyOverlay?.post { restoreDebugWindowPosition("spotify", debugSpotifyOverlay) }
+        debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
+        debugChecklist?.post { restoreDebugWindowPosition("checklist", debugChecklist) }
+    }
+
+    private fun restoreDebugWindowPosition(windowId: String, view: View?) {
+        view ?: return
+        val x = presetRepository.getDebugWindowPositionX(windowId)
+        val y = presetRepository.getDebugWindowPositionY(windowId)
+        if (x >= 0 && y >= 0) {
+            view.x = x
+            view.y = y
+        }
+    }
+
+    private fun saveDebugWindowPosition(windowId: String, view: View) {
+        presetRepository.setDebugWindowPosition(windowId, view.x, view.y)
     }
 
     private fun updateBuildDebugInfo() {
@@ -578,6 +646,10 @@ class MainActivity : AppCompatActivity() {
                     view.y = newY
                     true
                 }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("rds", view)
+                    true
+                }
                 else -> false
             }
         }
@@ -600,6 +672,38 @@ class MainActivity : AppCompatActivity() {
                     val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
                     view.x = newX
                     view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("build", view)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun setupDebugLayoutOverlayDrag() {
+        val overlay = debugLayoutOverlay ?: return
+        var dX = 0f
+        var dY = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (view.parent as View).width - view.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
+                    view.x = newX
+                    view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("layout", view)
                     true
                 }
                 else -> false
@@ -626,7 +730,57 @@ class MainActivity : AppCompatActivity() {
                     view.y = newY
                     true
                 }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("spotify", view)
+                    true
+                }
                 else -> false
+            }
+        }
+    }
+
+    private fun setupDebugButtonsOverlayDrag() {
+        val overlay = debugButtonsOverlay ?: return
+        var dX = 0f
+        var dY = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (view.parent as View).width - view.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
+                    view.x = newX
+                    view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("buttons", view)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun setupDebugButtonsListeners() {
+        findViewById<android.widget.Button>(R.id.btnDebugKillInternet)?.setOnClickListener {
+            debugInternetDisabled = !debugInternetDisabled
+            // SpotifyClient Flag synchronisieren
+            SpotifyClient.debugInternetDisabled = debugInternetDisabled
+            val btn = it as android.widget.Button
+            if (debugInternetDisabled) {
+                btn.text = "App Internet: OFF"
+                btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF666666.toInt())
+                android.widget.Toast.makeText(this, "App Internet disabled (debug)", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                btn.text = "Kill App Internet Connection"
+                btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFCC3333.toInt())
+                android.widget.Toast.makeText(this, "App Internet enabled", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -644,13 +798,12 @@ class MainActivity : AppCompatActivity() {
                                status.contains("offline", ignoreCase = true)
         val isFromSpotifyOnline = status == "Found!"
 
-        // Track-Info Felder: Bei Processing clearen, sonst setzen
         if (trackInfo != null) {
-            // Source info
+            // Source Header
             val sourceText = when {
                 isFromLocalCache -> "LOKAL"
-                isFromSpotifyOnline -> "SPOTIFY ONLINE"
-                else -> status
+                isFromSpotifyOnline -> "SPOTIFY"
+                else -> "..."
             }
             val sourceColor = when {
                 isFromLocalCache -> android.graphics.Color.parseColor("#FFAA00")  // Orange
@@ -660,69 +813,100 @@ class MainActivity : AppCompatActivity() {
             findViewById<TextView>(R.id.debugSpotifySource)?.text = sourceText
             findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(sourceColor)
 
-            // Source detail (URL or local path)
-            val sourceDetail = if (isFromLocalCache) {
-                trackInfo.coverUrl ?: "lokal"
-            } else {
-                trackInfo.coverUrlMedium ?: trackInfo.spotifyUrl ?: "--"
-            }
-            findViewById<TextView>(R.id.debugSpotifySourceDetail)?.text = sourceDetail
-
             // Load cover image
-            val coverImageView = findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)
-            coverImageView?.let { imageView ->
-                val coverPath = trackInfo.coverUrl
-                if (coverPath != null && coverPath.startsWith("/")) {
-                    // Local file path
-                    val file = java.io.File(coverPath)
-                    if (file.exists()) {
-                        val bitmap = android.graphics.BitmapFactory.decodeFile(coverPath)
-                        imageView.setImageBitmap(bitmap)
-                    } else {
-                        imageView.setImageResource(android.R.drawable.ic_menu_gallery)
-                    }
-                } else if (!coverPath.isNullOrBlank()) {
-                    // URL - load in background
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                        try {
-                            val url = java.net.URL(coverPath)
-                            val bitmap = android.graphics.BitmapFactory.decodeStream(url.openStream())
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                imageView.setImageBitmap(bitmap)
-                            }
-                        } catch (e: Exception) {
-                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
-                                imageView.setImageResource(android.R.drawable.ic_menu_gallery)
-                            }
-                        }
-                    }
-                } else {
-                    imageView.setImageResource(android.R.drawable.ic_menu_gallery)
-                }
-            }
+            loadCoverImage(trackInfo.coverUrl ?: trackInfo.coverUrlMedium)
 
-            // Track info
+            // TRACK Section
             findViewById<TextView>(R.id.debugSpotifyArtist)?.text = trackInfo.artist
             findViewById<TextView>(R.id.debugSpotifyTitle)?.text = trackInfo.title
-            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = trackInfo.album ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyAllArtists)?.text =
+                if (trackInfo.allArtists.isNotEmpty()) trackInfo.allArtists.joinToString(", ") else "--"
             findViewById<TextView>(R.id.debugSpotifyDuration)?.text = formatDuration(trackInfo.durationMs)
             findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "${trackInfo.popularity}/100"
+            findViewById<TextView>(R.id.debugSpotifyExplicit)?.text = if (trackInfo.explicit) "Yes" else "No"
+            findViewById<TextView>(R.id.debugSpotifyTrackDisc)?.text = "${trackInfo.trackNumber}/${trackInfo.discNumber}"
+            findViewById<TextView>(R.id.debugSpotifyISRC)?.text = trackInfo.isrc ?: "--"
+
+            // ALBUM Section
+            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = trackInfo.album ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyAlbumType)?.text = trackInfo.albumType ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyTotalTracks)?.text =
+                if (trackInfo.totalTracks > 0) trackInfo.totalTracks.toString() else "--"
             findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = trackInfo.releaseDate ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyResult)?.text = "${trackInfo.artist} - ${trackInfo.title}"
+
+            // IDs & URLs Section
+            findViewById<TextView>(R.id.debugSpotifyTrackId)?.text = trackInfo.trackId ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyAlbumId)?.text = trackInfo.albumId ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyUrl)?.text = trackInfo.spotifyUrl ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyAlbumUrl)?.text = trackInfo.albumUrl ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyPreviewUrl)?.text = trackInfo.previewUrl ?: "--"
+            findViewById<TextView>(R.id.debugSpotifyCoverUrl)?.text = trackInfo.coverUrl ?: trackInfo.coverUrlMedium ?: "--"
         } else {
             // Clear all fields when no track info
-            findViewById<TextView>(R.id.debugSpotifySource)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
-            findViewById<TextView>(R.id.debugSpotifySourceDetail)?.text = ""
-            findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)?.setImageResource(android.R.drawable.ic_menu_gallery)
-            findViewById<TextView>(R.id.debugSpotifyArtist)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyTitle)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyDuration)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = "--"
-            findViewById<TextView>(R.id.debugSpotifyResult)?.text = "--"
+            clearSpotifyDebugFields()
         }
+    }
+
+    private fun loadCoverImage(coverPath: String?) {
+        val coverImageView = findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage) ?: return
+
+        if (coverPath != null && coverPath.startsWith("/")) {
+            // Local file path
+            val file = java.io.File(coverPath)
+            if (file.exists()) {
+                val bitmap = android.graphics.BitmapFactory.decodeFile(coverPath)
+                coverImageView.setImageBitmap(bitmap)
+            } else {
+                coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
+            }
+        } else if (!coverPath.isNullOrBlank()) {
+            // URL - load in background
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    val url = java.net.URL(coverPath)
+                    val bitmap = android.graphics.BitmapFactory.decodeStream(url.openStream())
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        coverImageView.setImageBitmap(bitmap)
+                    }
+                } catch (e: Exception) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                        coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
+                    }
+                }
+            }
+        } else {
+            coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
+        }
+    }
+
+    private fun clearSpotifyDebugFields() {
+        findViewById<TextView>(R.id.debugSpotifySource)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+        findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)?.setImageResource(android.R.drawable.ic_menu_gallery)
+
+        // Track fields
+        findViewById<TextView>(R.id.debugSpotifyArtist)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyTitle)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyAllArtists)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyDuration)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyExplicit)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyTrackDisc)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyISRC)?.text = "--"
+
+        // Album fields
+        findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyAlbumType)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyTotalTracks)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = "--"
+
+        // IDs & URLs
+        findViewById<TextView>(R.id.debugSpotifyTrackId)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyAlbumId)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyAlbumUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyPreviewUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugSpotifyCoverUrl)?.text = "--"
     }
 
     private fun formatDuration(ms: Long): String {
@@ -1394,6 +1578,8 @@ class MainActivity : AppCompatActivity() {
                 if (!isLoadingSpotifyCredentials) {
                     presetRepository.setSpotifyClientId(s?.toString() ?: "")
                     android.util.Log.d("fytFM", "Saved Spotify Client ID: ${s?.toString()?.take(8)}...")
+                    // Spotify sofort neu initialisieren
+                    initSpotifyIntegration()
                 }
             }
         })
@@ -1404,6 +1590,8 @@ class MainActivity : AppCompatActivity() {
                 if (!isLoadingSpotifyCredentials) {
                     presetRepository.setSpotifyClientSecret(s?.toString() ?: "")
                     android.util.Log.d("fytFM", "Saved Spotify Client Secret")
+                    // Spotify sofort neu initialisieren
+                    initSpotifyIntegration()
                 }
             }
         })

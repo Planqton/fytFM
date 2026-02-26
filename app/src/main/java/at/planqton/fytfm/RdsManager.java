@@ -64,6 +64,23 @@ public class RdsManager {
     private long lastTpTaTimestamp = 0;
     private long lastAfTimestamp = 0;
 
+    // Root-Fallback für UIS7870/DUDU7 Geräte (wenn sqlfmservice Binder-Zugriff verweigert wird)
+    private SqlFMServiceClient sqlFmClient;
+    private RootRequiredListener rootListener;
+    private boolean rootNotificationShown = false;
+
+    /**
+     * Listener für Root-Benachrichtigung (UIS7870/DUDU7 Geräte)
+     * Wird einmalig aufgerufen wenn Root-Zugriff für FM-Steuerung benötigt wird
+     */
+    public interface RootRequiredListener {
+        void onRootRequired();
+    }
+
+    public void setRootRequiredListener(RootRequiredListener listener) {
+        this.rootListener = listener;
+    }
+
     public interface RdsCallback {
         void onRdsUpdate(String ps, String rt, int rssi, int pi, int pty, int tp, int ta, short[] afList);
     }
@@ -117,7 +134,36 @@ public class RdsManager {
             Log.w(TAG, "enableRds: readRds failed: " + e.getMessage());
         }
 
+        // Root-Fallback für UIS7870/DUDU7 Geräte
+        if (!success) {
+            success = enableRdsViaRootFallback();
+        }
+
         Log.i(TAG, "=== enableRds() done, success=" + success + " ===");
+        return success;
+    }
+
+    /**
+     * RDS aktivieren über Root-Fallback (sqlfmservice via su)
+     */
+    private boolean enableRdsViaRootFallback() {
+        if (!SqlFMServiceClient.isRootAvailable()) {
+            return false;
+        }
+
+        if (sqlFmClient == null) {
+            sqlFmClient = new SqlFMServiceClient();
+            sqlFmClient.setRootRequiredListener(() -> {
+                if (!rootNotificationShown && rootListener != null) {
+                    rootNotificationShown = true;
+                    rootListener.onRootRequired();
+                }
+            });
+        }
+
+        Log.i(TAG, "Versuche RDS aktivieren über Root-Fallback...");
+        boolean success = sqlFmClient.enableRdsViaSu();
+        Log.i(TAG, "Root-Fallback enableRds() = " + success);
         return success;
     }
 
@@ -537,17 +583,50 @@ public class RdsManager {
 
     /**
      * Tune zu einer Frequenz.
+     * Falls FmNative fehlschlägt, wird automatisch Root-Fallback über sqlfmservice versucht.
      */
     public boolean tune(float frequency) {
         Log.i(TAG, "Tune to " + frequency + " MHz");
         clearRds();
 
         try {
-            return fmNative.tune(frequency);
+            boolean success = fmNative.tune(frequency);
+            if (success) {
+                return true;
+            }
         } catch (Throwable e) {
-            Log.w(TAG, "tune failed: " + e.getMessage());
+            Log.w(TAG, "tune via FmNative failed: " + e.getMessage());
+        }
+
+        // Root-Fallback für UIS7870/DUDU7 Geräte
+        return tuneViaRootFallback(frequency);
+    }
+
+    /**
+     * Tune über Root-Fallback (sqlfmservice via su)
+     */
+    private boolean tuneViaRootFallback(float frequency) {
+        if (!SqlFMServiceClient.isRootAvailable()) {
+            Log.w(TAG, "Root nicht verfügbar für Fallback");
             return false;
         }
+
+        // SqlFMServiceClient erstellen falls noch nicht vorhanden
+        if (sqlFmClient == null) {
+            sqlFmClient = new SqlFMServiceClient();
+            // Listener weiterleiten
+            sqlFmClient.setRootRequiredListener(() -> {
+                if (!rootNotificationShown && rootListener != null) {
+                    rootNotificationShown = true;
+                    rootListener.onRootRequired();
+                }
+            });
+        }
+
+        Log.i(TAG, "Versuche Tune über Root-Fallback...");
+        boolean success = sqlFmClient.tune(frequency);
+        Log.i(TAG, "Root-Fallback tune(" + frequency + ") = " + success);
+        return success;
     }
 
     /**

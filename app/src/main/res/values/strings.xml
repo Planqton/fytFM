@@ -105,6 +105,7 @@
     <string name="removed_from_favorites">Station removed from favorites</string>
     <string name="seek_started_prev">Seek ◀ started…</string>
     <string name="seek_started_next">Seek ▶ started…</string>
+    <string name="root_required_message">Root access is being used for FM control (DUDU7)</string>
 
     <!-- Scan Dialog -->
     <string name="station_scan">Station Scan</string>

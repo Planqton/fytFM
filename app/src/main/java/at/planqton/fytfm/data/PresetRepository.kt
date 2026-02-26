@@ -287,4 +287,28 @@ class PresetRepository(context: Context) {
 
         return mergedStations
     }
+
+    // Debug Window States
+    fun setDebugWindowOpen(windowId: String, isOpen: Boolean) {
+        settingsPrefs.edit().putBoolean("debug_window_open_$windowId", isOpen).apply()
+    }
+
+    fun isDebugWindowOpen(windowId: String, default: Boolean = false): Boolean {
+        return settingsPrefs.getBoolean("debug_window_open_$windowId", default)
+    }
+
+    fun setDebugWindowPosition(windowId: String, x: Float, y: Float) {
+        settingsPrefs.edit()
+            .putFloat("debug_window_x_$windowId", x)
+            .putFloat("debug_window_y_$windowId", y)
+            .apply()
+    }
+
+    fun getDebugWindowPositionX(windowId: String): Float {
+        return settingsPrefs.getFloat("debug_window_x_$windowId", -1f)
+    }
+
+    fun getDebugWindowPositionY(windowId: String): Float {
+        return settingsPrefs.getFloat("debug_window_y_$windowId", -1f)
+    }
 }

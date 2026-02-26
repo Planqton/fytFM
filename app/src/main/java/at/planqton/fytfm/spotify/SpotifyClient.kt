@@ -45,6 +45,10 @@ class SpotifyClient(
 ) {
     companion object {
         private const val TAG = "SpotifyClient"
+
+        // Debug: Simuliert fehlende Internetverbindung
+        @Volatile
+        var debugInternetDisabled = false
     }
 
     private val client = OkHttpClient.Builder()
@@ -125,6 +129,12 @@ class SpotifyClient(
      * @return TrackInfo if found, null otherwise
      */
     suspend fun searchTrack(query: String): TrackInfo? = withContext(Dispatchers.IO) {
+        // Debug: Simulierte Netzwerkstörung
+        if (debugInternetDisabled) {
+            Log.d(TAG, "searchTrack: Internet disabled (debug)")
+            return@withContext null
+        }
+
         val token = getAccessToken() ?: return@withContext null
 
         // Try simple search first
@@ -148,6 +158,12 @@ class SpotifyClient(
      * Search with specific artist and title parameters
      */
     suspend fun searchTrackByParts(artist: String?, title: String?): TrackInfo? = withContext(Dispatchers.IO) {
+        // Debug: Simulierte Netzwerkstörung
+        if (debugInternetDisabled) {
+            Log.d(TAG, "searchTrackByParts: Internet disabled (debug)")
+            return@withContext null
+        }
+
         val token = getAccessToken() ?: return@withContext null
 
         // Build query with Spotify's search syntax

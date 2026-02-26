@@ -105,6 +105,7 @@
     <string name="removed_from_favorites">Sender aus Favoriten entfernt</string>
     <string name="seek_started_prev">Seek ◀ gestartet…</string>
     <string name="seek_started_next">Seek ▶ gestartet…</string>
+    <string name="root_required_message">Root-Zugriff wird für FM-Steuerung verwendet (DUDU7)</string>
 
     <!-- Scan Dialog -->
     <string name="station_scan">Sendersuche</string>
