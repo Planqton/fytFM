@@ -126,6 +126,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var radioScanner: at.planqton.fytfm.scanner.RadioScanner
     private lateinit var updateRepository: UpdateRepository
     private lateinit var rdsLogRepository: RdsLogRepository
+    private lateinit var radioLogoRepository: at.planqton.fytfm.data.logo.RadioLogoRepository
     private lateinit var updateBadge: View
     private var settingsUpdateListener: ((UpdateState) -> Unit)? = null
     private var twUtil: TWUtilHelper? = null
@@ -163,6 +164,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // Logo Template Import
+    private var logoTemplateImportCallback: ((Boolean) -> Unit)? = null
+    private val logoTemplateImportLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.let { uri ->
+                importLogoTemplateFromUri(uri)
+            }
+        } else {
+            logoTemplateImportCallback?.invoke(false)
+            logoTemplateImportCallback = null
+        }
+    }
+
     private var isPlaying = true
     private var isRadioOn = false
     private var showFavoritesOnly = false
@@ -178,6 +194,34 @@ class MainActivity : AppCompatActivity() {
         // Silently ignore com.syu.radio intents - we're already the active radio app
         if (intent?.action == "com.syu.radio") {
             android.util.Log.d("fytFM", "Received com.syu.radio intent - ignoring (already active)")
+        }
+        // Debug commands via: adb shell am start -n at.planqton.fytfm/.MainActivity --es debug "settings"
+        intent?.getStringExtra("debug")?.let { cmd ->
+            android.util.Log.d("fytFM", "Debug command: $cmd")
+            when (cmd) {
+                "settings" -> showSettingsDialog()
+                "screenshot" -> takeDebugScreenshot()
+            }
+        }
+    }
+
+    private fun takeDebugScreenshot() {
+        val dir = java.io.File("/sdcard/debugscreenshots")
+        if (!dir.exists()) dir.mkdirs()
+        val file = java.io.File(dir, "screenshot_${System.currentTimeMillis()}.png")
+
+        window.decorView.rootView.let { view ->
+            val bitmap = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            view.draw(canvas)
+            try {
+                java.io.FileOutputStream(file).use { out ->
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+                }
+                android.util.Log.d("fytFM", "Screenshot saved: ${file.absolutePath}")
+            } catch (e: Exception) {
+                android.util.Log.e("fytFM", "Screenshot failed: ${e.message}")
+            }
         }
     }
 
@@ -239,6 +283,7 @@ class MainActivity : AppCompatActivity() {
         updateRepository = UpdateRepository(this)
         rdsLogRepository = RdsLogRepository(this)
         rdsLogRepository.performCleanup()  // Cleanup old entries on app start
+        radioLogoRepository = at.planqton.fytfm.data.logo.RadioLogoRepository(this)
 
         // Initialize Spotify Integration
         initSpotifyIntegration()
@@ -333,7 +378,9 @@ class MainActivity : AppCompatActivity() {
                     currentSpotifyQuery = query
                     currentSpotifyTrackInfo = trackInfo
                     updateSpotifyDebugInfo(status, originalRt, strippedRt, query, trackInfo)
-                    updateNowPlaying(trackInfo)
+                    // Bei keinem Match: Raw RT parsen und anzeigen
+                    val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
+                    updateNowPlaying(displayInfo)
                     nowPlayingRawRt?.text = strippedRt ?: ""
                     updatePipDisplay()
                 }
@@ -358,7 +405,9 @@ class MainActivity : AppCompatActivity() {
                     currentSpotifyQuery = query
                     currentSpotifyTrackInfo = trackInfo
                     updateSpotifyDebugInfo(status, originalRt, strippedRt, query, trackInfo)
-                    updateNowPlaying(trackInfo)
+                    // Bei keinem Match: Raw RT parsen und anzeigen
+                    val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
+                    updateNowPlaying(displayInfo)
                     nowPlayingRawRt?.text = strippedRt ?: ""
                     updatePipDisplay()
                 }
@@ -400,30 +449,45 @@ class MainActivity : AppCompatActivity() {
                         val finalRt = combinedRt ?: rt
 
                         // Get track info for cover art
-                        val trackInfo = combiner.getLastTrackInfo(pi)
+                        // Only use trackInfo if we actually found a match for the current song
+                        // (combinedRt is non-null only when Spotify found a match)
+                        val trackInfo = if (combinedRt != null) combiner.getLastTrackInfo(pi) else null
 
                         // Update MediaService with combined RT (must be on Main thread!)
                         withContext(Dispatchers.Main) {
                             val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                            val currentFreq = frequencyScale.getFrequency()
+                            val radioLogoPath = radioLogoRepository.getLogoForStation(ps, pi, currentFreq)
                             FytFMMediaService.instance?.updateMetadata(
-                                frequency = frequencyScale.getFrequency(),
+                                frequency = currentFreq,
                                 ps = ps,
                                 rt = finalRt,
                                 isAM = isAM,
                                 coverUrl = trackInfo?.coverUrlMedium,  // Spotify URL (300px)
-                                localCoverPath = trackInfo?.coverUrl   // Local cached path
+                                localCoverPath = trackInfo?.coverUrl,  // Local cached path
+                                radioLogoPath = radioLogoPath          // Radio logo as fallback
                             )
                         }
                     }
-                } else {
-                    // No Spotify - use raw RT, no cover
+                } else if (!rt.isNullOrBlank()) {
+                    // No Spotify - use raw RT, with radio logo as fallback
                     val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                    val currentFreq = frequencyScale.getFrequency()
+                    val radioLogoPath = radioLogoRepository.getLogoForStation(ps, pi, currentFreq)
                     FytFMMediaService.instance?.updateMetadata(
-                        frequency = frequencyScale.getFrequency(),
+                        frequency = currentFreq,
                         ps = ps,
                         rt = rt,
-                        isAM = isAM
+                        isAM = isAM,
+                        radioLogoPath = radioLogoPath
                     )
+                    // Trotzdem RT parsen und in UI anzeigen
+                    runOnUiThread {
+                        val displayInfo = parseRawRtToTrackInfo(rt)
+                        updateNowPlaying(displayInfo)
+                        nowPlayingRawRt?.text = rt
+                        updatePipDisplay()
+                    }
                 }
 
                 runOnUiThread {
@@ -510,6 +574,31 @@ class MainActivity : AppCompatActivity() {
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         setPipLayout(isInPictureInPictureMode)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Re-check PiP mode when resuming (wichtig für Start im kleinen Fenster)
+        recheckPipMode("onResume")
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Re-check when window focus changes (wichtig nach Sleep-Mode)
+        if (hasFocus) {
+            recheckPipMode("onWindowFocusChanged")
+        }
+    }
+
+    private fun recheckPipMode(source: String) {
+        val rootView = findViewById<View>(R.id.rootLayout) ?: return
+        rootView.post {
+            val width = rootView.width
+            if (width > 0) {
+                android.util.Log.d("fytFM", "$source PiP check: width=$width, isPipMode=$isPipMode")
+                checkForPipModeByViewSize(width)
+            }
+        }
     }
 
     private var isPipMode = false
@@ -649,6 +738,16 @@ class MainActivity : AppCompatActivity() {
                 lastKnownWidth = newWidth
                 android.util.Log.d("fytFM", "Layout changed: newWidth=$newWidth, oldWidth=$oldWidth")
                 checkForPipModeByViewSize(newWidth)
+            }
+        }
+
+        // Initial check after view is laid out (wichtig für direkten Start im PiP-Fenster)
+        rootView.post {
+            val width = rootView.width
+            if (width > 0 && width != lastKnownWidth) {
+                lastKnownWidth = width
+                android.util.Log.d("fytFM", "Initial PiP check: width=$width")
+                checkForPipModeByViewSize(width)
             }
         }
     }
@@ -1225,6 +1324,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Parst einen Raw-RT String und versucht Artist/Title zu extrahieren.
+     * Erkennt Formate wie "Artist - Title", "Artist / Title", etc.
+     */
+    private fun parseRawRtToTrackInfo(rawRt: String): TrackInfo? {
+        if (rawRt.isBlank()) return null
+
+        // Versuche verschiedene Trennzeichen
+        val separators = listOf(" - ", " – ", " — ", " / ", " | ")
+
+        for (separator in separators) {
+            if (rawRt.contains(separator)) {
+                val parts = rawRt.split(separator, limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
+                    return TrackInfo(
+                        artist = parts[0].trim(),
+                        title = parts[1].trim(),
+                        trackId = "raw_rt_${rawRt.hashCode()}" // Unique ID für Vergleich
+                    )
+                }
+            }
+        }
+
+        // Kein Trennzeichen gefunden - ganzer Text als Titel
+        return TrackInfo(
+            artist = "",
+            title = rawRt.trim(),
+            trackId = "raw_rt_${rawRt.hashCode()}"
+        )
+    }
+
+    /**
      * Aktualisiert die Now Playing Bar mit Track-Informationen.
      * Ignoriert null (behält letzten Track). Nur hideNowPlayingBarExplicit() versteckt die Bar.
      */
@@ -1245,9 +1375,15 @@ class MainActivity : AppCompatActivity() {
         lastDisplayedTrackId = newTrackId
 
         if (trackInfo != null) {
-            // Update text
-            nowPlayingArtist?.text = trackInfo.artist
-            nowPlayingTitle?.text = trackInfo.title
+            // Update text - bei leerem Artist nur Titel zeigen
+            if (trackInfo.artist.isBlank()) {
+                nowPlayingArtist?.visibility = View.GONE
+                nowPlayingTitle?.text = trackInfo.title
+            } else {
+                nowPlayingArtist?.visibility = View.VISIBLE
+                nowPlayingArtist?.text = trackInfo.artist
+                nowPlayingTitle?.text = trackInfo.title
+            }
 
             // Load cover image with Coil
             val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
@@ -1268,7 +1404,21 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             } else {
-                nowPlayingCover?.setImageResource(android.R.drawable.ic_menu_gallery)
+                // No Spotify cover - try station logo from template
+                val stationLogo = radioLogoRepository.getLogoForStation(
+                    ps = rdsManager.ps,
+                    pi = rdsManager.pi,
+                    frequency = frequencyScale.getFrequency()
+                )
+                if (stationLogo != null) {
+                    nowPlayingCover?.load(java.io.File(stationLogo)) {
+                        crossfade(true)
+                        placeholder(android.R.drawable.ic_menu_gallery)
+                        error(android.R.drawable.ic_menu_gallery)
+                    }
+                } else {
+                    nowPlayingCover?.setImageResource(android.R.drawable.ic_menu_gallery)
+                }
             }
 
             // Show with animation
@@ -1433,16 +1583,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupStationList() {
-        stationAdapter = StationAdapter { station ->
-            // Tune to selected station
-            if (station.isAM) {
-                frequencyScale.setMode(FrequencyScaleView.RadioMode.AM)
-            } else {
-                frequencyScale.setMode(FrequencyScaleView.RadioMode.FM)
+        stationAdapter = StationAdapter(
+            onStationClick = { station ->
+                // Tune to selected station
+                if (station.isAM) {
+                    frequencyScale.setMode(FrequencyScaleView.RadioMode.AM)
+                } else {
+                    frequencyScale.setMode(FrequencyScaleView.RadioMode.FM)
+                }
+                frequencyScale.setFrequency(station.frequency)
+                stationAdapter.setSelectedFrequency(station.frequency)
+            },
+            getLogoPath = { ps, pi, frequency ->
+                if (presetRepository.isShowLogosInFavorites()) {
+                    radioLogoRepository.getLogoForStation(ps, pi, frequency)
+                } else {
+                    null
+                }
             }
-            frequencyScale.setFrequency(station.frequency)
-            stationAdapter.setSelectedFrequency(station.frequency)
-        }
+        )
 
         stationRecycler.layoutManager = LinearLayoutManager(
             this, LinearLayoutManager.HORIZONTAL, false
@@ -1463,8 +1622,18 @@ class MainActivity : AppCompatActivity() {
             // Log station change
             val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
             rdsLogRepository.onStationChange(frequency, isAM)
-            // Update MediaService with new frequency (RDS callback will update PS/RT later)
-            FytFMMediaService.instance?.updateMetadata(frequency, null, null, isAM)
+            // Update MediaService with new frequency and radio logo immediately
+            val radioLogoPath = radioLogoRepository.getLogoForStation(null, null, frequency)
+            android.util.Log.d("fytFM", "Station change: freq=$frequency, radioLogoPath=$radioLogoPath")
+            FytFMMediaService.instance?.updateMetadata(
+                frequency = frequency,
+                ps = null,
+                rt = null,
+                isAM = isAM,
+                coverUrl = null,
+                localCoverPath = null,
+                radioLogoPath = radioLogoPath
+            )
             // Actually tune the radio hardware!
             tuneToFrequency(frequency)
             // Save frequency to SharedPreferences
@@ -1886,14 +2055,49 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
 
+        // Logo Template item (declare first so it can be updated by radio area change)
+        val textLogoTemplateValue = dialogView.findViewById<TextView>(R.id.textLogoTemplateValue)
+        fun updateLogoTemplateText() {
+            val activeTemplate = radioLogoRepository.getActiveTemplateName()
+            textLogoTemplateValue.text = if (activeTemplate != null) {
+                val template = radioLogoRepository.getTemplates().find { it.name == activeTemplate }
+                "${activeTemplate} (${template?.stations?.size ?: 0} Sender)"
+            } else {
+                "Kein Template"
+            }
+        }
+        updateLogoTemplateText()
+        dialogView.findViewById<View>(R.id.itemLogoTemplate).setOnClickListener {
+            showLogoTemplateDialog { updateLogoTemplateText() }
+        }
+
+        // Show Logos in Favorites toggle
+        val switchShowLogosInFavorites = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchShowLogosInFavorites)
+        switchShowLogosInFavorites.isChecked = presetRepository.isShowLogosInFavorites()
+        switchShowLogosInFavorites.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setShowLogosInFavorites(isChecked)
+            // Refresh station list to apply change
+            stationAdapter.notifyDataSetChanged()
+        }
+
         // Radio Area item (opens selection dialog)
         val textRadioAreaValue = dialogView.findViewById<TextView>(R.id.textRadioAreaValue)
-        textRadioAreaValue.text = getRadioAreaName(presetRepository.getRadioArea())
+        fun updateRadioAreaText() {
+            val areaName = getRadioAreaName(presetRepository.getRadioArea())
+            val templateName = radioLogoRepository.getActiveTemplateName()
+            textRadioAreaValue.text = if (templateName != null) {
+                "$areaName / $templateName"
+            } else {
+                areaName
+            }
+        }
+        updateRadioAreaText()
         dialogView.findViewById<View>(R.id.itemRadioArea).setOnClickListener {
             showRadioAreaDialog { selectedArea ->
                 presetRepository.setRadioArea(selectedArea)
                 fmNative?.setRadioArea(selectedArea)
-                textRadioAreaValue.text = getRadioAreaName(selectedArea)
+                updateRadioAreaText()
+                updateLogoTemplateText()
             }
         }
 
@@ -2208,6 +2412,19 @@ class MainActivity : AppCompatActivity() {
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.setOnDismissListener { settingsUpdateListener = null }
         dialog.show()
+
+        // Dialog breiter machen (70% der Bildschirmbreite)
+        val targetWidth = (resources.displayMetrics.widthPixels * 0.7).toInt()
+        android.util.Log.d("fytFM", "Settings Dialog: screenWidth=${resources.displayMetrics.widthPixels}, targetWidth=$targetWidth")
+
+        dialog.window?.let { window ->
+            val params = window.attributes
+            android.util.Log.d("fytFM", "Settings Dialog BEFORE: width=${params.width}, height=${params.height}")
+            params.width = targetWidth
+            params.height = android.view.WindowManager.LayoutParams.WRAP_CONTENT
+            window.attributes = params
+            android.util.Log.d("fytFM", "Settings Dialog AFTER: width=${window.attributes.width}")
+        }
     }
 
     /**
@@ -2753,30 +2970,751 @@ class MainActivity : AppCompatActivity() {
         checkRussia.visibility = if (currentArea == 3) View.VISIBLE else View.GONE
         checkJapan.visibility = if (currentArea == 4) View.VISIBLE else View.GONE
 
-        // Click handlers
-        dialogView.findViewById<View>(R.id.itemAreaUSA).setOnClickListener {
-            onSelected(0)
+        // Chevrons anzeigen wenn Templates für die Region existieren
+        val chevronUSA = dialogView.findViewById<ImageView>(R.id.chevronUSA)
+        val chevronLatinAmerica = dialogView.findViewById<ImageView>(R.id.chevronLatinAmerica)
+        val chevronEurope = dialogView.findViewById<ImageView>(R.id.chevronEurope)
+        val chevronRussia = dialogView.findViewById<ImageView>(R.id.chevronRussia)
+        val chevronJapan = dialogView.findViewById<ImageView>(R.id.chevronJapan)
+
+        chevronUSA.visibility = if (radioLogoRepository.getTemplatesForArea(0).isNotEmpty()) View.VISIBLE else View.GONE
+        chevronLatinAmerica.visibility = if (radioLogoRepository.getTemplatesForArea(1).isNotEmpty()) View.VISIBLE else View.GONE
+        chevronEurope.visibility = if (radioLogoRepository.getTemplatesForArea(2).isNotEmpty()) View.VISIBLE else View.GONE
+        chevronRussia.visibility = if (radioLogoRepository.getTemplatesForArea(3).isNotEmpty()) View.VISIBLE else View.GONE
+        chevronJapan.visibility = if (radioLogoRepository.getTemplatesForArea(4).isNotEmpty()) View.VISIBLE else View.GONE
+
+        // Click handler mit Template-Auswahl
+        fun handleAreaClick(areaId: Int) {
+            val templates = radioLogoRepository.getTemplatesForArea(areaId)
+            if (templates.isNotEmpty()) {
+                // Zeige Template-Auswahl für diese Region
+                showAreaTemplateDialog(areaId, dialog) { selectedTemplate ->
+                    onSelected(areaId)
+                    dialog.dismiss()
+                }
+            } else {
+                // Keine Templates - direkt Region wählen
+                radioLogoRepository.setActiveTemplate(null)
+                onSelected(areaId)
+                dialog.dismiss()
+            }
+        }
+
+        dialogView.findViewById<View>(R.id.itemAreaUSA).setOnClickListener { handleAreaClick(0) }
+        dialogView.findViewById<View>(R.id.itemAreaLatinAmerica).setOnClickListener { handleAreaClick(1) }
+        dialogView.findViewById<View>(R.id.itemAreaEurope).setOnClickListener { handleAreaClick(2) }
+        dialogView.findViewById<View>(R.id.itemAreaRussia).setOnClickListener { handleAreaClick(3) }
+        dialogView.findViewById<View>(R.id.itemAreaJapan).setOnClickListener { handleAreaClick(4) }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+    }
+
+    /**
+     * Zeigt Template-Auswahl für eine bestimmte Region
+     */
+    private fun showAreaTemplateDialog(areaId: Int, parentDialog: AlertDialog, onComplete: (String?) -> Unit) {
+        val templates = radioLogoRepository.getTemplatesForArea(areaId)
+        val activeTemplate = radioLogoRepository.getActiveTemplateName()
+
+        // Template-Namen + "Kein Template" Option
+        val options = mutableListOf("Kein Template")
+        options.addAll(templates.map { "${it.name} (${it.stations.size} Sender)" })
+
+        val currentIndex = if (activeTemplate != null) {
+            val templateIndex = templates.indexOfFirst { it.name == activeTemplate }
+            if (templateIndex >= 0) templateIndex + 1 else 0
+        } else 0
+
+        AlertDialog.Builder(this)
+            .setTitle("${getRadioAreaName(areaId)} - Template")
+            .setSingleChoiceItems(options.toTypedArray(), currentIndex) { dlg, which ->
+                if (which == 0) {
+                    // Kein Template
+                    radioLogoRepository.setActiveTemplate(null)
+                    onComplete(null)
+                    dlg.dismiss()
+                } else {
+                    // Template ausgewählt - downloaden falls nötig
+                    val template = templates[which - 1]
+                    val hasLocalLogos = template.stations.all { it.localPath != null }
+
+                    if (hasLocalLogos) {
+                        // Logos bereits vorhanden
+                        radioLogoRepository.setActiveTemplate(template.name)
+                        onComplete(template.name)
+                        dlg.dismiss()
+                    } else {
+                        // Logos downloaden
+                        dlg.dismiss()
+                        downloadAndActivateTemplate(template, parentDialog) {
+                            onComplete(template.name)
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("Abbrechen", null)
+            .show()
+    }
+
+    private fun downloadAndActivateTemplate(template: at.planqton.fytfm.data.logo.RadioLogoTemplate, parentDialog: AlertDialog, onComplete: () -> Unit) {
+        val progressView = layoutInflater.inflate(android.R.layout.simple_list_item_1, null)
+        val progressText = progressView.findViewById<TextView>(android.R.id.text1)
+        progressText.text = "Lade Logos..."
+        progressText.gravity = android.view.Gravity.CENTER
+        progressText.setPadding(48, 48, 48, 48)
+
+        val progressDialog = AlertDialog.Builder(this)
+            .setView(progressView)
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            val (updatedTemplate, failed) = radioLogoRepository.downloadLogos(template) { current, total ->
+                runOnUiThread {
+                    progressText.text = "Lade Logos... ($current/$total)"
+                }
+            }
+
+            progressDialog.dismiss()
+
+            radioLogoRepository.saveTemplate(updatedTemplate)
+            radioLogoRepository.setActiveTemplate(updatedTemplate.name)
+
+            if (failed.isEmpty()) {
+                android.widget.Toast.makeText(this@MainActivity,
+                    "${updatedTemplate.stations.size} Logos geladen",
+                    android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Logos geladen")
+                    .setMessage("${updatedTemplate.stations.size - failed.size}/${updatedTemplate.stations.size} Logos geladen.\n\nFehlgeschlagen:\n${failed.joinToString("\n")}")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+
+            onComplete()
+        }
+    }
+
+    private fun showLogoTemplateDialog(onDismiss: () -> Unit) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_logo_template, null)
+
+        val dialog = AlertDialog.Builder(this, R.style.TransparentDialog)
+            .setView(dialogView)
+            .create()
+
+        val currentArea = presetRepository.getRadioArea()
+        val textCurrentArea = dialogView.findViewById<TextView>(R.id.textCurrentArea)
+        textCurrentArea.text = "Region: ${getRadioAreaName(currentArea)}"
+
+        val recyclerTemplates = dialogView.findViewById<RecyclerView>(R.id.recyclerTemplates)
+        val textEmptyTemplates = dialogView.findViewById<TextView>(R.id.textEmptyTemplates)
+
+        recyclerTemplates.layoutManager = LinearLayoutManager(this)
+
+        val templates = radioLogoRepository.getTemplatesForArea(currentArea)
+        val activeTemplateName = radioLogoRepository.getActiveTemplateName()
+
+        val adapter = at.planqton.fytfm.data.logo.LogoTemplateAdapter(
+            templates = templates,
+            selectedName = activeTemplateName,
+            onSelect = { template ->
+                // Nur aktivieren, Download erfolgt über Region Settings
+                radioLogoRepository.setActiveTemplate(template.name)
+                dialog.dismiss()
+                onDismiss()
+            },
+            onEdit = { template ->
+                showTemplateEditorDialog(template) {
+                    // Refresh list after editing
+                    val newTemplates = radioLogoRepository.getTemplatesForArea(currentArea)
+                    (recyclerTemplates.adapter as? at.planqton.fytfm.data.logo.LogoTemplateAdapter)
+                        ?.updateTemplates(newTemplates, radioLogoRepository.getActiveTemplateName())
+                    updateEmptyState(newTemplates, recyclerTemplates, textEmptyTemplates)
+                    // Refresh main station adapter to show updated logos
+                    radioLogoRepository.invalidateCache()
+                    stationAdapter.notifyDataSetChanged()
+                }
+            },
+            onExport = { template ->
+                exportLogoTemplate(template)
+            },
+            onDelete = { template ->
+                AlertDialog.Builder(this)
+                    .setTitle("Template löschen")
+                    .setMessage("Template '${template.name}' wirklich löschen?")
+                    .setPositiveButton("Löschen") { _, _ ->
+                        radioLogoRepository.deleteTemplate(template.name)
+                        // Refresh list
+                        val newTemplates = radioLogoRepository.getTemplatesForArea(currentArea)
+                        (recyclerTemplates.adapter as? at.planqton.fytfm.data.logo.LogoTemplateAdapter)
+                            ?.updateTemplates(newTemplates, radioLogoRepository.getActiveTemplateName())
+                        updateEmptyState(newTemplates, recyclerTemplates, textEmptyTemplates)
+                    }
+                    .setNegativeButton("Abbrechen", null)
+                    .show()
+            }
+        )
+
+        recyclerTemplates.adapter = adapter
+        updateEmptyState(templates, recyclerTemplates, textEmptyTemplates)
+
+        // Import button
+        dialogView.findViewById<View>(R.id.btnImportTemplate).setOnClickListener {
+            importLogoTemplate { imported ->
+                if (imported) {
+                    val newTemplates = radioLogoRepository.getTemplatesForArea(currentArea)
+                    adapter.updateTemplates(newTemplates, radioLogoRepository.getActiveTemplateName())
+                    updateEmptyState(newTemplates, recyclerTemplates, textEmptyTemplates)
+                }
+            }
+        }
+
+        // No template button
+        dialogView.findViewById<View>(R.id.btnNoTemplate).setOnClickListener {
+            radioLogoRepository.setActiveTemplate(null)
+            dialog.dismiss()
+            onDismiss()
+        }
+
+        dialog.setOnDismissListener { onDismiss() }
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+    }
+
+    private fun updateEmptyState(templates: List<at.planqton.fytfm.data.logo.RadioLogoTemplate>, recycler: RecyclerView, emptyView: TextView) {
+        if (templates.isEmpty()) {
+            recycler.visibility = View.GONE
+            emptyView.visibility = View.VISIBLE
+        } else {
+            recycler.visibility = View.VISIBLE
+            emptyView.visibility = View.GONE
+        }
+    }
+
+    private fun selectLogoTemplate(template: at.planqton.fytfm.data.logo.RadioLogoTemplate, parentDialog: AlertDialog, onDismiss: () -> Unit) {
+        // Show progress dialog
+        val progressView = layoutInflater.inflate(android.R.layout.simple_list_item_1, null)
+        val progressText = progressView.findViewById<TextView>(android.R.id.text1)
+        progressText.text = "Lade Logos..."
+        progressText.gravity = android.view.Gravity.CENTER
+        progressText.setPadding(48, 48, 48, 48)
+
+        val progressDialog = AlertDialog.Builder(this)
+            .setView(progressView)
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
+        // Download logos in background
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+            val (updatedTemplate, failed) = radioLogoRepository.downloadLogos(template) { current, total ->
+                runOnUiThread {
+                    progressText.text = "Lade Logos... ($current/$total)"
+                }
+            }
+
+            progressDialog.dismiss()
+
+            // Save template and set as active
+            radioLogoRepository.saveTemplate(updatedTemplate)
+            radioLogoRepository.setActiveTemplate(updatedTemplate.name)
+
+            if (failed.isEmpty()) {
+                android.widget.Toast.makeText(this@MainActivity,
+                    "${updatedTemplate.stations.size} Logos geladen",
+                    android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Logos geladen")
+                    .setMessage("${updatedTemplate.stations.size - failed.size}/${updatedTemplate.stations.size} Logos geladen.\n\nFehlgeschlagen:\n${failed.joinToString("\n")}")
+                    .setPositiveButton("OK", null)
+                    .show()
+            }
+
+            parentDialog.dismiss()
+            onDismiss()
+        }
+    }
+
+    private fun exportLogoTemplate(template: at.planqton.fytfm.data.logo.RadioLogoTemplate) {
+        try {
+            // Create file in cache directory
+            val exportDir = java.io.File(cacheDir, "export")
+            if (!exportDir.exists()) exportDir.mkdirs()
+            val fileName = "${template.name.replace(" ", "_")}.json"
+            val file = java.io.File(exportDir, fileName)
+            radioLogoRepository.exportTemplateToFile(template, file)
+
+            // Get URI via FileProvider
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                file
+            )
+
+            // Create share intent
+            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                putExtra(android.content.Intent.EXTRA_SUBJECT, "Logo Template: ${template.name}")
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(android.content.Intent.createChooser(shareIntent, "Template teilen"))
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Export fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun importLogoTemplate(onComplete: (Boolean) -> Unit) {
+        logoTemplateImportCallback = onComplete
+        val intent = android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(android.content.Intent.CATEGORY_OPENABLE)
+            type = "application/json"
+            // Fallback für alle Dateitypen falls JSON nicht erkannt wird
+            putExtra(android.content.Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "*/*"))
+        }
+        logoTemplateImportLauncher.launch(intent)
+    }
+
+    private fun importLogoTemplateFromUri(uri: android.net.Uri) {
+        try {
+            contentResolver.openInputStream(uri)?.use { inputStream ->
+                val jsonString = inputStream.bufferedReader().readText()
+                val template = radioLogoRepository.importTemplate(jsonString)
+                radioLogoRepository.saveTemplate(template)
+                android.widget.Toast.makeText(this, "Importiert: ${template.name}", android.widget.Toast.LENGTH_SHORT).show()
+                logoTemplateImportCallback?.invoke(true)
+            } ?: run {
+                android.widget.Toast.makeText(this, "Datei konnte nicht gelesen werden", android.widget.Toast.LENGTH_SHORT).show()
+                logoTemplateImportCallback?.invoke(false)
+            }
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Import fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            logoTemplateImportCallback?.invoke(false)
+        }
+        logoTemplateImportCallback = null
+    }
+
+    private fun showTemplateEditorDialog(template: at.planqton.fytfm.data.logo.RadioLogoTemplate, onSaved: () -> Unit) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_template_editor, null)
+
+        val dialog = AlertDialog.Builder(this, R.style.TransparentDialog)
+            .setView(dialogView)
+            .create()
+
+        val editTemplateName = dialogView.findViewById<EditText>(R.id.editTemplateName)
+        val textStationCount = dialogView.findViewById<TextView>(R.id.textStationCount)
+        val recyclerStations = dialogView.findViewById<RecyclerView>(R.id.recyclerStations)
+        val textEmptyStations = dialogView.findViewById<TextView>(R.id.textEmptyStations)
+        val btnAddStation = dialogView.findViewById<View>(R.id.btnAddStation)
+        val btnCancel = dialogView.findViewById<View>(R.id.btnCancelEditor)
+        val btnSave = dialogView.findViewById<View>(R.id.btnSaveTemplate)
+
+        editTemplateName.setText(template.name)
+
+        recyclerStations.layoutManager = LinearLayoutManager(this)
+
+        val stationsList = template.stations.toMutableList()
+
+        fun updateStationCount() {
+            textStationCount.text = "Sender (${stationsList.size})"
+            if (stationsList.isEmpty()) {
+                recyclerStations.visibility = View.GONE
+                textEmptyStations.visibility = View.VISIBLE
+            } else {
+                recyclerStations.visibility = View.VISIBLE
+                textEmptyStations.visibility = View.GONE
+            }
+        }
+
+        val stationAdapter = at.planqton.fytfm.data.logo.StationLogoAdapter(
+            stations = stationsList,
+            onEdit = { position, station ->
+                val currentTemplateName = editTemplateName.text.toString().trim().ifBlank { template.name }
+                showStationEditorDialog(station, currentTemplateName) { updatedStation ->
+                    stationsList[position] = updatedStation
+                    (recyclerStations.adapter as? at.planqton.fytfm.data.logo.StationLogoAdapter)?.updateStation(position, updatedStation)
+                }
+            },
+            onDelete = { position, station ->
+                AlertDialog.Builder(this)
+                    .setTitle("Sender löschen")
+                    .setMessage("Eintrag wirklich löschen?")
+                    .setPositiveButton("Löschen") { _, _ ->
+                        stationsList.removeAt(position)
+                        (recyclerStations.adapter as? at.planqton.fytfm.data.logo.StationLogoAdapter)?.removeStation(position)
+                        updateStationCount()
+                    }
+                    .setNegativeButton("Abbrechen", null)
+                    .show()
+            }
+        )
+
+        recyclerStations.adapter = stationAdapter
+        updateStationCount()
+
+        btnAddStation.setOnClickListener {
+            val currentTemplateName = editTemplateName.text.toString().trim().ifBlank { template.name }
+            showStationEditorDialog(null, currentTemplateName) { newStation ->
+                stationsList.add(newStation)
+                stationAdapter.addStation(newStation)
+                updateStationCount()
+            }
+        }
+
+        btnCancel.setOnClickListener {
             dialog.dismiss()
         }
-        dialogView.findViewById<View>(R.id.itemAreaLatinAmerica).setOnClickListener {
-            onSelected(1)
+
+        btnSave.setOnClickListener {
+            val newName = editTemplateName.text.toString().trim()
+            if (newName.isBlank()) {
+                android.widget.Toast.makeText(this, "Name darf nicht leer sein", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // Check if name changed and new name already exists
+            if (newName != template.name && radioLogoRepository.getTemplates().any { it.name == newName }) {
+                android.widget.Toast.makeText(this, "Template mit diesem Namen existiert bereits", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // Delete old template if name changed
+            if (newName != template.name) {
+                radioLogoRepository.deleteTemplate(template.name)
+            }
+
+            // Save updated template
+            val updatedTemplate = template.copy(
+                name = newName,
+                stations = stationsList.toList()
+            )
+            radioLogoRepository.saveTemplate(updatedTemplate)
+
+            // If this was the active template, update the reference
+            if (radioLogoRepository.getActiveTemplateName() == template.name ||
+                radioLogoRepository.getActiveTemplateName() == newName) {
+                radioLogoRepository.setActiveTemplate(newName)
+            }
+
+            android.widget.Toast.makeText(this, "Template gespeichert", android.widget.Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+            onSaved()
+        }
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+    }
+
+    private fun showStationEditorDialog(station: at.planqton.fytfm.data.logo.StationLogo?, templateName: String, onSave: (at.planqton.fytfm.data.logo.StationLogo) -> Unit) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_station_editor, null)
+
+        val dialog = AlertDialog.Builder(this, R.style.TransparentDialog)
+            .setView(dialogView)
+            .create()
+
+        val editPs = dialogView.findViewById<EditText>(R.id.editStationPs)
+        val editPi = dialogView.findViewById<EditText>(R.id.editStationPi)
+        val editFrequencies = dialogView.findViewById<EditText>(R.id.editStationFrequencies)
+        val editLogoUrl = dialogView.findViewById<EditText>(R.id.editStationLogoUrl)
+        val btnCancel = dialogView.findViewById<View>(R.id.btnCancelStation)
+        val btnSave = dialogView.findViewById<View>(R.id.btnSaveStation)
+        val btnSearchLogo = dialogView.findViewById<ImageButton>(R.id.btnSearchLogo)
+        val title = dialogView.findViewById<TextView>(R.id.textStationEditorTitle)
+        val layoutSaveProgress = dialogView.findViewById<View>(R.id.layoutSaveProgress)
+
+        title.text = if (station == null) "Sender hinzufügen" else "Sender bearbeiten"
+
+        // Populate fields if editing
+        station?.let {
+            editPs.setText(it.ps ?: "")
+            editPi.setText(it.pi ?: "")
+            editFrequencies.setText(it.frequencies?.joinToString(", ") { f -> "%.1f".format(java.util.Locale.US, f) } ?: "")
+            editLogoUrl.setText(it.logoUrl)
+        }
+
+        // Logo search button
+        btnSearchLogo.setOnClickListener {
+            val prefilledQuery = editPs.text.toString().trim().takeIf { it.isNotBlank() } ?: ""
+            showImageSearchDialog(prefilledQuery) { selectedUrl ->
+                editLogoUrl.setText(selectedUrl)
+            }
+        }
+
+        btnCancel.setOnClickListener {
             dialog.dismiss()
         }
-        dialogView.findViewById<View>(R.id.itemAreaEurope).setOnClickListener {
-            onSelected(2)
-            dialog.dismiss()
+
+        btnSave.setOnClickListener {
+            val ps = editPs.text.toString().trim().takeIf { it.isNotBlank() }
+            val pi = editPi.text.toString().trim().takeIf { it.isNotBlank() }
+            val frequenciesStr = editFrequencies.text.toString().trim()
+            // Parse comma-separated frequencies
+            val frequencies = frequenciesStr.split(",", ";", " ")
+                .mapNotNull { it.trim().replace(",", ".").toFloatOrNull() }
+                .takeIf { it.isNotEmpty() }
+            val logoUrl = editLogoUrl.text.toString().trim()
+
+            // Validate - at least one identifier and logo URL required
+            if (ps == null && pi == null && frequencies == null) {
+                android.widget.Toast.makeText(this, "Mindestens PS, PI oder Frequenz angeben", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (logoUrl.isBlank()) {
+                android.widget.Toast.makeText(this, "Logo-URL erforderlich", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // Check if URL changed - if so, download the new logo
+            val urlChanged = station?.logoUrl != logoUrl
+
+            if (urlChanged && logoUrl.startsWith("http")) {
+                // Disable buttons and show progress
+                btnSave.isEnabled = false
+                btnCancel.isEnabled = false
+                layoutSaveProgress.visibility = View.VISIBLE
+
+                // Download logo in background
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                    var localPath: String? = station?.localPath
+
+                    try {
+                        localPath = withContext(Dispatchers.IO) {
+                            // Create directory for template
+                            val safeName = templateName.replace(Regex("[^a-zA-Z0-9_-]"), "_")
+                            val templateDir = java.io.File(filesDir, "logos/$safeName").apply {
+                                if (!exists()) mkdirs()
+                            }
+
+                            // Generate filename from URL hash
+                            val digest = java.security.MessageDigest.getInstance("MD5")
+                            val hash = digest.digest(logoUrl.toByteArray())
+                            val filename = hash.joinToString("") { "%02x".format(it) } + ".png"
+                            val localFile = java.io.File(templateDir, filename)
+
+                            // Download
+                            val client = okhttp3.OkHttpClient.Builder()
+                                .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+                                .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+                                .build()
+
+                            val request = okhttp3.Request.Builder()
+                                .url(logoUrl)
+                                .build()
+
+                            client.newCall(request).execute().use { response ->
+                                if (response.isSuccessful) {
+                                    response.body?.byteStream()?.use { input ->
+                                        java.io.FileOutputStream(localFile).use { output ->
+                                            input.copyTo(output)
+                                        }
+                                    }
+                                    localFile.absolutePath
+                                } else {
+                                    throw Exception("HTTP ${response.code}")
+                                }
+                            }
+                        }
+
+                        if (!dialog.isShowing) return@launch
+
+                        val newStation = at.planqton.fytfm.data.logo.StationLogo(
+                            ps = ps,
+                            pi = pi,
+                            frequencies = frequencies,
+                            logoUrl = logoUrl,
+                            localPath = localPath
+                        )
+
+                        dialog.dismiss()
+                        onSave(newStation)
+                        android.widget.Toast.makeText(this@MainActivity, "Logo heruntergeladen", android.widget.Toast.LENGTH_SHORT).show()
+
+                    } catch (e: Exception) {
+                        android.util.Log.e("fytFM", "Failed to download logo: ${e.message}")
+                        if (!dialog.isShowing) return@launch
+
+                        layoutSaveProgress.visibility = View.GONE
+                        btnSave.isEnabled = true
+                        btnCancel.isEnabled = true
+                        android.widget.Toast.makeText(this@MainActivity, "Logo-Download fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
+            } else {
+                // No URL change or not HTTP, just save
+                val newStation = at.planqton.fytfm.data.logo.StationLogo(
+                    ps = ps,
+                    pi = pi,
+                    frequencies = frequencies,
+                    logoUrl = logoUrl,
+                    localPath = station?.localPath
+                )
+
+                dialog.dismiss()
+                onSave(newStation)
+            }
         }
-        dialogView.findViewById<View>(R.id.itemAreaRussia).setOnClickListener {
-            onSelected(3)
+
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        dialog.show()
+    }
+
+    private fun showImageSearchDialog(prefilledQuery: String, onSelect: (String) -> Unit) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_image_search, null)
+
+        val dialog = AlertDialog.Builder(this, R.style.TransparentDialog)
+            .setView(dialogView)
+            .create()
+
+        val editSearchQuery = dialogView.findViewById<EditText>(R.id.editSearchQuery)
+        val btnSearch = dialogView.findViewById<ImageButton>(R.id.btnSearch)
+        val progressLoading = dialogView.findViewById<android.widget.ProgressBar>(R.id.progressLoading)
+        val recyclerImages = dialogView.findViewById<RecyclerView>(R.id.recyclerImages)
+        val textEmptyResults = dialogView.findViewById<TextView>(R.id.textEmptyResults)
+        val btnClose = dialogView.findViewById<View>(R.id.btnCloseSearch)
+
+        editSearchQuery.setText(prefilledQuery)
+
+        recyclerImages.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 3)
+
+        val imageAdapter = at.planqton.fytfm.ui.ImageSearchAdapter { image ->
             dialog.dismiss()
+            onSelect(image.url)
         }
-        dialogView.findViewById<View>(R.id.itemAreaJapan).setOnClickListener {
-            onSelected(4)
+        recyclerImages.adapter = imageAdapter
+
+        fun performSearch(query: String) {
+            if (query.isBlank()) {
+                android.widget.Toast.makeText(this, "Suchbegriff eingeben", android.widget.Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            progressLoading.visibility = View.VISIBLE
+            recyclerImages.visibility = View.GONE
+            textEmptyResults.visibility = View.GONE
+
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                try {
+                    val results = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        searchRadioLogos(query)
+                    }
+
+                    // Check if dialog is still showing before updating UI
+                    if (!dialog.isShowing) return@launch
+
+                    progressLoading.visibility = View.GONE
+
+                    if (results.isEmpty()) {
+                        textEmptyResults.text = "Keine Ergebnisse für \"$query\""
+                        textEmptyResults.visibility = View.VISIBLE
+                        recyclerImages.visibility = View.GONE
+                    } else {
+                        textEmptyResults.visibility = View.GONE
+                        recyclerImages.visibility = View.VISIBLE
+                        imageAdapter.setImages(results)
+                    }
+                } catch (e: Exception) {
+                    if (!dialog.isShowing) return@launch
+                    progressLoading.visibility = View.GONE
+                    textEmptyResults.text = "Fehler: ${e.message}"
+                    textEmptyResults.visibility = View.VISIBLE
+                    recyclerImages.visibility = View.GONE
+                }
+            }
+        }
+
+        btnSearch.setOnClickListener {
+            performSearch(editSearchQuery.text.toString().trim())
+        }
+
+        editSearchQuery.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                performSearch(editSearchQuery.text.toString().trim())
+                true
+            } else false
+        }
+
+        btnClose.setOnClickListener {
             dialog.dismiss()
         }
 
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
+
+        // Auto-search if prefilled (after dialog is shown)
+        if (prefilledQuery.isNotBlank()) {
+            performSearch(prefilledQuery)
+        }
+    }
+
+    private fun searchRadioLogos(query: String): List<at.planqton.fytfm.ui.ImageResult> {
+        val results = mutableListOf<at.planqton.fytfm.ui.ImageResult>()
+        val client = okhttp3.OkHttpClient.Builder()
+            .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+            .followRedirects(true)
+            .build()
+
+        val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+
+        // Step 1: Get vqd token from DuckDuckGo
+        val tokenUrl = "https://duckduckgo.com/?q=$encodedQuery"
+        val tokenRequest = okhttp3.Request.Builder()
+            .url(tokenUrl)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .build()
+
+        val vqd: String
+        client.newCall(tokenRequest).execute().use { response ->
+            if (!response.isSuccessful) return results
+            val html = response.body?.string() ?: return results
+
+            // Extract vqd token using regex
+            val vqdMatch = Regex("vqd=([\"'])([^\"']+)\\1").find(html)
+                ?: Regex("vqd=([\\d-]+)").find(html)
+            vqd = vqdMatch?.groupValues?.lastOrNull() ?: return results
+        }
+
+        // Step 2: Search images with token
+        val imageUrl = "https://duckduckgo.com/i.js?l=de-de&o=json&q=$encodedQuery&vqd=$vqd&f=,,,&p=1"
+        val imageRequest = okhttp3.Request.Builder()
+            .url(imageUrl)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            .header("Referer", "https://duckduckgo.com/")
+            .build()
+
+        client.newCall(imageRequest).execute().use { response ->
+            if (!response.isSuccessful) return results
+            val body = response.body?.string() ?: return results
+
+            val json = org.json.JSONObject(body)
+            val resultsArray = json.optJSONArray("results") ?: return results
+
+            val seenUrls = mutableSetOf<String>()
+            val maxResults = minOf(resultsArray.length(), 30)
+
+            for (i in 0 until maxResults) {
+                val item = resultsArray.getJSONObject(i)
+                val imageUrl = item.optString("image", "")
+                val title = item.optString("title", "Bild")
+
+                // Filter out SVG files (not supported by MediaSession)
+                if (imageUrl.isNotBlank() &&
+                    imageUrl.startsWith("http") &&
+                    !imageUrl.lowercase().endsWith(".svg") &&
+                    !imageUrl.lowercase().contains(".svg?") &&
+                    !seenUrls.contains(imageUrl)) {
+                    seenUrls.add(imageUrl)
+                    results.add(at.planqton.fytfm.ui.ImageResult(imageUrl, title))
+                }
+            }
+        }
+
+        return results
     }
 
     private fun showRadioEditorDialog() {

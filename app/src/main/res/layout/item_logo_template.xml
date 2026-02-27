@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:minHeight="64dp"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:gravity="center_vertical">
+
+    <!-- Radio Button for Selection -->
+    <RadioButton
+        android:id="@+id/radioTemplate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="false"
+        android:focusable="false" />
+
+    <!-- Template Info -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/textTemplateName"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Klagenfurt"
+            android:textColor="#333333"
+            android:textSize="16sp" />
+
+        <TextView
+            android:id="@+id/textTemplateInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="12 Sender"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+    <!-- Edit Button -->
+    <ImageButton
+        android:id="@+id/btnEditTemplate"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_edit"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Bearbeiten" />
+
+    <!-- Export Button -->
+    <ImageButton
+        android:id="@+id/btnExportTemplate"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_share"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Export" />
+
+    <!-- Delete Button -->
+    <ImageButton
+        android:id="@+id/btnDeleteTemplate"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_delete"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Delete" />
+
+</LinearLayout>

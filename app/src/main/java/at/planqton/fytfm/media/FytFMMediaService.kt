@@ -128,6 +128,7 @@ class FytFMMediaService : MediaLibraryService() {
      *
      * @param coverUrl Spotify Cover URL (online)
      * @param localCoverPath Lokaler Pfad zum gecachten Cover (Fallback wenn Cache aktiv)
+     * @param radioLogoPath Lokaler Pfad zum Radio-Logo (Fallback wenn kein Spotify-Cover)
      */
     fun updateMetadata(
         frequency: Float,
@@ -135,7 +136,8 @@ class FytFMMediaService : MediaLibraryService() {
         rt: String?,
         isAM: Boolean = false,
         coverUrl: String? = null,
-        localCoverPath: String? = null
+        localCoverPath: String? = null,
+        radioLogoPath: String? = null
     ) {
         val freqDisplay = if (isAM) {
             "AM ${frequency.toInt()}"
@@ -145,18 +147,31 @@ class FytFMMediaService : MediaLibraryService() {
         val stationName = ps ?: freqDisplay
 
         // Cover-URI bestimmen
+        Log.d(TAG, "Cover selection: coverUrl=$coverUrl, localCoverPath=$localCoverPath, radioLogoPath=$radioLogoPath, cacheEnabled=${presetRepository.isSpotifyCacheEnabled()}")
         val artworkUri: Uri? = when {
             // 1. Spotify URL verfügbar → direkt nutzen
             !coverUrl.isNullOrBlank() && coverUrl.startsWith("http") -> {
+                Log.d(TAG, "Using Spotify URL")
                 Uri.parse(coverUrl)
             }
             // 2. Lokaler Pfad + Cache aktiviert → über lokalen Server
             !localCoverPath.isNullOrBlank() && presetRepository.isSpotifyCacheEnabled() -> {
+                Log.d(TAG, "Using local cached cover")
                 ensureCoverServerRunning()
                 coverServer?.setCoverPath(localCoverPath)
                 coverServer?.getCoverUrl()?.let { Uri.parse(it) }
             }
-            else -> null
+            // 3. Radio-Logo als Fallback (offline-fähig)
+            !radioLogoPath.isNullOrBlank() -> {
+                Log.d(TAG, "Using radio logo fallback")
+                ensureCoverServerRunning()
+                coverServer?.setCoverPath(radioLogoPath)
+                coverServer?.getCoverUrl()?.let { Uri.parse(it) }
+            }
+            else -> {
+                Log.d(TAG, "No cover available")
+                null
+            }
         }
 
         val metadata = MediaMetadata.Builder()
@@ -176,7 +191,7 @@ class FytFMMediaService : MediaLibraryService() {
             .build()
 
         player.updateMetadata(metadata)
-        Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt | cover=$artworkUri")
+        Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt | cover=$artworkUri | radioLogo=$radioLogoPath")
     }
 
     /**

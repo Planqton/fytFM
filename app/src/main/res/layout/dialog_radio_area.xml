@@ -48,6 +48,15 @@
             android:visibility="gone"
             android:tint="#5C6BC0" />
 
+        <ImageView
+            android:id="@+id/chevronUSA"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_chevron_right"
+            android:alpha="0.5"
+            android:visibility="gone" />
+
     </LinearLayout>
 
     <!-- Latin America -->
@@ -79,6 +88,15 @@
             android:src="@drawable/ic_check"
             android:visibility="gone"
             android:tint="#5C6BC0" />
+
+        <ImageView
+            android:id="@+id/chevronLatinAmerica"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_chevron_right"
+            android:alpha="0.5"
+            android:visibility="gone" />
 
     </LinearLayout>
 
@@ -112,6 +130,15 @@
             android:visibility="gone"
             android:tint="#5C6BC0" />
 
+        <ImageView
+            android:id="@+id/chevronEurope"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_chevron_right"
+            android:alpha="0.5"
+            android:visibility="gone" />
+
     </LinearLayout>
 
     <!-- Russia -->
@@ -144,6 +171,15 @@
             android:visibility="gone"
             android:tint="#5C6BC0" />
 
+        <ImageView
+            android:id="@+id/chevronRussia"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_chevron_right"
+            android:alpha="0.5"
+            android:visibility="gone" />
+
     </LinearLayout>
 
     <!-- Japan -->
@@ -175,6 +211,15 @@
             android:src="@drawable/ic_check"
             android:visibility="gone"
             android:tint="#5C6BC0" />
+
+        <ImageView
+            android:id="@+id/chevronJapan"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_chevron_right"
+            android:alpha="0.5"
+            android:visibility="gone" />
 
     </LinearLayout>
 

@@ -330,4 +330,13 @@ class PresetRepository(context: Context) {
     fun setCorrectionHelpersEnabled(enabled: Boolean) {
         settingsPrefs.edit().putBoolean("correction_helpers_enabled", enabled).apply()
     }
+
+    // Show Logos in Favorites List
+    fun isShowLogosInFavorites(): Boolean {
+        return settingsPrefs.getBoolean("show_logos_in_favorites", true)
+    }
+
+    fun setShowLogosInFavorites(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("show_logos_in_favorites", enabled).apply()
+    }
 }

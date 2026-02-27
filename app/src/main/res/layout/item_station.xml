@@ -6,57 +6,75 @@
     android:layout_height="wrap_content"
     android:layout_marginEnd="12dp"
     android:background="@drawable/station_tile_background"
-    android:gravity="center"
+    android:gravity="center_vertical"
     android:minWidth="100dp"
-    android:orientation="vertical"
-    android:paddingStart="16dp"
-    android:paddingEnd="16dp"
+    android:orientation="horizontal"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
     android:paddingTop="8dp"
     android:paddingBottom="8dp">
 
-    <!-- RDS Station Name (if available) -->
-    <TextView
-        android:id="@+id/tvStationName"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@color/radio_text_primary"
-        android:textSize="11sp"
+    <!-- Station Logo (if available) - left side -->
+    <ImageView
+        android:id="@+id/ivStationLogo"
+        android:layout_width="36dp"
+        android:layout_height="36dp"
+        android:layout_marginEnd="8dp"
+        android:scaleType="centerCrop"
         android:visibility="gone" />
 
-    <!-- Frequency with optional favorite star -->
+    <!-- Text content - right side -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:gravity="center"
+        android:orientation="vertical">
 
-        <ImageView
-            android:id="@+id/ivFavorite"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
-            android:layout_marginEnd="4dp"
-            android:src="@drawable/ic_star_small"
-            android:visibility="gone" />
-
+        <!-- RDS Station Name (if available) -->
         <TextView
-            android:id="@+id/tvFrequency"
+            android:id="@+id/tvStationName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="98.4"
+            android:ellipsize="end"
+            android:maxLines="1"
             android:textColor="@color/radio_text_primary"
-            android:textSize="14sp" />
+            android:textSize="11sp"
+            android:visibility="gone" />
+
+        <!-- Frequency with optional favorite star -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:id="@+id/ivFavorite"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_marginEnd="4dp"
+                android:src="@drawable/ic_star_small"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvFrequency"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="98.4"
+                android:textColor="@color/radio_text_primary"
+                android:textSize="14sp" />
+
+        </LinearLayout>
+
+        <!-- RSSI Signal Strength -->
+        <TextView
+            android:id="@+id/tvRssi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/radio_text_secondary"
+            android:textSize="10sp"
+            android:visibility="gone" />
 
     </LinearLayout>
-
-    <!-- RSSI Signal Strength -->
-    <TextView
-        android:id="@+id/tvRssi"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textColor="@color/radio_text_secondary"
-        android:textSize="10sp"
-        android:visibility="gone" />
 
 </LinearLayout>

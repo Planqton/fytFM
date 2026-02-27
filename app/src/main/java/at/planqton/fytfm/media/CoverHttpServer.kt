@@ -19,20 +19,25 @@ class CoverHttpServer(private val port: Int = 8765) : NanoHTTPD(port) {
     @Volatile
     private var currentCoverPath: String? = null
 
+    @Volatile
+    private var coverVersion: Long = 0
+
     /**
      * Set the current cover image path to serve
      */
     fun setCoverPath(path: String?) {
         currentCoverPath = path
-        Log.d(TAG, "Cover path set: $path")
+        coverVersion = System.currentTimeMillis()  // Cache-busting
+        Log.d(TAG, "Cover path set: $path (version=$coverVersion)")
     }
 
     /**
      * Get the URL to access the current cover
+     * Includes timestamp parameter to prevent client caching
      */
     fun getCoverUrl(): String? {
         return if (currentCoverPath != null) {
-            "http://127.0.0.1:$port/cover.jpg"
+            "http://127.0.0.1:$port/cover.jpg?v=$coverVersion"
         } else null
     }
 

@@ -1,0 +1,12 @@
+{
+  "name": "Test Europe",
+  "area": 2,
+  "version": 1,
+  "stations": [
+    {
+      "ps": "AGORA",
+      "frequency": 105.5,
+      "logoUrl": "https://www.agora.at/images/agora_sharing.jpg"
+    }
+  ]
+}

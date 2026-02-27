@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:clickable="true"
+    android:focusable="true"
+    android:minHeight="56dp"
+    android:orientation="horizontal"
+    android:paddingStart="24dp"
+    android:paddingEnd="12dp"
+    android:gravity="center_vertical">
+
+    <!-- Logo Preview -->
+    <ImageView
+        android:id="@+id/imgLogoPreview"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:scaleType="centerCrop"
+        android:background="#F0F0F0" />
+
+    <!-- Station Info -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/textStationIdentifier"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="AGORA"
+            android:textColor="#333333"
+            android:textSize="14sp"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+        <TextView
+            android:id="@+id/textStationDetails"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="105.5 MHz"
+            android:textColor="#888888"
+            android:textSize="12sp"
+            android:ellipsize="end"
+            android:maxLines="1" />
+
+    </LinearLayout>
+
+    <!-- Edit Button -->
+    <ImageButton
+        android:id="@+id/btnEditStation"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_edit"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Bearbeiten" />
+
+    <!-- Delete Button -->
+    <ImageButton
+        android:id="@+id/btnDeleteStation"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_delete"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Löschen" />
+
+</LinearLayout>

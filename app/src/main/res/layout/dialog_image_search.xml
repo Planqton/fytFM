@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/dialog_background"
+    android:orientation="vertical"
+    android:padding="0dp">
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:paddingTop="24dp"
+        android:paddingBottom="16dp"
+        android:text="Logo suchen"
+        android:textColor="#333333"
+        android:textSize="20sp"
+        android:textStyle="bold" />
+
+    <!-- Search Input -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="16dp"
+        android:gravity="center_vertical">
+
+        <EditText
+            android:id="@+id/editSearchQuery"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="z.B. Ö3 Radio Logo"
+            android:inputType="text"
+            android:imeOptions="actionSearch"
+            android:textSize="14sp" />
+
+        <ImageButton
+            android:id="@+id/btnSearch"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_search"
+            android:contentDescription="Suchen" />
+
+    </LinearLayout>
+
+    <!-- Loading indicator -->
+    <ProgressBar
+        android:id="@+id/progressLoading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone" />
+
+    <!-- Results Grid -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerImages"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:clipToPadding="false" />
+
+    <!-- Empty State -->
+    <TextView
+        android:id="@+id/textEmptyResults"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="32dp"
+        android:text="Suchbegriff eingeben und suchen"
+        android:textColor="#AAAAAA"
+        android:textSize="14sp" />
+
+    <!-- Close Button -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btnCloseSearch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Schließen"
+            style="?attr/borderlessButtonStyle" />
+
+    </LinearLayout>
+
+</LinearLayout>

@@ -2,6 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
+    android:minWidth="500dp"
     android:background="@drawable/dialog_background"
     android:orientation="vertical"
     android:padding="0dp">
@@ -324,6 +325,91 @@
                     android:layout_height="24dp"
                     android:src="@drawable/ic_chevron_right"
                     android:alpha="0.5" />
+
+            </LinearLayout>
+
+            <!-- Section Header: Radio Logos -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="8dp"
+                android:text="Radio Logos"
+                android:textColor="#666666"
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
+
+            <!-- Logo Template Manager Item -->
+            <LinearLayout
+                android:id="@+id/itemLogoTemplate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Logo Template Manager"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/textLogoTemplateValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Kein Template"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:alpha="0.5" />
+
+            </LinearLayout>
+
+            <!-- Show Logos in Favorites Toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchShowLogosInFavorites"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:text="Logos in Favoriten anzeigen"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
 
             </LinearLayout>
 
@@ -702,7 +788,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="RT Korrekturen anzeigen"
+                        android:text="RT Korrektur Regeln"
                         android:textColor="#333333"
                         android:textSize="16sp" />
 

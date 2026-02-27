@@ -13,7 +13,7 @@
         android:gravity="center"
         android:paddingTop="24dp"
         android:paddingBottom="16dp"
-        android:text="RT Korrekturen"
+        android:text="RT Korrektur Regeln"
         android:textColor="#333333"
         android:textSize="22sp"
         android:textStyle="bold" />
@@ -43,7 +43,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Edit Regeln"
+                    android:text="Regeln"
                     android:textColor="#4CAF50"
                     android:textSize="14sp"
                     android:textAllCaps="true"
@@ -88,7 +88,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:padding="24dp"
-                android:text="Keine Edit Regeln definiert"
+                android:text="Keine Regeln definiert"
                 android:textColor="#AAAAAA"
                 android:textSize="13sp"
                 android:visibility="gone" />
