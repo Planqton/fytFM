@@ -98,7 +98,7 @@ class RtCombiner(
             }
 
             // Find text comparison (respects caseSensitiveFind flag)
-            val findText = if (edit.caseSensitiveFind) edit.textOriginal.trim() else edit.textNormalized
+            val findText = if (edit.caseSensitiveFind) edit.textOriginal else edit.textNormalized
             val compareResult = if (edit.caseSensitiveFind) result else result.lowercase()
 
             val matched = when (edit.position) {

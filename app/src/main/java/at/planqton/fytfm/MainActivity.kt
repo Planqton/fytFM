@@ -96,6 +96,14 @@ class MainActivity : AppCompatActivity() {
     private var lastDisplayedTrackId: String? = null
     private var lastDebugTrackId: String? = null
 
+    // PiP Layout
+    private var pipLayout: View? = null
+    private var pipCoverImage: ImageView? = null
+    private var pipTitle: TextView? = null
+    private var pipArtist: TextView? = null
+    private var pipBtnPlayPause: ImageButton? = null
+    private var pipRawRt: TextView? = null
+
     // Correction Helper Buttons
     private var nowPlayingCorrectionButtons: View? = null
     private var btnCorrectionRefresh: ImageButton? = null
@@ -105,6 +113,10 @@ class MainActivity : AppCompatActivity() {
 
     // Debug: Internet-Simulation deaktivieren
     var debugInternetDisabled = false
+        private set
+
+    // Debug: Spotify/Local blockieren (nur RDS anzeigen)
+    var debugSpotifyBlocked = false
         private set
 
     private lateinit var presetRepository: PresetRepository
@@ -122,6 +134,13 @@ class MainActivity : AppCompatActivity() {
     private var spotifyClient: SpotifyClient? = null
     private var spotifyCache: SpotifyCache? = null
     private var rtCombiner: RtCombiner? = null
+
+    // Bug Report: Aktuelle Spotify-Status-Daten
+    private var currentSpotifyStatus: String? = null
+    private var currentSpotifyOriginalRt: String? = null
+    private var currentSpotifyStrippedRt: String? = null
+    private var currentSpotifyQuery: String? = null
+    private var currentSpotifyTrackInfo: TrackInfo? = null
 
     // Spotify Cache Export/Import launchers
     private val spotifyCacheExportLauncher = registerForActivityResult(
@@ -307,9 +326,16 @@ class MainActivity : AppCompatActivity() {
                 editStringDao = editStringDao
             ) { status, originalRt, strippedRt, query, trackInfo ->
                 runOnUiThread {
+                    // Store for bug reports
+                    currentSpotifyStatus = status
+                    currentSpotifyOriginalRt = originalRt
+                    currentSpotifyStrippedRt = strippedRt
+                    currentSpotifyQuery = query
+                    currentSpotifyTrackInfo = trackInfo
                     updateSpotifyDebugInfo(status, originalRt, strippedRt, query, trackInfo)
                     updateNowPlaying(trackInfo)
                     nowPlayingRawRt?.text = strippedRt ?: ""
+                    updatePipDisplay()
                 }
             }
             android.util.Log.i("fytFM", "Spotify integration initialized")
@@ -325,9 +351,16 @@ class MainActivity : AppCompatActivity() {
                 editStringDao = editStringDao
             ) { status, originalRt, strippedRt, query, trackInfo ->
                 runOnUiThread {
+                    // Store for bug reports
+                    currentSpotifyStatus = status
+                    currentSpotifyOriginalRt = originalRt
+                    currentSpotifyStrippedRt = strippedRt
+                    currentSpotifyQuery = query
+                    currentSpotifyTrackInfo = trackInfo
                     updateSpotifyDebugInfo(status, originalRt, strippedRt, query, trackInfo)
                     updateNowPlaying(trackInfo)
                     nowPlayingRawRt?.text = strippedRt ?: ""
+                    updatePipDisplay()
                 }
             }
             android.util.Log.i("fytFM", "Spotify credentials not configured, using cache only")
@@ -358,9 +391,9 @@ class MainActivity : AppCompatActivity() {
                 // Log RDS data (only on RT change)
                 rdsLogRepository.onRdsUpdate(ps, rt, pi, pty, tp, ta, rssi, afList)
 
-                // Process RT through Spotify integration if available
+                // Process RT through Spotify integration if available (unless blocked)
                 val combiner = rtCombiner
-                if (combiner != null && !rt.isNullOrBlank()) {
+                if (combiner != null && !rt.isNullOrBlank() && !debugSpotifyBlocked) {
                     val currentFrequency = frequencyScale.getFrequency()
                     CoroutineScope(Dispatchers.IO).launch {
                         val combinedRt = combiner.processRt(pi, rt, currentFrequency)
@@ -474,26 +507,58 @@ class MainActivity : AppCompatActivity() {
         rdsManager.stopPolling()
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        setPipLayout(!hasFocus)
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        setPipLayout(isInPictureInPictureMode)
     }
 
+    private var isPipMode = false
+
     private fun setPipLayout(isPip: Boolean) {
+        android.util.Log.i("fytFM", "setPipLayout: isPip=$isPip (was: $isPipMode)")
+        isPipMode = isPip
         if (isPip) {
+            // Hide main UI elements
             btnFavorite.visibility = View.GONE
             btnPrevStation.visibility = View.GONE
             btnNextStation.visibility = View.GONE
             controlBar.visibility = View.GONE
             findViewById<LinearLayout>(R.id.stationBar)?.visibility = View.GONE
-            tvFrequency.textSize = 36f
+            tvFrequency.visibility = View.GONE
+            frequencyScale.visibility = View.GONE
+
+            // Hide all debug overlays
+            debugOverlay?.visibility = View.GONE
+            debugChecklist?.visibility = View.GONE
+            debugLayoutOverlay?.visibility = View.GONE
+            debugBuildOverlay?.visibility = View.GONE
+            debugSpotifyOverlay?.visibility = View.GONE
+            debugButtonsOverlay?.visibility = View.GONE
+
+            // Show PiP specific layout
+            findViewById<View>(R.id.pipLayout)?.visibility = View.VISIBLE
+
+            updatePipDisplay()
         } else {
+            // Show main UI elements
             btnFavorite.visibility = View.VISIBLE
             btnPrevStation.visibility = View.VISIBLE
             btnNextStation.visibility = View.VISIBLE
             controlBar.visibility = View.VISIBLE
             findViewById<LinearLayout>(R.id.stationBar)?.visibility = View.VISIBLE
-            tvFrequency.textSize = 99f
+            tvFrequency.visibility = View.VISIBLE
+            frequencyScale.visibility = View.VISIBLE
+
+            // Restore debug overlays based on checkbox states
+            debugOverlay?.visibility = if (checkRdsInfo?.isChecked == true) View.VISIBLE else View.GONE
+            debugChecklist?.visibility = View.VISIBLE
+            debugLayoutOverlay?.visibility = if (checkLayoutInfo?.isChecked == true) View.VISIBLE else View.GONE
+            debugBuildOverlay?.visibility = if (checkBuildInfo?.isChecked == true) View.VISIBLE else View.GONE
+            debugSpotifyOverlay?.visibility = if (checkSpotifyInfo?.isChecked == true) View.VISIBLE else View.GONE
+            debugButtonsOverlay?.visibility = if (checkDebugButtons?.isChecked == true) View.VISIBLE else View.GONE
+
+            // Hide PiP specific layout
+            findViewById<View>(R.id.pipLayout)?.visibility = View.GONE
         }
     }
 
@@ -541,6 +606,17 @@ class MainActivity : AppCompatActivity() {
         nowPlayingTitle = findViewById(R.id.nowPlayingTitle)
         nowPlayingRawRt = findViewById(R.id.nowPlayingRawRt)
 
+        // PiP Layout
+        pipLayout = findViewById(R.id.pipLayout)
+        pipCoverImage = findViewById(R.id.pipCoverImage)
+        pipTitle = findViewById(R.id.pipTitle)
+        pipArtist = findViewById(R.id.pipArtist)
+        pipBtnPlayPause = findViewById(R.id.pipBtnPlayPause)
+        setupPipButtons()
+
+        // PiP Raw RT display
+        pipRawRt = findViewById(R.id.pipRawRt)
+
         // Correction Helper Buttons
         nowPlayingCorrectionButtons = findViewById(R.id.nowPlayingCorrectionButtons)
         btnCorrectionRefresh = findViewById(R.id.btnCorrectionRefresh)
@@ -557,6 +633,39 @@ class MainActivity : AppCompatActivity() {
         setupDebugButtonsListeners()
         restoreDebugWindowStates()
         updateDebugOverlayVisibility()
+
+        // Setup layout change listener for PiP detection
+        setupPipDetection()
+    }
+
+    private var lastKnownWidth = 0
+
+    private fun setupPipDetection() {
+        val rootView = findViewById<View>(R.id.rootLayout) ?: return
+        rootView.addOnLayoutChangeListener { _, left, _, right, _, oldLeft, _, oldRight, _ ->
+            val newWidth = right - left
+            val oldWidth = oldRight - oldLeft
+            if (newWidth != oldWidth && newWidth != lastKnownWidth) {
+                lastKnownWidth = newWidth
+                android.util.Log.d("fytFM", "Layout changed: newWidth=$newWidth, oldWidth=$oldWidth")
+                checkForPipModeByViewSize(newWidth)
+            }
+        }
+    }
+
+    private fun checkForPipModeByViewSize(viewWidth: Int) {
+        // Use absolute width in dp - if less than 800dp, consider it PiP-like
+        val density = resources.displayMetrics.density
+        val widthDp = viewWidth / density
+
+        // PiP-like if width is less than 800dp (typical split-screen/floating window)
+        val isPipLike = widthDp < 800f
+
+        android.util.Log.d("fytFM", "checkForPipModeByViewSize: viewWidth=$viewWidth, widthDp=$widthDp, density=$density, isPipLike=$isPipLike")
+
+        if (isPipLike != isPipMode) {
+            setPipLayout(isPipLike)
+        }
     }
 
     private fun setupDebugChecklistDrag() {
@@ -608,12 +717,16 @@ class MainActivity : AppCompatActivity() {
         checkRdsInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
             presetRepository.setDebugWindowOpen("rds", isChecked)
+            if (isChecked) {
+                debugOverlay?.post { restoreDebugWindowPosition("rds", debugOverlay) }
+            }
         }
         checkLayoutInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugLayoutOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
             presetRepository.setDebugWindowOpen("layout", isChecked)
             if (isChecked) {
                 updateLayoutDebugInfo()
+                debugLayoutOverlay?.post { restoreDebugWindowPosition("layout", debugLayoutOverlay) }
             }
         }
         checkBuildInfo?.setOnCheckedChangeListener { _, isChecked ->
@@ -621,15 +734,22 @@ class MainActivity : AppCompatActivity() {
             presetRepository.setDebugWindowOpen("build", isChecked)
             if (isChecked) {
                 updateBuildDebugInfo()
+                debugBuildOverlay?.post { restoreDebugWindowPosition("build", debugBuildOverlay) }
             }
         }
         checkSpotifyInfo?.setOnCheckedChangeListener { _, isChecked ->
             debugSpotifyOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
             presetRepository.setDebugWindowOpen("spotify", isChecked)
+            if (isChecked) {
+                debugSpotifyOverlay?.post { restoreDebugWindowPosition("spotify", debugSpotifyOverlay) }
+            }
         }
         checkDebugButtons?.setOnCheckedChangeListener { _, isChecked ->
             debugButtonsOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
             presetRepository.setDebugWindowOpen("buttons", isChecked)
+            if (isChecked) {
+                debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
+            }
         }
     }
 
@@ -838,6 +958,118 @@ class MainActivity : AppCompatActivity() {
                 android.widget.Toast.makeText(this, "App Internet enabled", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
+
+        // Bug Report Button
+        findViewById<android.widget.Button>(R.id.btnDebugBugReport)?.setOnClickListener {
+            createBugReport()
+        }
+
+        // View Reports Button
+        findViewById<android.widget.Button>(R.id.btnDebugViewReports)?.setOnClickListener {
+            startActivity(android.content.Intent(this, BugReportActivity::class.java))
+        }
+
+        // Block Spotify/Local Toggle Button
+        findViewById<android.widget.ToggleButton>(R.id.btnDebugBlockSpotify)?.setOnCheckedChangeListener { btn, isChecked ->
+            debugSpotifyBlocked = isChecked
+            if (isChecked) {
+                btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF993333.toInt())
+                android.widget.Toast.makeText(this, "Spotify/Local blocked - RDS only", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFCC9933.toInt())
+                android.widget.Toast.makeText(this, "Spotify/Local enabled", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun setupPipButtons() {
+        findViewById<ImageButton>(R.id.pipBtnPrev)?.setOnClickListener {
+            // Same as btnPrevStation - step down frequency
+            val step = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+                FrequencyScaleView.FM_FREQUENCY_STEP
+            } else {
+                FrequencyScaleView.AM_FREQUENCY_STEP
+            }
+            val newFreq = frequencyScale.getFrequency() - step
+            frequencyScale.setFrequency(newFreq)
+        }
+        findViewById<ImageButton>(R.id.pipBtnNext)?.setOnClickListener {
+            // Same as btnNextStation - step up frequency
+            val step = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+                FrequencyScaleView.FM_FREQUENCY_STEP
+            } else {
+                FrequencyScaleView.AM_FREQUENCY_STEP
+            }
+            val newFreq = frequencyScale.getFrequency() + step
+            frequencyScale.setFrequency(newFreq)
+        }
+        findViewById<ImageButton>(R.id.pipBtnPlayPause)?.setOnClickListener {
+            btnPlayPause.performClick()
+        }
+    }
+
+    private fun updatePipDisplay() {
+        if (!isPipMode) return
+
+        // Update frequency/station name
+        val ps = rdsManager.ps
+        val frequency = frequencyScale.getFrequency()
+        pipTitle?.text = if (!ps.isNullOrBlank()) ps else "FM ${String.format("%.2f", frequency)}"
+
+        // Always show raw RT from RDS
+        val rawRt = rdsManager.rt
+        pipRawRt?.text = rawRt ?: ""
+
+        // Update artist (from Spotify/Local track info)
+        val trackInfo = currentSpotifyTrackInfo
+        if (trackInfo != null) {
+            pipArtist?.text = "${trackInfo.artist} - ${trackInfo.title}"
+            // Load cover image
+            val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
+            if (coverUrl != null) {
+                pipCoverImage?.load(coverUrl) {
+                    crossfade(true)
+                    placeholder(R.drawable.ic_cover_placeholder)
+                    error(R.drawable.ic_cover_placeholder)
+                }
+            } else {
+                pipCoverImage?.setImageResource(R.drawable.ic_cover_placeholder)
+            }
+        } else {
+            pipArtist?.text = ""
+            pipCoverImage?.setImageResource(R.drawable.ic_cover_placeholder)
+        }
+    }
+
+    private fun createBugReport() {
+        val bugReportHelper = BugReportHelper(this)
+        val appState = BugReportHelper.AppState(
+            // RDS Data
+            rdsPs = rdsManager.ps,
+            rdsRt = rdsManager.rt,
+            rdsPi = rdsManager.pi,
+            rdsPty = rdsManager.pty,
+            rdsRssi = rdsManager.rssi,
+            rdsTp = rdsManager.tp,
+            rdsTa = rdsManager.ta,
+            rdsAfEnabled = rdsManager.isAfEnabled,
+            rdsAfList = rdsManager.afList?.toList(),
+            currentFrequency = frequencyScale.getFrequency(),
+
+            // Spotify Data
+            spotifyStatus = currentSpotifyStatus,
+            spotifyOriginalRt = currentSpotifyOriginalRt,
+            spotifyStrippedRt = currentSpotifyStrippedRt,
+            spotifyQuery = currentSpotifyQuery,
+            spotifyTrackInfo = currentSpotifyTrackInfo
+        )
+
+        val reportPath = bugReportHelper.createBugReport(appState)
+        if (reportPath != null) {
+            android.widget.Toast.makeText(this, "Bug report created", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            android.widget.Toast.makeText(this, "Failed to create bug report", android.widget.Toast.LENGTH_SHORT).show()
+        }
     }
 
     // Methode zum Aktualisieren der Spotify Debug-Anzeige
@@ -846,12 +1078,10 @@ class MainActivity : AppCompatActivity() {
 
         // Status und Input immer setzen
         findViewById<TextView>(R.id.debugSpotifyStatus)?.text = status
-        // Show both original and stripped RT
-        val rtDisplay = if (originalRt != null && strippedRt != null) {
-            "$originalRt\n→ $strippedRt"
-        } else {
-            originalRt ?: strippedRt ?: "--"
-        }
+        // Show original RT and search string (always both)
+        val orig = originalRt ?: "--"
+        val search = strippedRt ?: "--"
+        val rtDisplay = "Orig: $orig\nSuche: $search"
         findViewById<TextView>(R.id.debugSpotifyRtInput)?.text = rtDisplay
 
         // Bei "Waiting..." explizit alles clearen (Senderwechsel)
@@ -867,6 +1097,24 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // Determine source based on status (immer aktualisieren!)
+        val isFromLocalCache = status.contains("Cached", ignoreCase = true) ||
+                               status.contains("offline", ignoreCase = true)
+        val isFromSpotifyOnline = status == "Found!"
+
+        val sourceText = when {
+            isFromLocalCache -> "LOKAL"
+            isFromSpotifyOnline -> "SPOTIFY"
+            else -> "..."
+        }
+        val sourceColor = when {
+            isFromLocalCache -> android.graphics.Color.parseColor("#FFAA00")  // Orange
+            isFromSpotifyOnline -> android.graphics.Color.parseColor("#1DB954")  // Spotify Green
+            else -> android.graphics.Color.parseColor("#AAAAAA")
+        }
+        findViewById<TextView>(R.id.debugSpotifySource)?.text = sourceText
+        findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(sourceColor)
+
         // Prüfen ob sich der Track geändert hat
         val newTrackId = trackInfo.trackId
         if (newTrackId == lastDebugTrackId) {
@@ -874,25 +1122,7 @@ class MainActivity : AppCompatActivity() {
         }
         lastDebugTrackId = newTrackId
 
-        // Determine source based on status
-        val isFromLocalCache = status.contains("Cached", ignoreCase = true) ||
-                               status.contains("offline", ignoreCase = true)
-        val isFromSpotifyOnline = status == "Found!"
-
         if (trackInfo != null) {
-            // Source Header
-            val sourceText = when {
-                isFromLocalCache -> "LOKAL"
-                isFromSpotifyOnline -> "SPOTIFY"
-                else -> "..."
-            }
-            val sourceColor = when {
-                isFromLocalCache -> android.graphics.Color.parseColor("#FFAA00")  // Orange
-                isFromSpotifyOnline -> android.graphics.Color.parseColor("#1DB954")  // Spotify Green
-                else -> android.graphics.Color.parseColor("#AAAAAA")
-            }
-            findViewById<TextView>(R.id.debugSpotifySource)?.text = sourceText
-            findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(sourceColor)
 
             // Load cover image
             loadCoverImage(trackInfo.coverUrl ?: trackInfo.coverUrlMedium)
@@ -2725,6 +2955,7 @@ class MainActivity : AppCompatActivity() {
     private fun updatePlayPauseButton() {
         val iconRes = if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         btnPlayPause.setImageResource(iconRes)
+        pipBtnPlayPause?.setImageResource(iconRes)
     }
 
     /**

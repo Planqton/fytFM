@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
 
     <application
         android:allowBackup="true"
@@ -43,6 +44,18 @@
                 <action android:name="com.syu.radio" />
             </intent-filter>
         </activity>
+
+        <activity
+            android:name=".BugReportActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.FytFM" />
+
+        <activity
+            android:name=".BugReportDetailActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.FytFM" />
 
         <!-- Debug Receiver für ADB-Steuerung -->
         <receiver

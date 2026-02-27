@@ -1,123 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="horizontal"
+    android:minHeight="56dp"
     android:padding="12dp"
-    android:background="?attr/selectableItemBackground"
-    android:gravity="center_vertical">
+    android:background="?attr/selectableItemBackground">
 
     <!-- Enable/Disable switch -->
     <Switch
         android:id="@+id/switchEnabled"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="12dp" />
-
-    <!-- Text content -->
-    <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:orientation="vertical">
-
-        <!-- Find text -->
-        <TextView
-            android:id="@+id/textFind"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="#333333"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:maxLines="1"
-            android:ellipsize="end" />
-
-        <!-- Replace text -->
-        <TextView
-            android:id="@+id/textReplace"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textSize="13sp"
-            android:layout_marginTop="2dp" />
-
-        <!-- Tags row -->
-        <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:layout_marginTop="4dp">
-
-            <TextView
-                android:id="@+id/textPosition"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#888888"
-                android:textSize="11sp"
-                android:background="@drawable/bg_tag"
-                android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp" />
-
-            <TextView
-                android:id="@+id/textFallback"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
-                android:background="#FF9800"
-                android:textSize="11sp"
-                android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp"
-                android:layout_marginStart="6dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/textCondition"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
-                android:background="#2196F3"
-                android:textSize="11sp"
-                android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp"
-                android:layout_marginStart="6dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/textFrequency"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
-                android:background="#9C27B0"
-                android:textSize="11sp"
-                android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp"
-                android:layout_marginStart="6dp"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/textCaseSensitive"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
-                android:background="#607D8B"
-                android:textSize="11sp"
-                android:paddingHorizontal="6dp"
-                android:paddingVertical="2dp"
-                android:layout_marginStart="6dp"
-                android:text="Aa"
-                android:visibility="gone" />
-        </LinearLayout>
-    </LinearLayout>
-
-    <!-- Edit button -->
-    <ImageButton
-        android:id="@+id/btnEdit"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:background="?attr/selectableItemBackgroundBorderless"
-        android:src="@drawable/ic_edit"
-        android:scaleType="centerInside"
-        android:padding="8dp"
-        android:contentDescription="Edit" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
     <!-- Delete button -->
     <ImageButton
@@ -128,6 +24,123 @@
         android:src="@drawable/ic_close"
         android:scaleType="centerInside"
         android:padding="8dp"
-        android:contentDescription="Delete" />
+        android:contentDescription="Delete"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-</LinearLayout>
+    <!-- Edit button -->
+    <ImageButton
+        android:id="@+id/btnEdit"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@drawable/ic_edit"
+        android:scaleType="centerInside"
+        android:padding="8dp"
+        android:contentDescription="Edit"
+        app:layout_constraintEnd_toStartOf="@id/btnDelete"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Find text -->
+    <TextView
+        android:id="@+id/textFind"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:textColor="#333333"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:maxLines="1"
+        android:ellipsize="end"
+        app:layout_constraintStart_toEndOf="@id/switchEnabled"
+        app:layout_constraintEnd_toStartOf="@id/btnEdit"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <!-- Replace text -->
+    <TextView
+        android:id="@+id/textReplace"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="2dp"
+        android:textSize="13sp"
+        app:layout_constraintStart_toEndOf="@id/switchEnabled"
+        app:layout_constraintEnd_toStartOf="@id/btnEdit"
+        app:layout_constraintTop_toBottomOf="@id/textFind" />
+
+    <!-- Tags row -->
+    <LinearLayout
+        android:id="@+id/tagsRow"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginTop="4dp"
+        app:layout_constraintStart_toEndOf="@id/switchEnabled"
+        app:layout_constraintEnd_toStartOf="@id/btnEdit"
+        app:layout_constraintTop_toBottomOf="@id/textReplace">
+
+        <TextView
+            android:id="@+id/textPosition"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#888888"
+            android:textSize="11sp"
+            android:background="@drawable/bg_tag"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp" />
+
+        <TextView
+            android:id="@+id/textFallback"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:background="#FF9800"
+            android:textSize="11sp"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:layout_marginStart="6dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/textCondition"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:background="#2196F3"
+            android:textSize="11sp"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:layout_marginStart="6dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/textFrequency"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:background="#9C27B0"
+            android:textSize="11sp"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:layout_marginStart="6dp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/textCaseSensitive"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFFFFF"
+            android:background="#607D8B"
+            android:textSize="11sp"
+            android:paddingHorizontal="6dp"
+            android:paddingVertical="2dp"
+            android:layout_marginStart="6dp"
+            android:text="Aa"
+            android:visibility="gone" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

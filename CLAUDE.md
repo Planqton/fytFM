@@ -1,5 +1,7 @@
 # fytFM - Claude Code Notizen
 
+**WICHTIG: App immer mit `/upload/bai.sh` starten!**
+
 ## Build & Deploy
 
 **Immer `bai.sh` verwenden:**

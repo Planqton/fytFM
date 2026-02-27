@@ -767,7 +767,7 @@
                         android:textColor="#888888"
                         android:textSize="9sp"
                         android:fontFamily="monospace"
-                        android:maxLines="2"
+                        android:maxLines="4"
                         android:ellipsize="end" />
                 </LinearLayout>
             </LinearLayout>
@@ -1173,7 +1173,41 @@
             android:textSize="12sp"
             android:backgroundTint="#CC3333" />
 
+        <Button
+            android:id="@+id/btnDebugBugReport"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Create Bug Report"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:backgroundTint="#3399CC" />
+
+        <Button
+            android:id="@+id/btnDebugViewReports"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="View Reports"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:backgroundTint="#666666" />
+
+        <ToggleButton
+            android:id="@+id/btnDebugBlockSpotify"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textOn="Spotify/Local: BLOCKED"
+            android:textOff="Block Spotify/Local"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:backgroundTint="#CC9933" />
+
     </LinearLayout>
+
+    <!-- PiP Layout (Picture-in-Picture mode) -->
+    <include layout="@layout/pip_layout" />
 
     <!-- Archive Overlay -->
     <include layout="@layout/overlay_archive" />

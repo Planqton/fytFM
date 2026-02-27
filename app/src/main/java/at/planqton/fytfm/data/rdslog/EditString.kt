@@ -58,7 +58,7 @@ data class EditString(
         const val POSITION_ANYWHERE = "ANYWHERE"   // Überall
 
         fun normalize(text: String): String {
-            return text.lowercase().trim()
+            return text.lowercase()
         }
 
         fun create(
@@ -73,7 +73,7 @@ data class EditString(
             enabled: Boolean = true
         ): EditString {
             return EditString(
-                textOriginal = text.trim(),
+                textOriginal = text,
                 textNormalized = normalize(text),
                 replaceWith = replaceWith,
                 position = position,

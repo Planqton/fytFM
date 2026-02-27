@@ -15,3 +15,6 @@
 local.properties
 # Upload folder (credentials, keys, scripts)
 upload/
+
+# Claude Code instructions
+CLAUDE.md
