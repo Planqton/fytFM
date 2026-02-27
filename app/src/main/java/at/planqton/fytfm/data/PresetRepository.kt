@@ -339,4 +339,12 @@ class PresetRepository(context: Context) {
     fun setShowLogosInFavorites(enabled: Boolean) {
         settingsPrefs.edit().putBoolean("show_logos_in_favorites", enabled).apply()
     }
+
+    fun isCarouselMode(): Boolean {
+        return settingsPrefs.getBoolean("carousel_mode", false)
+    }
+
+    fun setCarouselMode(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("carousel_mode", enabled).apply()
+    }
 }

@@ -96,6 +96,12 @@ class MainActivity : AppCompatActivity() {
     private var lastDisplayedTrackId: String? = null
     private var lastDebugTrackId: String? = null
 
+    // Carousel Now Playing Bar
+    private var carouselNowPlayingBar: View? = null
+    private var carouselNowPlayingCover: ImageView? = null
+    private var carouselNowPlayingArtist: TextView? = null
+    private var carouselNowPlayingTitle: TextView? = null
+
     // PiP Layout
     private var pipLayout: View? = null
     private var pipCoverImage: ImageView? = null
@@ -110,6 +116,17 @@ class MainActivity : AppCompatActivity() {
     private var btnCorrectionTrash: ImageButton? = null
     private var rtCorrectionDao: RtCorrectionDao? = null
     private var editStringDao: EditStringDao? = null
+
+    // View Mode Toggle (Equalizer vs Image/Carousel)
+    private var mainContentArea: View? = null
+    private var carouselContentArea: View? = null
+    private var btnViewModeEqualizer: View? = null
+    private var btnViewModeImage: View? = null
+    private var stationCarousel: RecyclerView? = null
+    private var carouselFrequencyLabel: TextView? = null
+    private var btnCarouselFavorite: ImageButton? = null
+    private var stationCarouselAdapter: at.planqton.fytfm.ui.StationCarouselAdapter? = null
+    private var isCarouselMode = false
 
     // Debug: Internet-Simulation deaktivieren
     var debugInternetDisabled = false
@@ -695,6 +712,12 @@ class MainActivity : AppCompatActivity() {
         nowPlayingTitle = findViewById(R.id.nowPlayingTitle)
         nowPlayingRawRt = findViewById(R.id.nowPlayingRawRt)
 
+        // Carousel Now Playing Bar
+        carouselNowPlayingBar = findViewById(R.id.carouselNowPlayingBar)
+        carouselNowPlayingCover = findViewById(R.id.carouselNowPlayingCover)
+        carouselNowPlayingArtist = findViewById(R.id.carouselNowPlayingArtist)
+        carouselNowPlayingTitle = findViewById(R.id.carouselNowPlayingTitle)
+
         // PiP Layout
         pipLayout = findViewById(R.id.pipLayout)
         pipCoverImage = findViewById(R.id.pipCoverImage)
@@ -711,6 +734,16 @@ class MainActivity : AppCompatActivity() {
         btnCorrectionRefresh = findViewById(R.id.btnCorrectionRefresh)
         btnCorrectionTrash = findViewById(R.id.btnCorrectionTrash)
         setupCorrectionHelpers()
+
+        // View Mode Toggle
+        mainContentArea = findViewById(R.id.mainContentArea)
+        carouselContentArea = findViewById(R.id.carouselContentArea)
+        btnViewModeEqualizer = findViewById(R.id.btnViewModeEqualizer)
+        btnViewModeImage = findViewById(R.id.btnViewModeImage)
+        stationCarousel = findViewById(R.id.stationCarousel)
+        carouselFrequencyLabel = findViewById(R.id.carouselFrequencyLabel)
+        btnCarouselFavorite = findViewById(R.id.btnCarouselFavorite)
+        setupViewModeToggle()
 
         setupDebugOverlayDrag()
         setupDebugBuildOverlayDrag()
@@ -1421,6 +1454,18 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
+            // Update carousel if in carousel mode
+            if (isCarouselMode) {
+                // Update carousel card cover
+                stationCarouselAdapter?.updateCurrentCover(
+                    coverUrl = trackInfo.coverUrlMedium,
+                    localCoverPath = if (trackInfo.coverUrl?.startsWith("/") == true) trackInfo.coverUrl else null
+                )
+
+                // Update carousel now playing bar
+                updateCarouselNowPlayingBar(trackInfo)
+            }
+
             // Show with animation
             if (bar.visibility != View.VISIBLE) {
                 showNowPlayingBar(bar)
@@ -1434,8 +1479,67 @@ class MainActivity : AppCompatActivity() {
     fun hideNowPlayingBarExplicit() {
         val bar = nowPlayingBar ?: return
         lastDisplayedTrackId = null
+        // Clear carousel cover and hide carousel now playing bar
+        stationCarouselAdapter?.updateCurrentCover(null, null)
+        carouselNowPlayingBar?.visibility = View.GONE
         if (bar.visibility == View.VISIBLE) {
             hideNowPlayingBar(bar)
+        }
+    }
+
+    /**
+     * Update the carousel now playing bar with track info
+     */
+    private fun updateCarouselNowPlayingBar(trackInfo: TrackInfo) {
+        val bar = carouselNowPlayingBar ?: return
+
+        // Update text
+        if (trackInfo.artist.isBlank()) {
+            carouselNowPlayingArtist?.visibility = View.GONE
+            carouselNowPlayingTitle?.text = trackInfo.title
+        } else {
+            carouselNowPlayingArtist?.visibility = View.VISIBLE
+            carouselNowPlayingArtist?.text = trackInfo.artist
+            carouselNowPlayingTitle?.text = trackInfo.title
+        }
+
+        // Load cover image
+        val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
+        if (!coverUrl.isNullOrBlank()) {
+            if (coverUrl.startsWith("/")) {
+                carouselNowPlayingCover?.load(java.io.File(coverUrl)) {
+                    crossfade(true)
+                    placeholder(android.R.drawable.ic_menu_gallery)
+                    error(android.R.drawable.ic_menu_gallery)
+                }
+            } else {
+                carouselNowPlayingCover?.load(coverUrl) {
+                    crossfade(true)
+                    placeholder(android.R.drawable.ic_menu_gallery)
+                    error(android.R.drawable.ic_menu_gallery)
+                }
+            }
+        } else {
+            // Try station logo
+            val stationLogo = radioLogoRepository.getLogoForStation(
+                ps = rdsManager.ps,
+                pi = rdsManager.pi,
+                frequency = frequencyScale.getFrequency()
+            )
+            if (stationLogo != null) {
+                carouselNowPlayingCover?.load(java.io.File(stationLogo)) {
+                    crossfade(true)
+                    placeholder(android.R.drawable.ic_menu_gallery)
+                    error(android.R.drawable.ic_menu_gallery)
+                }
+            } else {
+                carouselNowPlayingCover?.setImageResource(android.R.drawable.ic_menu_gallery)
+            }
+        }
+
+        // Show bar
+        if (bar.visibility != View.VISIBLE) {
+            bar.visibility = View.VISIBLE
         }
     }
 
@@ -1559,6 +1663,159 @@ class MainActivity : AppCompatActivity() {
         nowPlayingCorrectionButtons?.visibility = if (enabled) View.VISIBLE else View.GONE
     }
 
+    /**
+     * Setup view mode toggle (Equalizer vs Carousel)
+     */
+    private fun setupViewModeToggle() {
+        // Setup carousel adapter
+        stationCarouselAdapter = at.planqton.fytfm.ui.StationCarouselAdapter { frequency, isAM ->
+            // When user clicks a station in carousel, tune to it
+            if (isAM) {
+                frequencyScale.setMode(FrequencyScaleView.RadioMode.AM)
+            } else {
+                frequencyScale.setMode(FrequencyScaleView.RadioMode.FM)
+            }
+            frequencyScale.setFrequency(frequency)
+            fmNative?.tune(frequency)
+            updateCarouselSelection()
+        }
+
+        stationCarousel?.apply {
+            adapter = stationCarouselAdapter
+            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
+                this@MainActivity,
+                androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL,
+                false
+            )
+            // Add snap helper for center snapping
+            val snapHelper = androidx.recyclerview.widget.LinearSnapHelper()
+            snapHelper.attachToRecyclerView(this)
+        }
+
+        // Toggle button click handlers
+        btnViewModeEqualizer?.setOnClickListener {
+            setViewMode(false)
+        }
+
+        btnViewModeImage?.setOnClickListener {
+            setViewMode(true)
+        }
+
+        // Carousel favorite button
+        btnCarouselFavorite?.setOnClickListener {
+            btnFavorite.performClick()
+            updateCarouselFavoriteIcon()
+        }
+
+        // Restore saved view mode
+        val savedCarouselMode = presetRepository.isCarouselMode()
+        android.util.Log.d("fytFM", "setupViewModeToggle: savedCarouselMode=$savedCarouselMode")
+        if (savedCarouselMode) {
+            setViewMode(true)
+        }
+    }
+
+    /**
+     * Switch between equalizer (normal) and carousel (image) mode
+     */
+    private fun setViewMode(carousel: Boolean) {
+        isCarouselMode = carousel
+        presetRepository.setCarouselMode(carousel)
+
+        if (carousel) {
+            // Switch to carousel mode
+            mainContentArea?.visibility = View.GONE
+            carouselContentArea?.visibility = View.VISIBLE
+            btnViewModeEqualizer?.background = null
+            btnViewModeImage?.setBackgroundResource(R.drawable.toggle_selected)
+
+            // Populate carousel with stations
+            populateCarousel()
+            updateCarouselSelection()
+        } else {
+            // Switch to equalizer mode
+            mainContentArea?.visibility = View.VISIBLE
+            carouselContentArea?.visibility = View.GONE
+            btnViewModeEqualizer?.setBackgroundResource(R.drawable.toggle_selected)
+            btnViewModeImage?.background = null
+        }
+    }
+
+    /**
+     * Populate the carousel with saved stations
+     */
+    private fun populateCarousel() {
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val stations = if (isAM) {
+            presetRepository.loadAmStations()
+        } else {
+            presetRepository.loadFmStations()
+        }
+
+        android.util.Log.d("fytFM", "populateCarousel: ${stations.size} stations loaded, isAM=$isAM")
+        stations.forEach { android.util.Log.d("fytFM", "  Station: ${it.frequency} - ${it.name}") }
+
+        val carouselItems = stations.map { station ->
+            val logoPath = radioLogoRepository.getLogoForStation(station.name, null, station.frequency)
+            at.planqton.fytfm.ui.StationCarouselAdapter.StationItem(
+                frequency = station.frequency,
+                name = station.name,
+                logoPath = logoPath,
+                isAM = isAM
+            )
+        }
+
+        stationCarouselAdapter?.setStations(carouselItems)
+    }
+
+    /**
+     * Update carousel selection to match current frequency
+     */
+    private fun updateCarouselSelection() {
+        val currentFreq = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+
+        android.util.Log.d("fytFM", "updateCarouselSelection: freq=$currentFreq, isAM=$isAM")
+        stationCarouselAdapter?.setCurrentFrequency(currentFreq, isAM)
+
+        // Update the frequency label below carousel
+        val freqText = if (isAM) {
+            "AM ${currentFreq.toInt()}"
+        } else {
+            "FM %.2f".format(currentFreq).replace(".", ",")
+        }
+        carouselFrequencyLabel?.text = freqText
+
+        updateCarouselFavoriteIcon()
+
+        // Scroll to the current station (use post to ensure layout is ready)
+        val position = stationCarouselAdapter?.getPositionForFrequency(currentFreq, isAM) ?: -1
+        android.util.Log.d("fytFM", "updateCarouselSelection: position=$position")
+        if (position >= 0) {
+            stationCarousel?.post {
+                // Use scrollToPosition for initial scroll, then center it
+                val layoutManager = stationCarousel?.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+                android.util.Log.d("fytFM", "updateCarouselSelection: scrolling to position $position")
+                layoutManager?.scrollToPositionWithOffset(position, stationCarousel?.width?.div(2)?.minus(100) ?: 0)
+            }
+        }
+    }
+
+    /**
+     * Update carousel favorite icon state
+     */
+    private fun updateCarouselFavoriteIcon() {
+        val currentFreq = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
+        val station = stations.find { Math.abs(it.frequency - currentFreq) < 0.05f }
+        val isFavorite = station?.isFavorite == true
+
+        btnCarouselFavorite?.setImageResource(
+            if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
+        )
+    }
+
     private fun updateDebugOverlayVisibility() {
         val showDebug = presetRepository.isShowDebugInfos()
         debugChecklist?.visibility = if (showDebug) View.VISIBLE else View.GONE
@@ -1640,6 +1897,10 @@ class MainActivity : AppCompatActivity() {
             saveLastFrequency(frequency)
             // Update favorite button
             updateFavoriteButton()
+            // Update carousel selection if in carousel mode
+            if (isCarouselMode) {
+                updateCarouselSelection()
+            }
         }
 
         frequencyScale.setOnModeChangeListener { mode ->

@@ -251,6 +251,107 @@
 
     </LinearLayout>
 
+    <!-- Carousel View Mode (hidden by default) -->
+    <LinearLayout
+        android:id="@+id/carouselContentArea"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- Station Carousel -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/stationCarousel"
+            android:layout_width="match_parent"
+            android:layout_height="250dp"
+            android:clipToPadding="false"
+            android:paddingStart="80dp"
+            android:paddingEnd="80dp" />
+
+        <!-- Current Station Info -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <ImageButton
+                android:id="@+id/btnCarouselFavorite"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_favorite_border"
+                android:padding="8dp"
+                android:contentDescription="Favorite" />
+
+            <TextView
+                android:id="@+id/carouselFrequencyLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="FM 103.70"
+                android:textSize="24sp"
+                android:textColor="@color/radio_text_primary" />
+
+        </LinearLayout>
+
+        <!-- Carousel Now Playing Bar -->
+        <LinearLayout
+            android:id="@+id/carouselNowPlayingBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:layout_marginStart="32dp"
+            android:layout_marginEnd="32dp"
+            android:background="@drawable/now_playing_background"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="10dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/carouselNowPlayingCover"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:scaleType="centerCrop"
+                android:src="@android:drawable/ic_menu_gallery" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="12dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/carouselNowPlayingTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="14sp"
+                    android:textColor="@color/radio_text_primary"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+                <TextView
+                    android:id="@+id/carouselNowPlayingArtist"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textSize="12sp"
+                    android:textColor="@color/radio_text_secondary"
+                    android:maxLines="1"
+                    android:ellipsize="end" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
     <!-- Combined Control Bar - FM, Search, SkipPrev, Play, SkipNext, Folder, Settings -->
     <LinearLayout
         android:id="@+id/controlBar"
