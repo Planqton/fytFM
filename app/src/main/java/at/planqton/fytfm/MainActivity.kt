@@ -45,6 +45,7 @@ import at.planqton.fytfm.spotify.SpotifyClient
 import at.planqton.fytfm.spotify.SpotifyCache
 import at.planqton.fytfm.spotify.RtCombiner
 import at.planqton.fytfm.spotify.TrackInfo
+import at.planqton.fytfm.uart.UartDebugManager
 import coil.load
 
 class MainActivity : AppCompatActivity() {
@@ -86,6 +87,11 @@ class MainActivity : AppCompatActivity() {
     private var debugDensityInfo: TextView? = null
     private var checkDebugButtons: CheckBox? = null
     private var debugButtonsOverlay: View? = null
+    private var checkUartDebug: CheckBox? = null
+    private var debugUartOverlay: View? = null
+
+    // UART Debug
+    private var uartManager: UartDebugManager? = null
 
     // Now Playing Bar
     private var nowPlayingBar: View? = null
@@ -704,6 +710,8 @@ class MainActivity : AppCompatActivity() {
         debugDensityInfo = findViewById(R.id.debugDensityInfo)
         checkDebugButtons = findViewById(R.id.checkDebugButtons)
         debugButtonsOverlay = findViewById(R.id.debugButtonsOverlay)
+        checkUartDebug = findViewById(R.id.checkUartDebug)
+        debugUartOverlay = findViewById(R.id.debugUartOverlay)
 
         // Now Playing Bar
         nowPlayingBar = findViewById(R.id.nowPlayingBar)
@@ -750,6 +758,7 @@ class MainActivity : AppCompatActivity() {
         setupDebugLayoutOverlayDrag()
         setupDebugSpotifyOverlayDrag()
         setupDebugButtonsOverlayDrag()
+        setupDebugUartOverlayDrag()
         setupDebugChecklistDrag()
         setupDebugChecklistListeners()
         setupDebugButtonsListeners()
@@ -883,6 +892,14 @@ class MainActivity : AppCompatActivity() {
                 debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
             }
         }
+        checkUartDebug?.setOnCheckedChangeListener { _, isChecked ->
+            debugUartOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("uart", isChecked)
+            if (isChecked) {
+                initUartDebug()
+                debugUartOverlay?.post { restoreDebugWindowPosition("uart", debugUartOverlay) }
+            }
+        }
     }
 
     private fun restoreDebugWindowStates() {
@@ -892,6 +909,7 @@ class MainActivity : AppCompatActivity() {
         checkBuildInfo?.isChecked = presetRepository.isDebugWindowOpen("build", false)
         checkSpotifyInfo?.isChecked = presetRepository.isDebugWindowOpen("spotify", false)
         checkDebugButtons?.isChecked = presetRepository.isDebugWindowOpen("buttons", false)
+        checkUartDebug?.isChecked = presetRepository.isDebugWindowOpen("uart", false)
 
         // Restore positions (post to ensure views are laid out)
         debugOverlay?.post { restoreDebugWindowPosition("rds", debugOverlay) }
@@ -899,6 +917,7 @@ class MainActivity : AppCompatActivity() {
         debugBuildOverlay?.post { restoreDebugWindowPosition("build", debugBuildOverlay) }
         debugSpotifyOverlay?.post { restoreDebugWindowPosition("spotify", debugSpotifyOverlay) }
         debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
+        debugUartOverlay?.post { restoreDebugWindowPosition("uart", debugUartOverlay) }
         debugChecklist?.post { restoreDebugWindowPosition("checklist", debugChecklist) }
     }
 
@@ -932,6 +951,16 @@ class MainActivity : AppCompatActivity() {
         val metrics = resources.displayMetrics
         debugScreenInfo?.text = "Screen: ${metrics.widthPixels}x${metrics.heightPixels}"
         debugDensityInfo?.text = "Density: ${metrics.density} (${metrics.densityDpi}dpi)"
+    }
+
+    private fun initUartDebug() {
+        if (uartManager == null) {
+            debugUartOverlay?.let { overlay ->
+                uartManager = UartDebugManager(this, overlay).also {
+                    it.init()
+                }
+            }
+        }
     }
 
     private fun setupDebugOverlayDrag() {
@@ -1067,6 +1096,36 @@ class MainActivity : AppCompatActivity() {
                 }
                 MotionEvent.ACTION_UP -> {
                     saveDebugWindowPosition("buttons", view)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun setupDebugUartOverlayDrag() {
+        val overlay = debugUartOverlay ?: return
+        val dragHandle = overlay.findViewById<View>(R.id.uartDragHandle) ?: return
+        var dX = 0f
+        var dY = 0f
+
+        dragHandle.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = overlay.x - event.rawX
+                    dY = overlay.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val parent = overlay.parent as View
+                    val newX = (event.rawX + dX).coerceIn(0f, parent.width - overlay.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, parent.height - overlay.height.toFloat())
+                    overlay.x = newX
+                    overlay.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("uart", overlay)
                     true
                 }
                 else -> false
@@ -4481,6 +4540,7 @@ class MainActivity : AppCompatActivity() {
         twUtil?.close()
         updateRepository.destroy()
         rdsLogRepository.destroy()
+        uartManager?.destroy()
         // Turn off radio when app closes
         if (isRadioOn) {
             fmNative.powerOff()

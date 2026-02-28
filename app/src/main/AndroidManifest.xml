@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
 
+    <!-- USB Serial for UART Debug -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -60,6 +63,7 @@
             android:exported="false"
             android:screenOrientation="landscape"
             android:theme="@style/Theme.FytFM" />
+
 
         <!-- Debug Receiver für ADB-Steuerung -->
         <receiver
