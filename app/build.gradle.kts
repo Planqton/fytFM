@@ -15,8 +15,8 @@ android {
         applicationId = "at.planqton.fytfm"
         minSdk = 29
         targetSdk = 36
-        versionCode = 10401
-        versionName = "1.4.1"
+        versionCode = 10403
+        versionName = "1.4.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -30,6 +30,7 @@ android {
 
     buildFeatures {
         buildConfig = true
+        aidl = true
     }
 
     buildTypes {
