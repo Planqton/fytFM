@@ -74,6 +74,40 @@
             </intent-filter>
         </receiver>
 
+        <!-- MediaButton Receiver für Lenkradtasten -->
+        <receiver
+            android:name=".media.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter android:priority="999">
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <!-- FYT/BYD spezifische Media Button Actions -->
+                <action android:name="byd.intent.action.MEDIA_BUTTON" />
+                <action android:name="byd.intent.action.MEDIA_MODE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- FYT Radio Key Event Receiver - versucht com.syu.radio Events abzufangen -->
+        <receiver
+            android:name=".steering.SyuRadioReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="999">
+                <action android:name="com.syu.radio.broadcast.MyService" />
+                <action android:name="com.syu.radio.broadcast" />
+                <action android:name="com.syu.radio" />
+            </intent-filter>
+        </receiver>
+
+        <!-- FYT Radio Service - versucht als com.syu.radio.broadcast.MyService zu fungieren -->
+        <service
+            android:name=".steering.SyuRadioService"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="999">
+                <action android:name="com.syu.radio.broadcast.MyService" />
+            </intent-filter>
+        </service>
+
         <!-- FileProvider für APK Updates -->
         <provider
             android:name="androidx.core.content.FileProvider"

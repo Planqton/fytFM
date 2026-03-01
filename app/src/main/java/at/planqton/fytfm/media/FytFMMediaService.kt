@@ -45,6 +45,7 @@ class FytFMMediaService : MediaLibraryService() {
     private lateinit var presetRepository: PresetRepository
     private var fmNative: FmNative? = null
     private var coverServer: CoverHttpServer? = null
+    private var mediaButtonSession: MediaButtonSession? = null
 
     // Callbacks für Radio-Steuerung (werden von MainActivity gesetzt)
     var onPlayCallback: (() -> Unit)? = null
@@ -100,6 +101,37 @@ class FytFMMediaService : MediaLibraryService() {
             .build()
 
         Log.i(TAG, "MediaSession created")
+
+        // Legacy MediaSession für Media Button Events (Lenkradtasten)
+        initMediaButtonSession()
+    }
+
+    /**
+     * Initialisiert die Legacy MediaSession für Media Button Events
+     */
+    private fun initMediaButtonSession() {
+        mediaButtonSession = MediaButtonSession(
+            context = this,
+            onNext = {
+                Log.i(TAG, "MediaButton: NEXT")
+                onSkipNextCallback?.invoke()
+            },
+            onPrevious = {
+                Log.i(TAG, "MediaButton: PREVIOUS")
+                onSkipPrevCallback?.invoke()
+            },
+            onPlayPause = {
+                Log.i(TAG, "MediaButton: PLAY_PAUSE")
+                // Toggle Play/Pause
+                if (player.playWhenReady) {
+                    onPauseCallback?.invoke() ?: defaultPause()
+                } else {
+                    onPlayCallback?.invoke() ?: defaultPlay()
+                }
+            }
+        )
+        mediaButtonSession?.initialize()
+        Log.i(TAG, "MediaButtonSession initialized")
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? {
@@ -110,6 +142,8 @@ class FytFMMediaService : MediaLibraryService() {
     override fun onDestroy() {
         Log.i(TAG, "onDestroy")
         instance = null
+        mediaButtonSession?.release()
+        mediaButtonSession = null
         coverServer?.stop()
         coverServer = null
         mediaSession?.run {
@@ -216,6 +250,7 @@ class FytFMMediaService : MediaLibraryService() {
      */
     fun updatePlaybackState(isPlaying: Boolean) {
         player.updatePlaybackState(isPlaying)
+        mediaButtonSession?.updatePlaybackState(isPlaying)
         Log.d(TAG, "Playback state: $isPlaying")
     }
 

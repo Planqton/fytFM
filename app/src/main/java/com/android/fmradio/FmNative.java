@@ -1,7 +1,10 @@
 package com.android.fmradio;
 
+import android.content.Context;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.util.Log;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -36,6 +39,12 @@ public class FmNative {
     private static FmNative instance;
     private static boolean libraryLoaded = false;
 
+    // Audio Manager für FM-Routing
+    private static AudioManager audioManager;
+    private static Method setParameterMethod;
+    private static boolean audioInitialized = false;
+    private static final int STREAM_FM = 10;
+
     static {
         try {
             System.loadLibrary("fmjni");
@@ -61,6 +70,73 @@ public class FmNative {
 
     public static boolean isLibraryLoaded() {
         return libraryLoaded;
+    }
+
+    /**
+     * Initialisiert Audio-Manager für FM-Routing
+     * Muss einmal beim App-Start aufgerufen werden
+     */
+    public static void initAudio(Context context) {
+        if (audioInitialized) return;
+
+        try {
+            audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+
+            // setParameter Methode via Reflection (versteckte API)
+            Class<?> audioManagerClass = Class.forName("android.media.AudioManager");
+            setParameterMethod = audioManagerClass.getDeclaredMethod(
+                    "setParameter",
+                    String.class,
+                    String.class
+            );
+            setParameterMethod.setAccessible(true);
+
+            audioInitialized = true;
+            Log.i(TAG, "Audio manager initialized for FM routing");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize audio manager: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Setzt FM-Lautstärke via AudioManager.setParameter
+     */
+    private static void setFmVolume(int volume) {
+        if (!audioInitialized || setParameterMethod == null) return;
+
+        try {
+            setParameterMethod.invoke(audioManager, "FM_Volume", String.valueOf(volume));
+            Log.d(TAG, "setFmVolume(" + volume + ")");
+        } catch (Exception e) {
+            Log.e(TAG, "setFmVolume failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Aktiviert FM-Audio Routing
+     */
+    private static void enableFmAudio() {
+        if (!audioInitialized) {
+            Log.w(TAG, "enableFmAudio: audio not initialized");
+            return;
+        }
+
+        try {
+            int volume = audioManager.getStreamVolume(STREAM_FM);
+            if (volume <= 0) volume = 15;
+            setFmVolume(volume);
+            Log.i(TAG, "FM Audio enabled, volume=" + volume);
+        } catch (Exception e) {
+            Log.e(TAG, "enableFmAudio failed: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Deaktiviert FM-Audio Routing
+     */
+    private static void disableFmAudio() {
+        setFmVolume(0);
+        Log.i(TAG, "FM Audio disabled");
     }
 
     // ========== Native Methoden - NUR die in libfmjni.so registrierten! ==========
@@ -119,6 +195,9 @@ public class FmNative {
                 return false;
             }
 
+            // FM Audio Routing aktivieren
+            enableFmAudio();
+
             Log.i(TAG, "FM powered on at " + frequency + " MHz");
             return true;
         } catch (Exception e) {
@@ -133,6 +212,9 @@ public class FmNative {
     public boolean powerOff() {
         if (!libraryLoaded) return false;
         try {
+            // FM Audio Routing deaktivieren
+            disableFmAudio();
+
             powerDown(0);
             closeDev();
             Log.i(TAG, "FM powered off");
