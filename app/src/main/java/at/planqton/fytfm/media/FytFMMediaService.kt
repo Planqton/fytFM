@@ -181,26 +181,28 @@ class FytFMMediaService : MediaLibraryService() {
         val stationName = ps ?: freqDisplay
 
         // Cover-URI bestimmen
+        // WICHTIG: Lokale Pfade werden über CoverServer bereitgestellt (http://127.0.0.1:8765)
+        // da manche Car-Launcher keine externen URLs oder lokale file:// URIs laden können
         Log.d(TAG, "Cover selection: coverUrl=$coverUrl, localCoverPath=$localCoverPath, radioLogoPath=$radioLogoPath, cacheEnabled=${presetRepository.isSpotifyCacheEnabled()}")
         val artworkUri: Uri? = when {
-            // 1. Spotify URL verfügbar → direkt nutzen
-            !coverUrl.isNullOrBlank() && coverUrl.startsWith("http") -> {
-                Log.d(TAG, "Using Spotify URL")
-                Uri.parse(coverUrl)
-            }
-            // 2. Lokaler Pfad + Cache aktiviert → über lokalen Server
-            !localCoverPath.isNullOrBlank() && presetRepository.isSpotifyCacheEnabled() -> {
-                Log.d(TAG, "Using local cached cover")
+            // 1. Lokaler Cache-Pfad verfügbar → über CoverServer (zuverlässiger für Car-Launcher)
+            !localCoverPath.isNullOrBlank() && localCoverPath.startsWith("/") -> {
+                Log.d(TAG, "Using local cached cover via CoverServer")
                 ensureCoverServerRunning()
                 coverServer?.setCoverPath(localCoverPath)
                 coverServer?.getCoverUrl()?.let { Uri.parse(it) }
             }
-            // 3. Radio-Logo als Fallback (offline-fähig)
+            // 2. Radio-Logo als Fallback (offline-fähig)
             !radioLogoPath.isNullOrBlank() -> {
-                Log.d(TAG, "Using radio logo fallback")
+                Log.d(TAG, "Using radio logo via CoverServer")
                 ensureCoverServerRunning()
                 coverServer?.setCoverPath(radioLogoPath)
                 coverServer?.getCoverUrl()?.let { Uri.parse(it) }
+            }
+            // 3. Spotify URL als letzter Fallback (funktioniert nicht bei allen Car-Launchern)
+            !coverUrl.isNullOrBlank() && coverUrl.startsWith("http") -> {
+                Log.d(TAG, "Using Spotify URL (fallback)")
+                Uri.parse(coverUrl)
             }
             else -> {
                 Log.d(TAG, "No cover available")
@@ -214,10 +216,10 @@ class FytFMMediaService : MediaLibraryService() {
 
         val metadata = MediaMetadata.Builder()
             .setTitle(displayTitle)                                    // RT oder Stationsname
-            .setSubtitle(freqDisplay)                                  // Frequenz als Untertitel
-            .setArtist(freqDisplay)                                    // Frequenz (für Player die Artist zeigen)
-            .setAlbumTitle(stationName)                                // Stationsname für Fallback
-            .setDisplayTitle(stationName)                              // Stationsname
+            .setSubtitle(stationName)                                  // Sendername als Untertitel
+            .setArtist(stationName)                                    // Sendername (für Player die Artist zeigen)
+            .setAlbumTitle(freqDisplay)                                // Frequenz für Fallback
+            .setDisplayTitle(displayTitle)                             // RT oder Stationsname (gleich wie title)
             .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION)
             .setIsPlayable(true)
             .setIsBrowsable(false)
@@ -231,8 +233,10 @@ class FytFMMediaService : MediaLibraryService() {
         player.updateMetadata(metadata)
 
         // Legacy MediaButtonSession auch aktualisieren (für manche Car-Launcher)
+        // Wenn RT vorhanden (Track gefunden), zeige "Artist - Title", sonst Sendername
+        val displayForLegacy = rt?.takeIf { it.isNotBlank() } ?: stationName
         val coverForLegacy = localCoverPath ?: radioLogoPath
-        mediaButtonSession?.updateMetadata(stationName, frequency, coverForLegacy)
+        mediaButtonSession?.updateMetadata(displayForLegacy, frequency, coverForLegacy)
 
         Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt | cover=$artworkUri | radioLogo=$radioLogoPath")
     }

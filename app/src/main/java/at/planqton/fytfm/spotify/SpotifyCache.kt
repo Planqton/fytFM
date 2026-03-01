@@ -236,6 +236,23 @@ class SpotifyCache(private val context: Context) : SQLiteOpenHelper(context, DAT
     }
 
     /**
+     * Get the local cover path for a track (if cached)
+     */
+    fun getLocalCoverPath(trackId: String?): String? {
+        if (trackId == null) return null
+        val db = readableDatabase
+        val cursor = db.rawQuery(
+            "SELECT local_cover_path FROM $TABLE_TRACKS WHERE track_id = ? LIMIT 1",
+            arrayOf(trackId)
+        )
+        return cursor.use {
+            if (it.moveToFirst()) {
+                it.getString(0)?.takeIf { path -> path.startsWith("/") }
+            } else null
+        }
+    }
+
+    /**
      * Get all cached tracks
      */
     fun getAllCachedTracks(): List<TrackInfo> {

@@ -632,13 +632,16 @@ class MainActivity : AppCompatActivity() {
                             val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
                             val currentFreq = frequencyScale.getFrequency()
                             val radioLogoPath = radioLogoRepository.getLogoForStation(ps, pi, currentFreq)
+                            // Lokalen Cover-Pfad aus Cache holen (zuverlässiger als trackInfo.coverUrl)
+                            val localCover = spotifyCache?.getLocalCoverPath(trackInfo?.trackId)
+                                ?: trackInfo?.coverUrl?.takeIf { it.startsWith("/") }
                             FytFMMediaService.instance?.updateMetadata(
                                 frequency = currentFreq,
                                 ps = ps,
                                 rt = finalRt,
                                 isAM = isAM,
                                 coverUrl = trackInfo?.coverUrlMedium,  // Spotify URL (300px)
-                                localCoverPath = trackInfo?.coverUrl,  // Local cached path
+                                localCoverPath = localCover,           // Local cached path
                                 radioLogoPath = radioLogoPath          // Radio logo as fallback
                             )
                         }
