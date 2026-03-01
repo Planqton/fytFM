@@ -229,6 +229,11 @@ class FytFMMediaService : MediaLibraryService() {
             .build()
 
         player.updateMetadata(metadata)
+
+        // Legacy MediaButtonSession auch aktualisieren (für manche Car-Launcher)
+        val coverForLegacy = localCoverPath ?: radioLogoPath
+        mediaButtonSession?.updateMetadata(stationName, frequency, coverForLegacy)
+
         Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt | cover=$artworkUri | radioLogo=$radioLogoPath")
     }
 

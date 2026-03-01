@@ -58,6 +58,7 @@ class RtCombiner(
     private val lastProcessedRt = mutableMapOf<Int, String>() // Track last processed RT to avoid duplicates
     private val lastSearchRt = mutableMapOf<Int, String>() // Track last stripped RT for debug display
     private val lastOriginalRt = mutableMapOf<Int, String>() // Track last original RT for debug display
+    private val bufferResultRts = mutableMapOf<Int, Set<String>>() // RTs that were combined to find last result
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     data class RtEntry(
@@ -195,6 +196,20 @@ class RtCombiner(
             }
             return lastResult[pi]
         }
+
+        // Check if this RT was part of a buffer combination that already found a result
+        val bufferRts = bufferResultRts[pi]
+        if (bufferRts != null && trimmedRt.lowercase() in bufferRts && lastResult[pi] != null) {
+            val cachedTrack = lastTrackInfo[pi]
+            if (cachedTrack != null) {
+                val originalRt = lastOriginalRt[pi] ?: trimmedRt
+                val strippedRt = lastSearchRt[pi] ?: trimmedRt
+                Log.d(TAG, "RT '$trimmedRt' is part of buffered result, returning cached: ${lastResult[pi]}")
+                onDebugUpdate?.invoke("Cached", originalRt, strippedRt, null, cachedTrack)
+            }
+            return lastResult[pi]
+        }
+
         lastProcessedRt[pi] = trimmedRt
         lastOriginalRt[pi] = trimmedRt
         currentRt = trimmedRt
@@ -241,9 +256,23 @@ class RtCombiner(
             if (buffer.size >= 2) {
                 val (bufferResult, bufferTrack) = tryBufferCombinations(pi, buffer)
                 if (bufferResult != null) {
+                    // Save all buffer RTs so they're recognized as "already processed"
+                    val bufferTexts = buffer.map { it.text.lowercase() }.toSet()
+                    bufferResultRts[pi] = bufferTexts
+
+                    // Update display to show combined RT
+                    val combinedRt = buffer.joinToString(" | ") { it.text }
+                    lastOriginalRt[pi] = combinedRt
+                    lastSearchRt[pi] = combinedRt
+                    currentRt = combinedRt
+
                     lastResult[pi] = bufferResult
-                    if (bufferTrack != null) lastTrackInfo[pi] = bufferTrack
+                    if (bufferTrack != null) {
+                        lastTrackInfo[pi] = bufferTrack
+                        currentTrackInfo = bufferTrack
+                    }
                     clearBuffer(pi)
+                    onDebugUpdate?.invoke("Found!", combinedRt, combinedRt, null, bufferTrack)
                     return bufferResult
                 }
             }
@@ -344,11 +373,33 @@ class RtCombiner(
         }
     }
 
+    /**
+     * Validate that a track result actually matches the search terms.
+     * Returns true if the track's artist or title contains at least one word from each search term.
+     */
+    private fun isTrackRelevant(track: TrackInfo, searchTerms: List<String>): Boolean {
+        val trackText = "${track.artist} ${track.title}".lowercase()
+
+        // Each search term should have at least one word (>= 3 chars) present in the track
+        for (term in searchTerms) {
+            val words = term.lowercase().split(" ").filter { it.length >= 3 }
+            val hasMatch = words.any { word -> trackText.contains(word) }
+            if (!hasMatch) {
+                Log.d(TAG, "Track '$trackText' doesn't match term '$term'")
+                return false
+            }
+        }
+        return true
+    }
+
     private suspend fun tryBufferCombinations(pi: Int, buffer: List<RtEntry>): Pair<String?, TrackInfo?> {
         if (buffer.size < 2) return Pair(null, null)
 
         val texts = buffer.map { it.text }
         Log.d(TAG, "Trying combinations from buffer: $texts")
+
+        // Collect all valid results and pick the best one
+        val validResults = mutableListOf<Pair<String, TrackInfo>>()
 
         // Try different combinations
         for (i in texts.indices) {
@@ -362,10 +413,22 @@ class RtCombiner(
                 onDebugUpdate?.invoke("Searching...", currentRt, texts.joinToString(" | "), query, null)
 
                 val (result, track) = validateWithSpotify(artist, title, query)
-                if (result != null) {
-                    return Pair(result, track)
+                if (result != null && track != null) {
+                    // Validate that the result actually matches the search terms
+                    if (isTrackRelevant(track, texts)) {
+                        Log.d(TAG, "Valid match found: $result")
+                        validResults.add(Pair(result, track))
+                    } else {
+                        Log.d(TAG, "Ignoring irrelevant result: $result for search: $texts")
+                    }
                 }
             }
+        }
+
+        // Return best match (highest popularity)
+        if (validResults.isNotEmpty()) {
+            val best = validResults.maxByOrNull { it.second.popularity }!!
+            return best
         }
 
         // Try simple concatenation search
@@ -490,6 +553,7 @@ class RtCombiner(
         lastProcessedRt.clear()
         lastSearchRt.clear()
         lastOriginalRt.clear()
+        bufferResultRts.clear()
         currentRt = null
         currentTrackInfo = null
     }
@@ -519,6 +583,7 @@ class RtCombiner(
         lastProcessedRt.remove(pi)
         lastSearchRt.remove(pi)
         lastOriginalRt.remove(pi)
+        bufferResultRts.remove(pi)
     }
 
     /**
@@ -542,5 +607,6 @@ class RtCombiner(
         lastProcessedRt.clear()
         lastSearchRt.clear()
         lastOriginalRt.clear()
+        bufferResultRts.clear()
     }
 }

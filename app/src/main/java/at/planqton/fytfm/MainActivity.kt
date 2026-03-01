@@ -3876,8 +3876,8 @@ class MainActivity : AppCompatActivity() {
             .setTitle(title)
             .setView(scrollView)
             .setPositiveButton(if (isEdit) "Speichern" else "Hinzufügen") { _, _ ->
-                val findText = inputFind.text.toString().trim()
-                if (findText.isNotEmpty()) {
+                val findText = inputFind.text.toString()  // Don't trim - spaces are intentional (e.g. " mit ")
+                if (findText.isNotBlank()) {
                     val replaceText = inputReplace.text.toString()
                     val selectedPosition = positions.getOrNull(radioGroup.checkedRadioButtonId)?.first
                         ?: EditString.POSITION_PREFIX

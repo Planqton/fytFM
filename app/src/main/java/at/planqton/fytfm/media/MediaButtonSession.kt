@@ -3,6 +3,9 @@ package at.planqton.fytfm.media
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Handler
@@ -11,6 +14,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.widget.Toast
 import at.planqton.fytfm.MainActivity
+import java.io.File
 
 /**
  * Legacy MediaSession für Media Button Events (Lenkradtasten).
@@ -203,6 +207,40 @@ class MediaButtonSession(
             Log.d(TAG, "PlaybackState updated: isPlaying=$isPlaying")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update playback state", e)
+        }
+    }
+
+    /**
+     * Metadata aktualisieren (synchron mit FytFMMediaService)
+     */
+    fun updateMetadata(stationName: String?, frequency: Float?, coverPath: String?) {
+        try {
+            val metadataBuilder = MediaMetadata.Builder()
+                .putString(MediaMetadata.METADATA_KEY_TITLE, stationName ?: "FM Radio")
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, frequency?.let { String.format("%.1f MHz", it) } ?: "")
+                .putString(MediaMetadata.METADATA_KEY_ALBUM, "fytFM")
+
+            // Cover laden wenn vorhanden
+            coverPath?.let { path ->
+                try {
+                    val file = File(path)
+                    if (file.exists()) {
+                        val bitmap = BitmapFactory.decodeFile(path)
+                        if (bitmap != null) {
+                            metadataBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, bitmap)
+                            metadataBuilder.putBitmap(MediaMetadata.METADATA_KEY_ART, bitmap)
+                            Log.d(TAG, "Cover loaded from: $path")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to load cover: $path", e)
+                }
+            }
+
+            mediaSession?.setMetadata(metadataBuilder.build())
+            Log.d(TAG, "Metadata updated: station=$stationName, freq=$frequency")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update metadata", e)
         }
     }
 
