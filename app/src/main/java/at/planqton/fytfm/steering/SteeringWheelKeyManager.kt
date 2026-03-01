@@ -81,6 +81,9 @@ class SteeringWheelKeyManager(
         private const val ACTION_SYU_RADIO = "com.syu.radio.broadcast"
         private const val ACTION_QF_KEY_EVENT = "com.qf.action.KEY_EVENT"
 
+        // Debug/Test Broadcasts
+        private const val ACTION_UARTDEBUG_CMD = "at.planqton.uartdebug.CMD"
+
         // Cached reflection
         private var getServiceMethod: Method? = null
         private var serviceManagerClass: Class<*>? = null
@@ -230,6 +233,16 @@ class SteeringWheelKeyManager(
                         3 -> handler.post { handleKeyCode(KEYCODE_MEDIA_PLAY_PAUSE) }
                     }
                 }
+                // Debug/Test Broadcasts
+                ACTION_UARTDEBUG_CMD -> {
+                    val cmd = intent.getStringExtra("cmd")
+                    Log.i(TAG, "UartDebug: cmd=$cmd")
+                    when (cmd) {
+                        "next" -> handler.post { handleKeyCode(KEYCODE_MEDIA_NEXT) }
+                        "prev" -> handler.post { handleKeyCode(KEYCODE_MEDIA_PREVIOUS) }
+                        "play", "pause", "playpause" -> handler.post { handleKeyCode(KEYCODE_MEDIA_PLAY_PAUSE) }
+                    }
+                }
                 else -> {
                     // Log unbekannte Actions für Debugging
                     Log.d(TAG, "Unknown action: ${intent.action}, extras: ${intent.extras}")
@@ -259,12 +272,10 @@ class SteeringWheelKeyManager(
         when (keyCode) {
             KEYCODE_MEDIA_NEXT -> {
                 Log.d(TAG, "NEXT pressed")
-                showToast("NEXT gedrückt")
                 listener?.onNextPressed()
             }
             KEYCODE_MEDIA_PREVIOUS -> {
                 Log.d(TAG, "PREV pressed")
-                showToast("ZURÜCK gedrückt")
                 listener?.onPrevPressed()
             }
             KEYCODE_MEDIA_PLAY_PAUSE, KEYCODE_MEDIA_PLAY, KEYCODE_MEDIA_PAUSE, KEYCODE_HEADSETHOOK -> {
@@ -861,6 +872,8 @@ class SteeringWheelKeyManager(
                 // SYU/QF Actions
                 addAction(ACTION_SYU_RADIO)
                 addAction(ACTION_QF_KEY_EVENT)
+                // Debug/Test Action
+                addAction(ACTION_UARTDEBUG_CMD)
             }
             // Für Android 13+ mit RECEIVER_EXPORTED
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {

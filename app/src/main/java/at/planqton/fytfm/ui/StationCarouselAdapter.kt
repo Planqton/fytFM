@@ -87,6 +87,9 @@ class StationCarouselAdapter(
         holder.frequencyText.text = freqText
         holder.bandLabel.text = if (station.isAM) "AM" else "FM"
 
+        // Station name inline (next to FM/AM label)
+        holder.stationNameInline.text = if (!station.name.isNullOrBlank()) " ${station.name}" else ""
+
         // Card scaling for selected item
         val scale = if (isSelected) 1.0f else 0.85f
         holder.itemView.scaleX = scale
@@ -149,6 +152,7 @@ class StationCarouselAdapter(
         val frequencyText: TextView = view.findViewById(R.id.frequencyText)
         val bandLabel: TextView = view.findViewById(R.id.bandLabel)
         val stationName: TextView = view.findViewById(R.id.stationName)
+        val stationNameInline: TextView = view.findViewById(R.id.stationNameInline)
         val stationLogo: ImageView = view.findViewById(R.id.stationLogo)
     }
 }

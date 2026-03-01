@@ -87,7 +87,17 @@ class MainActivity : AppCompatActivity() {
     private var debugScreenInfo: TextView? = null
     private var debugDensityInfo: TextView? = null
     private var checkDebugButtons: CheckBox? = null
+    private var checkSwcInfo: CheckBox? = null
+    private var checkCarouselInfo: CheckBox? = null
     private var debugButtonsOverlay: View? = null
+    private var debugSwcOverlay: View? = null
+    private var debugSwcLog: TextView? = null
+    private val swcLogEntries = mutableListOf<String>()
+    private var debugCarouselOverlay: View? = null
+    private var debugCarouselTimer: TextView? = null
+    private var debugCarouselActiveTile: TextView? = null
+    private var debugCarouselPosition: TextView? = null
+    private var debugCarouselPadding: TextView? = null
 
     // Steering Wheel Key Handler
     private var steeringWheelKeyManager: SteeringWheelKeyManager? = null
@@ -133,6 +143,14 @@ class MainActivity : AppCompatActivity() {
     private var btnCarouselFavorite: ImageButton? = null
     private var stationCarouselAdapter: at.planqton.fytfm.ui.StationCarouselAdapter? = null
     private var isCarouselMode = false
+    private var carouselNeedsInitialScroll = true  // Flag for first scroll after app start
+
+    // Carousel auto-centering
+    private val carouselCenterHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var carouselCenterRunnable: Runnable? = null
+    private var carouselReturnRunnable: Runnable? = null  // For auto-return after manual scroll
+    private var carouselCenterTimerStart: Long = 0
+    private var carouselPendingCenterPosition: Int = -1
 
     // Debug: Internet-Simulation deaktivieren
     var debugInternetDisabled = false
@@ -378,35 +396,31 @@ class MainActivity : AppCompatActivity() {
             listener = object : SyuToolkitManager.KeyEventListener {
                 override fun onNextPressed() {
                     runOnUiThread {
-                        android.util.Log.i("fytFM", "SYU: NEXT pressed")
-                        if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-                            seekToStation(true)
-                        }
+                        logSwcEvent("SYU: NEXT")
+                        if (isRadioOn) skipToNextStation()
                     }
                 }
 
                 override fun onPrevPressed() {
                     runOnUiThread {
-                        android.util.Log.i("fytFM", "SYU: PREV pressed")
-                        if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-                            seekToStation(false)
-                        }
+                        logSwcEvent("SYU: PREV")
+                        if (isRadioOn) skipToPreviousStation()
                     }
                 }
 
                 override fun onPlayPausePressed() {
                     runOnUiThread {
-                        android.util.Log.i("fytFM", "SYU: PLAY/PAUSE pressed")
+                        logSwcEvent("SYU: PLAY/PAUSE")
                         toggleRadioPower()
                     }
                 }
 
                 override fun onVolumeUp() {
-                    // Volume wird vom System gehandhabt
+                    runOnUiThread { logSwcEvent("SYU: VOL+") }
                 }
 
                 override fun onVolumeDown() {
-                    // Volume wird vom System gehandhabt
+                    runOnUiThread { logSwcEvent("SYU: VOL-") }
                 }
 
                 override fun onKeyEvent(keyCode: Int, intData: IntArray?) {
@@ -414,21 +428,9 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 override fun onFrequencyUpdate(frequencyKhz: Int) {
-                    runOnUiThread {
-                        // Convert from 10kHz units to MHz (e.g., 9880 -> 98.8, 10490 -> 104.9)
-                        val frequencyMhz = frequencyKhz / 100.0f
-                        android.util.Log.i("fytFM", "SYU: Frequency update: $frequencyMhz MHz (raw: $frequencyKhz)")
-
-                        // Only react if radio is on and in FM mode
-                        if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-                            // Tune to the new frequency from the system
-                            val currentFreq = frequencyScale.getFrequency()
-                            if (kotlin.math.abs(currentFreq - frequencyMhz) > 0.05f) {
-                                android.util.Log.i("fytFM", "SYU: Tuning from $currentFreq to $frequencyMhz MHz")
-                                frequencyScale.setFrequency(frequencyMhz)
-                            }
-                        }
-                    }
+                    // Ignoriert - fytFM nutzt eigene Presets statt com.syu.music Frequenz-Sync
+                    val frequencyMhz = frequencyKhz / 100.0f
+                    android.util.Log.d("fytFM", "SYU: Frequency update ignoriert: $frequencyMhz MHz")
                 }
             }
         )
@@ -441,34 +443,31 @@ class MainActivity : AppCompatActivity() {
             listener = object : SteeringWheelKeyManager.KeyEventListener {
                 override fun onNextPressed() {
                     runOnUiThread {
-                        android.util.Log.i("fytFM", "Broadcast: NEXT pressed")
-                        if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-                            seekToStation(true)
-                        }
+                        logSwcEvent("BC: NEXT")
+                        if (isRadioOn) skipToNextStation()
                     }
                 }
 
                 override fun onPrevPressed() {
                     runOnUiThread {
-                        android.util.Log.i("fytFM", "Broadcast: PREV pressed")
-                        if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-                            seekToStation(false)
-                        }
+                        logSwcEvent("BC: PREV")
+                        if (isRadioOn) skipToPreviousStation()
                     }
                 }
 
                 override fun onPlayPausePressed() {
                     runOnUiThread {
+                        logSwcEvent("BC: PLAY/PAUSE")
                         toggleRadioPower()
                     }
                 }
 
                 override fun onVolumeUp() {
-                    // Volume wird vom System gehandhabt
+                    runOnUiThread { logSwcEvent("BC: VOL+") }
                 }
 
                 override fun onVolumeDown() {
-                    // Volume wird vom System gehandhabt
+                    runOnUiThread { logSwcEvent("BC: VOL-") }
                 }
             }
         )
@@ -826,7 +825,16 @@ class MainActivity : AppCompatActivity() {
         debugScreenInfo = findViewById(R.id.debugScreenInfo)
         debugDensityInfo = findViewById(R.id.debugDensityInfo)
         checkDebugButtons = findViewById(R.id.checkDebugButtons)
+        checkSwcInfo = findViewById(R.id.checkSwcInfo)
+        checkCarouselInfo = findViewById(R.id.checkCarouselInfo)
         debugButtonsOverlay = findViewById(R.id.debugButtonsOverlay)
+        debugSwcOverlay = findViewById(R.id.debugSwcOverlay)
+        debugSwcLog = findViewById(R.id.debugSwcLog)
+        debugCarouselOverlay = findViewById(R.id.debugCarouselOverlay)
+        debugCarouselTimer = findViewById(R.id.debugCarouselTimer)
+        debugCarouselActiveTile = findViewById(R.id.debugCarouselActiveTile)
+        debugCarouselPosition = findViewById(R.id.debugCarouselPosition)
+        debugCarouselPadding = findViewById(R.id.debugCarouselPadding)
 
         // Now Playing Bar
         nowPlayingBar = findViewById(R.id.nowPlayingBar)
@@ -873,9 +881,12 @@ class MainActivity : AppCompatActivity() {
         setupDebugLayoutOverlayDrag()
         setupDebugSpotifyOverlayDrag()
         setupDebugButtonsOverlayDrag()
+        setupDebugSwcOverlayDrag()
+        setupDebugCarouselOverlayDrag()
         setupDebugChecklistDrag()
         setupDebugChecklistListeners()
         setupDebugButtonsListeners()
+        setupDebugOverlayAlphaSliders()
         restoreDebugWindowStates()
         updateDebugOverlayVisibility()
 
@@ -973,6 +984,8 @@ class MainActivity : AppCompatActivity() {
             debugOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
             presetRepository.setDebugWindowOpen("rds", isChecked)
             if (isChecked) {
+                // Set current frequency immediately when showing overlay
+                debugFreq?.text = String.format("%.1f MHz", frequencyScale.getFrequency())
                 debugOverlay?.post { restoreDebugWindowPosition("rds", debugOverlay) }
             }
         }
@@ -1006,6 +1019,20 @@ class MainActivity : AppCompatActivity() {
                 debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
             }
         }
+        checkSwcInfo?.setOnCheckedChangeListener { _, isChecked ->
+            debugSwcOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("swc", isChecked)
+            if (isChecked) {
+                debugSwcOverlay?.post { restoreDebugWindowPosition("swc", debugSwcOverlay) }
+            }
+        }
+        checkCarouselInfo?.setOnCheckedChangeListener { _, isChecked ->
+            debugCarouselOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("carousel", isChecked)
+            if (isChecked) {
+                debugCarouselOverlay?.post { restoreDebugWindowPosition("carousel", debugCarouselOverlay) }
+            }
+        }
     }
 
     private fun restoreDebugWindowStates() {
@@ -1015,6 +1042,8 @@ class MainActivity : AppCompatActivity() {
         checkBuildInfo?.isChecked = presetRepository.isDebugWindowOpen("build", false)
         checkSpotifyInfo?.isChecked = presetRepository.isDebugWindowOpen("spotify", false)
         checkDebugButtons?.isChecked = presetRepository.isDebugWindowOpen("buttons", false)
+        checkSwcInfo?.isChecked = presetRepository.isDebugWindowOpen("swc", false)
+        checkCarouselInfo?.isChecked = presetRepository.isDebugWindowOpen("carousel", false)
 
         // Restore positions (post to ensure views are laid out)
         debugOverlay?.post { restoreDebugWindowPosition("rds", debugOverlay) }
@@ -1022,6 +1051,8 @@ class MainActivity : AppCompatActivity() {
         debugBuildOverlay?.post { restoreDebugWindowPosition("build", debugBuildOverlay) }
         debugSpotifyOverlay?.post { restoreDebugWindowPosition("spotify", debugSpotifyOverlay) }
         debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
+        debugSwcOverlay?.post { restoreDebugWindowPosition("swc", debugSwcOverlay) }
+        debugCarouselOverlay?.post { restoreDebugWindowPosition("carousel", debugCarouselOverlay) }
         debugChecklist?.post { restoreDebugWindowPosition("checklist", debugChecklist) }
     }
 
@@ -1195,6 +1226,115 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
+    }
+
+    private fun setupDebugSwcOverlayDrag() {
+        val overlay = debugSwcOverlay ?: return
+        var dX = 0f
+        var dY = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (view.parent as View).width - view.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
+                    view.x = newX
+                    view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("swc", view)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun setupDebugCarouselOverlayDrag() {
+        val overlay = debugCarouselOverlay ?: return
+        var dX = 0f
+        var dY = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (view.parent as View).width - view.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
+                    view.x = newX
+                    view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("carousel", view)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun logSwcEvent(button: String) {
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val logEntry = "$timestamp - $button"
+
+        swcLogEntries.add(0, logEntry)  // Add at beginning
+        if (swcLogEntries.size > 10) {
+            swcLogEntries.removeAt(swcLogEntries.size - 1)  // Remove oldest
+        }
+
+        debugSwcLog?.text = swcLogEntries.joinToString("\n")
+    }
+
+    private fun setupDebugOverlayAlphaSliders() {
+        // Global Alpha Slider for all Debug Overlays
+        findViewById<android.widget.SeekBar>(R.id.debugOverlaysAlphaSlider)?.apply {
+            // Load saved alpha value (default 80%)
+            val savedProgress = getSharedPreferences("fytfm_prefs", MODE_PRIVATE)
+                .getInt("debug_overlay_alpha", 80)
+            progress = savedProgress
+            // Apply immediately
+            applyDebugOverlayAlpha(savedProgress)
+
+            setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                    applyDebugOverlayAlpha(progress)
+                }
+                override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {
+                    // Save when user stops dragging
+                    seekBar?.let {
+                        getSharedPreferences("fytfm_prefs", MODE_PRIVATE).edit()
+                            .putInt("debug_overlay_alpha", it.progress)
+                            .apply()
+                    }
+                }
+            })
+        }
+    }
+
+    private fun applyDebugOverlayAlpha(progress: Int) {
+        // Minimum 10%, maximum 100% -> map 0-100 to 0.1-1.0
+        val alpha = 0.1f + (progress / 100f) * 0.9f
+        // Apply alpha to all debug overlays
+        debugOverlay?.alpha = alpha
+        debugLayoutOverlay?.alpha = alpha
+        debugBuildOverlay?.alpha = alpha
+        debugSpotifyOverlay?.alpha = alpha
+        debugButtonsOverlay?.alpha = alpha
+        debugSwcOverlay?.alpha = alpha
+        debugCarouselOverlay?.alpha = alpha
+        debugChecklist?.alpha = alpha
     }
 
     private fun setupDebugButtonsListeners() {
@@ -1801,6 +1941,9 @@ class MainActivity : AppCompatActivity() {
             frequencyScale.setFrequency(frequency)
             fmNative?.tune(frequency)
             updateCarouselSelection()
+
+            // Start 2-second timer to center the carousel on selected item
+            startCarouselCenterTimer(frequency, isAM)
         }
 
         stationCarousel?.apply {
@@ -1810,9 +1953,48 @@ class MainActivity : AppCompatActivity() {
                 androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL,
                 false
             )
+            // Allow edge items to scroll to center
+            clipToPadding = false
+
             // Add snap helper for center snapping
             val snapHelper = androidx.recyclerview.widget.LinearSnapHelper()
             snapHelper.attachToRecyclerView(this)
+
+            // Add scroll listener to auto-return to current station after 2 seconds of idle
+            addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+                override fun onScrollStateChanged(recyclerView: androidx.recyclerview.widget.RecyclerView, newState: Int) {
+                    super.onScrollStateChanged(recyclerView, newState)
+                    if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_IDLE) {
+                        // User stopped scrolling - start 2 second timer to return to current station
+                        startCarouselReturnTimer()
+                    } else if (newState == androidx.recyclerview.widget.RecyclerView.SCROLL_STATE_DRAGGING) {
+                        // User started dragging - cancel any pending return timer
+                        cancelCarouselReturnTimer()
+                    }
+                }
+            })
+
+            // Set dynamic padding after layout to allow edge items to center
+            post {
+                val cardWidth = (216 * resources.displayMetrics.density).toInt()  // ~200dp card + margins
+                val padding = (width - cardWidth) / 2
+                setPadding(padding, paddingTop, padding, paddingBottom)
+                android.util.Log.d("fytFM", "Carousel padding set to: $padding (width=$width, cardWidth=$cardWidth)")
+
+                // Initial scroll to current frequency AFTER padding is set
+                if (carouselNeedsInitialScroll && isCarouselMode) {
+                    val currentFreq = frequencyScale.getFrequency()
+                    val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                    val position = stationCarouselAdapter?.getPositionForFrequency(currentFreq, isAM) ?: -1
+                    android.util.Log.d("fytFM", "Carousel post-padding scroll: freq=$currentFreq, position=$position")
+                    if (position >= 0) {
+                        carouselNeedsInitialScroll = false
+                        // Use smoothScrollToPosition - the padding already handles centering
+                        smoothScrollToPosition(position)
+                        android.util.Log.d("fytFM", "Carousel smoothScrollToPosition $position")
+                    }
+                }
+            }
         }
 
         // Toggle button click handlers
@@ -1855,6 +2037,8 @@ class MainActivity : AppCompatActivity() {
             // Populate carousel with stations
             populateCarousel()
             updateCarouselSelection()
+            // Initial scroll will be triggered by frequency listener
+            carouselNeedsInitialScroll = true
         } else {
             // Switch to equalizer mode
             mainContentArea?.visibility = View.VISIBLE
@@ -1911,17 +2095,152 @@ class MainActivity : AppCompatActivity() {
 
         updateCarouselFavoriteIcon()
 
-        // Scroll to the current station (use post to ensure layout is ready)
+        // Log position for debugging (no immediate scroll - let timer handle centering)
         val position = stationCarouselAdapter?.getPositionForFrequency(currentFreq, isAM) ?: -1
         android.util.Log.d("fytFM", "updateCarouselSelection: position=$position")
-        if (position >= 0) {
-            stationCarousel?.post {
-                // Use scrollToPosition for initial scroll, then center it
-                val layoutManager = stationCarousel?.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
-                android.util.Log.d("fytFM", "updateCarouselSelection: scrolling to position $position")
-                layoutManager?.scrollToPositionWithOffset(position, stationCarousel?.width?.div(2)?.minus(100) ?: 0)
+    }
+
+    private var carouselDebugUpdateRunnable: Runnable? = null
+
+    /**
+     * Start 2-second timer to smoothly center the carousel on the selected station
+     */
+    private fun startCarouselCenterTimer(frequency: Float, isAM: Boolean) {
+        // Cancel any existing timers
+        carouselCenterRunnable?.let { carouselCenterHandler.removeCallbacks(it) }
+        carouselDebugUpdateRunnable?.let { carouselCenterHandler.removeCallbacks(it) }
+
+        val position = stationCarouselAdapter?.getPositionForFrequency(frequency, isAM) ?: -1
+        if (position < 0) return
+
+        carouselPendingCenterPosition = position
+        carouselCenterTimerStart = System.currentTimeMillis()
+
+        // Update debug display
+        updateCarouselDebugInfo()
+
+        // Start repeating update for debug display
+        carouselDebugUpdateRunnable = object : Runnable {
+            override fun run() {
+                updateCarouselDebugInfo()
+                if (carouselPendingCenterPosition >= 0) {
+                    carouselCenterHandler.postDelayed(this, 100)
+                }
             }
         }
+        carouselCenterHandler.postDelayed(carouselDebugUpdateRunnable!!, 100)
+
+        carouselCenterRunnable = Runnable {
+            smoothScrollCarouselToCenter(carouselPendingCenterPosition)
+            carouselPendingCenterPosition = -1
+            updateCarouselDebugInfo()
+        }
+
+        carouselCenterHandler.postDelayed(carouselCenterRunnable!!, 2000)
+        android.util.Log.d("fytFM", "Carousel center timer started for position $position")
+    }
+
+    /**
+     * Update carousel debug overlay with current state
+     */
+    private fun updateCarouselDebugInfo() {
+        // Timer countdown
+        if (carouselPendingCenterPosition >= 0) {
+            val elapsed = System.currentTimeMillis() - carouselCenterTimerStart
+            val remaining = ((2000 - elapsed) / 100) / 10f
+            debugCarouselTimer?.text = "%.1fs".format(remaining.coerceAtLeast(0f))
+        } else {
+            debugCarouselTimer?.text = "idle"
+        }
+
+        // Active tile - show current frequency's position
+        val currentFreq = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val currentPos = stationCarouselAdapter?.getPositionForFrequency(currentFreq, isAM) ?: -1
+        debugCarouselActiveTile?.text = if (currentPos >= 0) {
+            "Pos $currentPos (${if (carouselPendingCenterPosition >= 0) "scrolling" else "idle"})"
+        } else {
+            "no match"
+        }
+
+        // Current scroll position
+        stationCarousel?.let { recyclerView ->
+            val layoutManager = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+            val firstVisible = layoutManager?.findFirstVisibleItemPosition() ?: -1
+            val lastVisible = layoutManager?.findLastVisibleItemPosition() ?: -1
+            debugCarouselPosition?.text = "$firstVisible - $lastVisible"
+
+            // Padding info
+            debugCarouselPadding?.text = "${recyclerView.paddingStart}px"
+        }
+    }
+
+    /**
+     * Smoothly scroll carousel to center the item at the given position
+     */
+    private fun smoothScrollCarouselToCenter(position: Int) {
+        android.util.Log.d("fytFM", "smoothScrollCarouselToCenter called with position=$position")
+        if (position < 0) return
+
+        stationCarousel?.smoothScrollToPosition(position)
+        android.util.Log.d("fytFM", "Carousel smoothScrollToPosition $position")
+    }
+
+    /**
+     * Start timer to return carousel to current station after 2 seconds of idle
+     */
+    private fun startCarouselReturnTimer() {
+        cancelCarouselReturnTimer()
+
+        // Set debug info variables
+        val currentFreq = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        carouselPendingCenterPosition = stationCarouselAdapter?.getPositionForFrequency(currentFreq, isAM) ?: -1
+        carouselCenterTimerStart = System.currentTimeMillis()
+        updateCarouselDebugInfo()
+
+        // Start periodic debug update
+        carouselDebugUpdateRunnable = object : Runnable {
+            override fun run() {
+                updateCarouselDebugInfo()
+                if (carouselPendingCenterPosition >= 0) {
+                    carouselCenterHandler.postDelayed(this, 100)
+                }
+            }
+        }
+        carouselCenterHandler.postDelayed(carouselDebugUpdateRunnable!!, 100)
+
+        carouselReturnRunnable = Runnable {
+            val pos = carouselPendingCenterPosition
+            android.util.Log.d("fytFM", "Carousel return timer: scrolling to position $pos")
+            if (pos >= 0) {
+                smoothScrollCarouselToCenter(pos)
+            }
+            carouselPendingCenterPosition = -1
+            updateCarouselDebugInfo()
+        }
+        carouselCenterHandler.postDelayed(carouselReturnRunnable!!, 2000)
+        android.util.Log.d("fytFM", "Carousel return timer started (2s)")
+    }
+
+    /**
+     * Cancel pending carousel return timer
+     */
+    private fun cancelCarouselReturnTimer() {
+        carouselReturnRunnable?.let {
+            carouselCenterHandler.removeCallbacks(it)
+            android.util.Log.d("fytFM", "Carousel return timer cancelled")
+        }
+        carouselReturnRunnable = null
+
+        // Also cancel debug update runnable
+        carouselDebugUpdateRunnable?.let {
+            carouselCenterHandler.removeCallbacks(it)
+        }
+        carouselDebugUpdateRunnable = null
+
+        carouselPendingCenterPosition = -1
+        updateCarouselDebugInfo()
     }
 
     /**
@@ -2023,6 +2342,8 @@ class MainActivity : AppCompatActivity() {
             // Update carousel selection if in carousel mode
             if (isCarouselMode) {
                 updateCarouselSelection()
+                // Start timer to scroll to new station after 2 seconds
+                startCarouselReturnTimer()
             }
         }
 
