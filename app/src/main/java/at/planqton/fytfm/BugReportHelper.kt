@@ -2,6 +2,7 @@ package at.planqton.fytfm
 
 import android.content.Context
 import android.os.Build
+import android.os.Environment
 import android.util.Log
 import at.planqton.fytfm.spotify.TrackInfo
 import java.io.BufferedReader
@@ -254,5 +255,113 @@ class BugReportHelper(private val context: Context) {
         val minutes = totalSeconds / 60
         val seconds = totalSeconds % 60
         return "${minutes}:${seconds.toString().padStart(2, '0')}"
+    }
+
+    /**
+     * Creates a bug report and saves it to the Downloads folder.
+     * @return The file path of the created report, or null on error.
+     */
+    fun createBugReportToDownloads(appState: AppState): String? {
+        return try {
+            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val fytFmDir = File(downloadsDir, "fytFM")
+            if (!fytFmDir.exists()) {
+                fytFmDir.mkdirs()
+            }
+
+            val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+            val filename = "bugreport_$timestamp.txt"
+            val reportFile = File(fytFmDir, filename)
+
+            val report = buildString {
+                appendLine("=" .repeat(60))
+                appendLine("fytFM Bug Report")
+                appendLine("=" .repeat(60))
+                appendLine()
+
+                // Timestamp and version
+                appendLine("## Report Info")
+                appendLine("Timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
+                appendLine("App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                appendLine("Build Date: ${BuildConfig.BUILD_DATE} ${BuildConfig.BUILD_TIME}")
+                appendLine("Build Type: ${BuildConfig.BUILD_TYPE}")
+                appendLine()
+
+                // Device Info
+                appendLine("## Device Info")
+                appendLine("Manufacturer: ${Build.MANUFACTURER}")
+                appendLine("Model: ${Build.MODEL}")
+                appendLine("Device: ${Build.DEVICE}")
+                appendLine("Product: ${Build.PRODUCT}")
+                appendLine("Board: ${Build.BOARD}")
+                appendLine("Hardware: ${Build.HARDWARE}")
+                appendLine("Android Version: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                appendLine("Display: ${Build.DISPLAY}")
+                appendLine()
+
+                // User Description
+                if (!appState.userDescription.isNullOrEmpty()) {
+                    appendLine("## User Description")
+                    appendLine(appState.userDescription)
+                    appendLine()
+                }
+
+                // RDS Data
+                appendLine("## RDS Data")
+                appendLine("Frequency: ${appState.currentFrequency} MHz")
+                appendLine("PS: ${appState.rdsPs ?: "(none)"}")
+                appendLine("RT: ${appState.rdsRt ?: "(none)"}")
+                appendLine("PI: 0x${Integer.toHexString(appState.rdsPi).uppercase()}")
+                appendLine("PTY: ${appState.rdsPty} (${getPtyName(appState.rdsPty)})")
+                appendLine("RSSI: ${appState.rdsRssi}")
+                appendLine("TP: ${appState.rdsTp}")
+                appendLine("TA: ${appState.rdsTa}")
+                appendLine("AF Enabled: ${appState.rdsAfEnabled}")
+                if (appState.rdsAfList != null && appState.rdsAfList.isNotEmpty()) {
+                    appendLine("AF List: ${appState.rdsAfList.joinToString(", ") { "%.1f".format(it / 10.0) }}")
+                }
+                appendLine()
+
+                // Spotify Data
+                appendLine("## Spotify Data")
+                appendLine("Status: ${appState.spotifyStatus ?: "(none)"}")
+                appendLine("Original RT: ${appState.spotifyOriginalRt ?: "(none)"}")
+                appendLine("Stripped RT: ${appState.spotifyStrippedRt ?: "(none)"}")
+                appendLine("Query: ${appState.spotifyQuery ?: "(none)"}")
+                if (appState.spotifyTrackInfo != null) {
+                    val track = appState.spotifyTrackInfo
+                    appendLine()
+                    appendLine("### Track Info")
+                    appendLine("Artist: ${track.artist}")
+                    appendLine("Title: ${track.title}")
+                    appendLine("Album: ${track.album ?: "(none)"}")
+                    appendLine("All Artists: ${track.allArtists.joinToString(", ")}")
+                    appendLine("Duration: ${formatDuration(track.durationMs)}")
+                    appendLine("Popularity: ${track.popularity}/100")
+                    appendLine("Explicit: ${track.explicit}")
+                    appendLine("Track/Disc: ${track.trackNumber}/${track.discNumber}")
+                    appendLine("ISRC: ${track.isrc ?: "(none)"}")
+                    appendLine("Album Type: ${track.albumType ?: "(none)"}")
+                    appendLine("Release Date: ${track.releaseDate ?: "(none)"}")
+                    appendLine("Track ID: ${track.trackId ?: "(none)"}")
+                    appendLine("Album ID: ${track.albumId ?: "(none)"}")
+                    appendLine("Spotify URL: ${track.spotifyUrl ?: "(none)"}")
+                    appendLine("Cover URL: ${track.coverUrl ?: track.coverUrlMedium ?: "(none)"}")
+                }
+                appendLine()
+
+                // Logcat
+                appendLine("## Logcat (last $MAX_LOGCAT_LINES lines)")
+                appendLine("-".repeat(60))
+                append(getLogcat())
+            }
+
+            reportFile.writeText(report)
+            Log.i(TAG, "Bug report created in Downloads: ${reportFile.absolutePath}")
+            reportFile.absolutePath
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create bug report to Downloads", e)
+            null
+        }
     }
 }

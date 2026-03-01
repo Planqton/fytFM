@@ -33,6 +33,22 @@ class RtCombiner(
         private const val TAG = "RtCombiner"
         private const val BUFFER_TIMEOUT_MS = 15000L // 15 seconds timeout for buffer
         private const val MAX_BUFFER_SIZE = 3 // Max RT messages to buffer
+        private const val SHORT_RT_THRESHOLD = 25 // RT shorter than this without separator should be buffered
+        private val SEPARATORS = listOf(" - ", " – ", " — ", " / ", " | ")
+    }
+
+    /**
+     * Check if RT should be buffered first before searching.
+     * Returns true if RT is short and doesn't contain a typical separator.
+     * This helps with stations like Kronehit that send Artist and Title as separate RTs.
+     */
+    private fun shouldBufferFirst(rt: String): Boolean {
+        // If RT contains a separator, it's likely complete
+        if (SEPARATORS.any { rt.contains(it) }) {
+            return false
+        }
+        // If RT is short, buffer it first
+        return rt.length < SHORT_RT_THRESHOLD
     }
 
     // RT-Buffer per station (PI-Code)
@@ -210,6 +226,30 @@ class RtCombiner(
 
             onDebugUpdate?.invoke("No Spotify", trimmedRt, searchRt, null, null)
             return searchRt
+        }
+
+        // Check if this RT should be buffered first (short RT without separator)
+        // This helps with stations like Kronehit that send Artist and Title separately
+        val bufferFirst = shouldBufferFirst(searchRt)
+        if (bufferFirst) {
+            Log.d(TAG, "Short RT without separator, buffering first: '$searchRt'")
+            onDebugUpdate?.invoke("Buffering...", trimmedRt, searchRt, null, null)
+            addToBuffer(pi, searchRt)
+            val buffer = rtBuffer[pi] ?: return lastResult[pi]
+
+            // Only search when we have 2+ entries in buffer
+            if (buffer.size >= 2) {
+                val (bufferResult, bufferTrack) = tryBufferCombinations(pi, buffer)
+                if (bufferResult != null) {
+                    lastResult[pi] = bufferResult
+                    if (bufferTrack != null) lastTrackInfo[pi] = bufferTrack
+                    clearBuffer(pi)
+                    return bufferResult
+                }
+            }
+
+            // Not enough buffer entries yet, return last result or null
+            return lastResult[pi]
         }
 
         // Try to find track with immediate edits applied

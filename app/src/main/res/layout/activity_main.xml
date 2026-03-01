@@ -153,7 +153,7 @@
             android:layout_height="120dp"
             android:layout_marginTop="16dp" />
 
-        <!-- Now Playing Bar -->
+        <!-- Now Playing Bar (permanent) -->
         <LinearLayout
             android:id="@+id/nowPlayingBar"
             android:layout_width="match_parent"
@@ -163,7 +163,7 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:padding="10dp"
-            android:visibility="gone">
+            android:visibility="visible">
 
             <ImageView
                 android:id="@+id/nowPlayingCover"
@@ -199,15 +199,31 @@
                     android:maxLines="1"
                     android:ellipsize="end" />
 
-                <TextView
-                    android:id="@+id/nowPlayingRawRt"
+                <LinearLayout
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="@color/radio_text_secondary"
-                    android:textSize="10sp"
-                    android:alpha="0.5"
-                    android:maxLines="1"
-                    android:ellipsize="end" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/nowPlayingRawRt"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/radio_text_secondary"
+                        android:textSize="10sp"
+                        android:alpha="0.5"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                    <View
+                        android:id="@+id/nowPlayingIgnoredIndicator"
+                        android:layout_width="6dp"
+                        android:layout_height="6dp"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/circle_indicator"
+                        android:visibility="gone" />
+
+                </LinearLayout>
             </LinearLayout>
 
             <!-- Correction Helper Buttons (only visible when enabled in settings) -->
@@ -240,13 +256,26 @@
                     android:src="@drawable/ic_trash" />
             </LinearLayout>
 
-            <ImageView
-                android:id="@+id/nowPlayingSpotifyIcon"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+            <!-- Spotify Toggle -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
                 android:layout_marginStart="8dp"
-                android:src="@drawable/ic_spotify"
-                android:alpha="0.7" />
+                android:background="@drawable/toggle_background"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
+
+                <ImageView
+                    android:id="@+id/btnSpotifyToggle"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_spotify"
+                    android:background="@drawable/toggle_selected"
+                    android:contentDescription="Toggle Spotify" />
+            </LinearLayout>
         </LinearLayout>
 
     </LinearLayout>
@@ -299,7 +328,7 @@
 
         </LinearLayout>
 
-        <!-- Carousel Now Playing Bar -->
+        <!-- Carousel Now Playing Bar (permanent) -->
         <LinearLayout
             android:id="@+id/carouselNowPlayingBar"
             android:layout_width="match_parent"
@@ -311,7 +340,7 @@
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:padding="10dp"
-            android:visibility="gone">
+            android:visibility="visible">
 
             <ImageView
                 android:id="@+id/carouselNowPlayingCover"
@@ -347,6 +376,83 @@
                     android:maxLines="1"
                     android:ellipsize="end" />
 
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:id="@+id/carouselNowPlayingRawRt"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/radio_text_secondary"
+                        android:textSize="10sp"
+                        android:alpha="0.5"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+
+                    <View
+                        android:id="@+id/carouselIgnoredIndicator"
+                        android:layout_width="6dp"
+                        android:layout_height="6dp"
+                        android:layout_marginStart="6dp"
+                        android:background="@drawable/circle_indicator"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Carousel Correction Helper Buttons -->
+            <LinearLayout
+                android:id="@+id/carouselCorrectionButtons"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <ImageButton
+                    android:id="@+id/btnCarouselCorrectionRefresh"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Skip this track"
+                    android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_refresh" />
+
+                <ImageButton
+                    android:id="@+id/btnCarouselCorrectionTrash"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:layout_marginStart="4dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Ignore this RT"
+                    android:padding="4dp"
+                    android:scaleType="fitCenter"
+                    android:src="@drawable/ic_trash" />
+            </LinearLayout>
+
+            <!-- Carousel Spotify Toggle -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/toggle_background"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="4dp"
+                android:paddingEnd="4dp">
+
+                <ImageView
+                    android:id="@+id/btnCarouselSpotifyToggle"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:padding="4dp"
+                    android:src="@drawable/ic_spotify"
+                    android:background="@drawable/toggle_selected"
+                    android:contentDescription="Toggle Spotify" />
             </LinearLayout>
 
         </LinearLayout>
@@ -1373,16 +1479,6 @@
             android:backgroundTint="#CC3333" />
 
         <Button
-            android:id="@+id/btnDebugBugReport"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Create Bug Report"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:backgroundTint="#3399CC" />
-
-        <Button
             android:id="@+id/btnDebugViewReports"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -1402,6 +1498,16 @@
             android:textColor="#FFFFFF"
             android:textSize="12sp"
             android:backgroundTint="#CC9933" />
+
+        <Button
+            android:id="@+id/btnDebugKillApp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Kill App"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:backgroundTint="#990000" />
 
     </LinearLayout>
 

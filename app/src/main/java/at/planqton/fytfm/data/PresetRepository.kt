@@ -228,6 +228,25 @@ class PresetRepository(context: Context) {
         return getSpotifyClientId().isNotBlank() && getSpotifyClientSecret().isNotBlank()
     }
 
+    // Spotify Enabled/Disabled Toggle - per station (frequency)
+    // Default is enabled, we store frequencies where it's DISABLED
+    fun isSpotifyEnabledForFrequency(frequency: Float): Boolean {
+        val disabledFreqs = settingsPrefs.getStringSet("spotify_disabled_frequencies", emptySet()) ?: emptySet()
+        val freqKey = "%.1f".format(frequency)
+        return !disabledFreqs.contains(freqKey)
+    }
+
+    fun setSpotifyEnabledForFrequency(frequency: Float, enabled: Boolean) {
+        val disabledFreqs = settingsPrefs.getStringSet("spotify_disabled_frequencies", emptySet())?.toMutableSet() ?: mutableSetOf()
+        val freqKey = "%.1f".format(frequency)
+        if (enabled) {
+            disabledFreqs.remove(freqKey)
+        } else {
+            disabledFreqs.add(freqKey)
+        }
+        settingsPrefs.edit().putStringSet("spotify_disabled_frequencies", disabledFreqs).apply()
+    }
+
     // Spotify Local Cache Setting
     fun isSpotifyCacheEnabled(): Boolean {
         return settingsPrefs.getBoolean("spotify_cache_enabled", true) // Default: enabled

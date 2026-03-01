@@ -208,12 +208,16 @@ class FytFMMediaService : MediaLibraryService() {
             }
         }
 
+        // Title: RT wenn vorhanden, sonst Stationsname
+        // Artist/Subtitle: Frequenz (manche Player zeigen Artist, andere Subtitle)
+        val displayTitle = rt?.takeIf { it.isNotBlank() } ?: stationName
+
         val metadata = MediaMetadata.Builder()
-            .setTitle(rt?.takeIf { it.isNotBlank() } ?: stationName)  // RT oder Stationsname
-            .setSubtitle(stationName)                                  // Stationsname
-            .setAlbumTitle(stationName)                                // Fallback für manche Widgets
-            .setArtist(stationName)                                    // Für manche Car-Launcher
-            .setDisplayTitle(freqDisplay)                              // Frequenz
+            .setTitle(displayTitle)                                    // RT oder Stationsname
+            .setSubtitle(freqDisplay)                                  // Frequenz als Untertitel
+            .setArtist(freqDisplay)                                    // Frequenz (für Player die Artist zeigen)
+            .setAlbumTitle(stationName)                                // Stationsname für Fallback
+            .setDisplayTitle(stationName)                              // Stationsname
             .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION)
             .setIsPlayable(true)
             .setIsBrowsable(false)

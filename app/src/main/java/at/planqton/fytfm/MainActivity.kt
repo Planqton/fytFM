@@ -117,6 +117,11 @@ class MainActivity : AppCompatActivity() {
     private var carouselNowPlayingCover: ImageView? = null
     private var carouselNowPlayingArtist: TextView? = null
     private var carouselNowPlayingTitle: TextView? = null
+    private var carouselNowPlayingRawRt: TextView? = null
+
+    // Ignored RT indicators
+    private var nowPlayingIgnoredIndicator: View? = null
+    private var carouselIgnoredIndicator: View? = null
 
     // PiP Layout
     private var pipLayout: View? = null
@@ -130,6 +135,11 @@ class MainActivity : AppCompatActivity() {
     private var nowPlayingCorrectionButtons: View? = null
     private var btnCorrectionRefresh: ImageButton? = null
     private var btnCorrectionTrash: ImageButton? = null
+    private var carouselCorrectionButtons: View? = null
+    private var btnCarouselCorrectionRefresh: ImageButton? = null
+    private var btnCarouselCorrectionTrash: ImageButton? = null
+    private var btnSpotifyToggle: ImageView? = null
+    private var btnCarouselSpotifyToggle: ImageView? = null
     private var rtCorrectionDao: RtCorrectionDao? = null
     private var editStringDao: EditStringDao? = null
 
@@ -379,6 +389,26 @@ class MainActivity : AppCompatActivity() {
         updatePowerButton()
         updateFavoriteButton()
 
+        // Initialize MediaSession with current station immediately after service is ready
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
+        val savedStation = stations.find { Math.abs(it.frequency - lastFreq) < 0.05f }
+        val savedStationName = savedStation?.name
+        val radioLogoPath = radioLogoRepository.getLogoForStation(savedStationName, null, lastFreq)
+        android.util.Log.d("fytFM", "Initial MediaSession: freq=$lastFreq, stationName=$savedStationName, radioLogoPath=$radioLogoPath")
+        // Delay slightly to ensure MediaService is ready
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            FytFMMediaService.instance?.updateMetadata(
+                frequency = lastFreq,
+                ps = savedStationName,
+                rt = null,
+                isAM = isAM,
+                coverUrl = null,
+                localCoverPath = null,
+                radioLogoPath = radioLogoPath
+            )
+        }, 500)
+
         // Auto power on if enabled in settings
         if (presetRepository.isPowerOnStartup() && !isRadioOn) {
             toggleRadioPower()
@@ -521,6 +551,8 @@ class MainActivity : AppCompatActivity() {
                     val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
                     updateNowPlaying(displayInfo)
                     nowPlayingRawRt?.text = strippedRt ?: ""
+                    carouselNowPlayingRawRt?.text = strippedRt ?: ""
+                    updateIgnoredIndicator(strippedRt)
                     updatePipDisplay()
                 }
             }
@@ -548,6 +580,8 @@ class MainActivity : AppCompatActivity() {
                     val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
                     updateNowPlaying(displayInfo)
                     nowPlayingRawRt?.text = strippedRt ?: ""
+                    carouselNowPlayingRawRt?.text = strippedRt ?: ""
+                    updateIgnoredIndicator(strippedRt)
                     updatePipDisplay()
                 }
             }
@@ -579,10 +613,11 @@ class MainActivity : AppCompatActivity() {
                 // Log RDS data (only on RT change)
                 rdsLogRepository.onRdsUpdate(ps, rt, pi, pty, tp, ta, rssi, afList)
 
-                // Process RT through Spotify integration if available (unless blocked)
+                // Process RT through Spotify integration if available (unless blocked or disabled for this station)
                 val combiner = rtCombiner
-                if (combiner != null && !rt.isNullOrBlank() && !debugSpotifyBlocked) {
-                    val currentFrequency = frequencyScale.getFrequency()
+                val currentFrequency = frequencyScale.getFrequency()
+                val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(currentFrequency)
+                if (combiner != null && !rt.isNullOrBlank() && !debugSpotifyBlocked && spotifyEnabled) {
                     CoroutineScope(Dispatchers.IO).launch {
                         val combinedRt = combiner.processRt(pi, rt, currentFrequency)
                         val finalRt = combinedRt ?: rt
@@ -625,6 +660,8 @@ class MainActivity : AppCompatActivity() {
                         val displayInfo = parseRawRtToTrackInfo(rt)
                         updateNowPlaying(displayInfo)
                         nowPlayingRawRt?.text = rt
+                        carouselNowPlayingRawRt?.text = rt
+                        updateIgnoredIndicator(rt)
                         updatePipDisplay()
                     }
                 }
@@ -848,6 +885,11 @@ class MainActivity : AppCompatActivity() {
         carouselNowPlayingCover = findViewById(R.id.carouselNowPlayingCover)
         carouselNowPlayingArtist = findViewById(R.id.carouselNowPlayingArtist)
         carouselNowPlayingTitle = findViewById(R.id.carouselNowPlayingTitle)
+        carouselNowPlayingRawRt = findViewById(R.id.carouselNowPlayingRawRt)
+
+        // Ignored RT indicators
+        nowPlayingIgnoredIndicator = findViewById(R.id.nowPlayingIgnoredIndicator)
+        carouselIgnoredIndicator = findViewById(R.id.carouselIgnoredIndicator)
 
         // PiP Layout
         pipLayout = findViewById(R.id.pipLayout)
@@ -864,6 +906,14 @@ class MainActivity : AppCompatActivity() {
         nowPlayingCorrectionButtons = findViewById(R.id.nowPlayingCorrectionButtons)
         btnCorrectionRefresh = findViewById(R.id.btnCorrectionRefresh)
         btnCorrectionTrash = findViewById(R.id.btnCorrectionTrash)
+        // Carousel versions
+        carouselCorrectionButtons = findViewById(R.id.carouselCorrectionButtons)
+        btnCarouselCorrectionRefresh = findViewById(R.id.btnCarouselCorrectionRefresh)
+        btnCarouselCorrectionTrash = findViewById(R.id.btnCarouselCorrectionTrash)
+        // Spotify Toggles
+        btnSpotifyToggle = findViewById(R.id.btnSpotifyToggle)
+        btnCarouselSpotifyToggle = findViewById(R.id.btnCarouselSpotifyToggle)
+        setupSpotifyToggle()
         setupCorrectionHelpers()
 
         // View Mode Toggle
@@ -1354,11 +1404,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Bug Report Button
-        findViewById<android.widget.Button>(R.id.btnDebugBugReport)?.setOnClickListener {
-            createBugReport()
-        }
-
         // View Reports Button
         findViewById<android.widget.Button>(R.id.btnDebugViewReports)?.setOnClickListener {
             startActivity(android.content.Intent(this, BugReportActivity::class.java))
@@ -1374,6 +1419,11 @@ class MainActivity : AppCompatActivity() {
                 btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFCC9933.toInt())
                 android.widget.Toast.makeText(this, "Spotify/Local enabled", android.widget.Toast.LENGTH_SHORT).show()
             }
+        }
+
+        // Kill App Button
+        findViewById<android.widget.Button>(R.id.btnDebugKillApp)?.setOnClickListener {
+            android.os.Process.killProcess(android.os.Process.myPid())
         }
     }
 
@@ -1464,6 +1514,57 @@ class MainActivity : AppCompatActivity() {
             android.widget.Toast.makeText(this, "Bug report created", android.widget.Toast.LENGTH_SHORT).show()
         } else {
             android.widget.Toast.makeText(this, "Failed to create bug report", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showBugReportInputDialog() {
+        val editText = android.widget.EditText(this).apply {
+            hint = "Was ist das Problem?"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            minLines = 3
+            maxLines = 6
+            gravity = android.view.Gravity.TOP or android.view.Gravity.START
+            setPadding(32, 24, 32, 24)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle("Bug Report erstellen")
+            .setMessage("Beschreibe das Problem kurz. Die App wird danach Logs sammeln und in Downloads speichern.")
+            .setView(editText)
+            .setPositiveButton("Erstellen") { _, _ ->
+                val userDescription = editText.text.toString()
+                createBugReportToDownloads(userDescription)
+            }
+            .setNegativeButton("Abbrechen", null)
+            .show()
+    }
+
+    private fun createBugReportToDownloads(userDescription: String) {
+        val bugReportHelper = BugReportHelper(this)
+        val appState = BugReportHelper.AppState(
+            rdsPs = rdsManager.ps,
+            rdsRt = rdsManager.rt,
+            rdsPi = rdsManager.pi,
+            rdsPty = rdsManager.pty,
+            rdsRssi = rdsManager.rssi,
+            rdsTp = rdsManager.tp,
+            rdsTa = rdsManager.ta,
+            rdsAfEnabled = rdsManager.isAfEnabled,
+            rdsAfList = rdsManager.afList?.toList(),
+            currentFrequency = frequencyScale.getFrequency(),
+            spotifyStatus = currentSpotifyStatus,
+            spotifyOriginalRt = currentSpotifyOriginalRt,
+            spotifyStrippedRt = currentSpotifyStrippedRt,
+            spotifyQuery = currentSpotifyQuery,
+            spotifyTrackInfo = currentSpotifyTrackInfo,
+            userDescription = userDescription.ifEmpty { null }
+        )
+
+        val reportPath = bugReportHelper.createBugReportToDownloads(appState)
+        if (reportPath != null) {
+            android.widget.Toast.makeText(this, "Bug Report gespeichert in Downloads/fytFM/", android.widget.Toast.LENGTH_LONG).show()
+        } else {
+            android.widget.Toast.makeText(this, "Fehler beim Erstellen des Bug Reports", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -1682,48 +1783,55 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Load cover image with Coil
+            val currentFreq = frequencyScale.getFrequency()
             val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
-            if (!coverUrl.isNullOrBlank()) {
+            val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(currentFreq)
+
+            // Try station logo first (always available as fallback)
+            val stationLogo = radioLogoRepository.getLogoForStation(
+                ps = rdsManager.ps,
+                pi = rdsManager.pi,
+                frequency = currentFreq
+            )
+
+            if (spotifyEnabled && !coverUrl.isNullOrBlank()) {
+                // Spotify cover available
                 if (coverUrl.startsWith("/")) {
-                    // Local file
                     nowPlayingCover?.load(java.io.File(coverUrl)) {
                         crossfade(true)
-                        placeholder(android.R.drawable.ic_menu_gallery)
-                        error(android.R.drawable.ic_menu_gallery)
+                        placeholder(R.drawable.ic_radio)
+                        error(R.drawable.ic_radio)
                     }
                 } else {
-                    // URL
                     nowPlayingCover?.load(coverUrl) {
                         crossfade(true)
-                        placeholder(android.R.drawable.ic_menu_gallery)
-                        error(android.R.drawable.ic_menu_gallery)
+                        placeholder(R.drawable.ic_radio)
+                        error(R.drawable.ic_radio)
                     }
+                }
+            } else if (stationLogo != null) {
+                // Station logo available
+                nowPlayingCover?.load(java.io.File(stationLogo)) {
+                    crossfade(true)
+                    placeholder(R.drawable.ic_radio)
+                    error(R.drawable.ic_radio)
                 }
             } else {
-                // No Spotify cover - try station logo from template
-                val stationLogo = radioLogoRepository.getLogoForStation(
-                    ps = rdsManager.ps,
-                    pi = rdsManager.pi,
-                    frequency = frequencyScale.getFrequency()
-                )
-                if (stationLogo != null) {
-                    nowPlayingCover?.load(java.io.File(stationLogo)) {
-                        crossfade(true)
-                        placeholder(android.R.drawable.ic_menu_gallery)
-                        error(android.R.drawable.ic_menu_gallery)
-                    }
-                } else {
-                    nowPlayingCover?.setImageResource(android.R.drawable.ic_menu_gallery)
-                }
+                // Fallback: Radio icon
+                nowPlayingCover?.setImageResource(R.drawable.ic_radio)
             }
 
             // Update carousel if in carousel mode
             if (isCarouselMode) {
-                // Update carousel card cover
-                stationCarouselAdapter?.updateCurrentCover(
-                    coverUrl = trackInfo.coverUrlMedium,
-                    localCoverPath = if (trackInfo.coverUrl?.startsWith("/") == true) trackInfo.coverUrl else null
-                )
+                // Update carousel card cover - clear cover when Spotify is disabled for this station
+                if (!presetRepository.isSpotifyEnabledForFrequency(currentFreq)) {
+                    stationCarouselAdapter?.updateCurrentCover(null, null)
+                } else {
+                    stationCarouselAdapter?.updateCurrentCover(
+                        coverUrl = trackInfo.coverUrlMedium,
+                        localCoverPath = if (trackInfo.coverUrl?.startsWith("/") == true) trackInfo.coverUrl else null
+                    )
+                }
 
                 // Update carousel now playing bar
                 updateCarouselNowPlayingBar(trackInfo)
@@ -1737,16 +1845,100 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Versteckt die Now Playing Bar explizit (z.B. bei Senderwechsel)
+     * Setzt die Now Playing Bar zurück (ohne sie zu verstecken, da permanent sichtbar)
      */
     fun hideNowPlayingBarExplicit() {
-        val bar = nowPlayingBar ?: return
         lastDisplayedTrackId = null
-        // Clear carousel cover and hide carousel now playing bar
+        // Clear carousel cover
         stationCarouselAdapter?.updateCurrentCover(null, null)
-        carouselNowPlayingBar?.visibility = View.GONE
-        if (bar.visibility == View.VISIBLE) {
-            hideNowPlayingBar(bar)
+        // Bar bleibt sichtbar, nur Inhalt zurücksetzen
+        nowPlayingTitle?.text = ""
+        nowPlayingArtist?.text = ""
+        nowPlayingArtist?.visibility = View.GONE
+        nowPlayingCover?.setImageResource(R.drawable.ic_radio)
+        // Carousel bar zurücksetzen
+        carouselNowPlayingTitle?.text = ""
+        carouselNowPlayingArtist?.text = ""
+        carouselNowPlayingArtist?.visibility = View.GONE
+        carouselNowPlayingCover?.setImageResource(R.drawable.ic_radio)
+    }
+
+    /**
+     * Setzt die Now Playing Bar mit Sender-Infos zurück (bei Frequenzwechsel)
+     * Zeigt Station Logo + Sendername + Frequenz an
+     */
+    private fun resetNowPlayingBarForStation(stationName: String?, logoPath: String?, frequency: Float, isAM: Boolean) {
+        lastDisplayedTrackId = null
+
+        // Format frequency display
+        val freqDisplay = if (isAM) {
+            "${frequency.toInt()} kHz"
+        } else {
+            "FM ${String.format("%.1f", frequency)}"
+        }
+
+        // Set text: Station name or frequency
+        val displayName = stationName ?: freqDisplay
+        nowPlayingTitle?.text = displayName
+        nowPlayingArtist?.text = if (stationName != null) freqDisplay else ""
+        nowPlayingArtist?.visibility = if (stationName != null) View.VISIBLE else View.GONE
+
+        // Set cover: Station logo or radio icon
+        if (logoPath != null) {
+            nowPlayingCover?.load(java.io.File(logoPath)) {
+                crossfade(true)
+                placeholder(R.drawable.ic_radio)
+                error(R.drawable.ic_radio)
+            }
+        } else {
+            nowPlayingCover?.setImageResource(R.drawable.ic_radio)
+        }
+
+        // Clear raw RT display and hide ignored indicator
+        nowPlayingRawRt?.text = ""
+        carouselNowPlayingRawRt?.text = ""
+        nowPlayingIgnoredIndicator?.visibility = View.GONE
+        carouselIgnoredIndicator?.visibility = View.GONE
+
+        // Update carousel bar
+        carouselNowPlayingTitle?.text = displayName
+        carouselNowPlayingArtist?.text = if (stationName != null) freqDisplay else ""
+        carouselNowPlayingArtist?.visibility = if (stationName != null) View.VISIBLE else View.GONE
+
+        if (logoPath != null) {
+            carouselNowPlayingCover?.load(java.io.File(logoPath)) {
+                crossfade(true)
+                placeholder(R.drawable.ic_radio)
+                error(R.drawable.ic_radio)
+            }
+        } else {
+            carouselNowPlayingCover?.setImageResource(R.drawable.ic_radio)
+        }
+
+        // Clear carousel card cover
+        stationCarouselAdapter?.updateCurrentCover(null, null)
+    }
+
+    /**
+     * Updates the ignored indicator visibility based on whether the current RT is ignored
+     */
+    private fun updateIgnoredIndicator(rt: String?) {
+        if (rt.isNullOrBlank()) {
+            nowPlayingIgnoredIndicator?.visibility = View.GONE
+            carouselIgnoredIndicator?.visibility = View.GONE
+            return
+        }
+
+        val dao = rtCorrectionDao ?: return
+        val normalizedRt = RtCorrection.normalizeRt(rt)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val isIgnored = dao.isRtIgnored(normalizedRt)
+            withContext(Dispatchers.Main) {
+                val visibility = if (isIgnored) View.VISIBLE else View.GONE
+                nowPlayingIgnoredIndicator?.visibility = visibility
+                carouselIgnoredIndicator?.visibility = visibility
+            }
         }
     }
 
@@ -1767,37 +1959,42 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Load cover image
+        val currentFreq = frequencyScale.getFrequency()
         val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
-        if (!coverUrl.isNullOrBlank()) {
+        val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(currentFreq)
+
+        // Try station logo first (always available as fallback)
+        val stationLogo = radioLogoRepository.getLogoForStation(
+            ps = rdsManager.ps,
+            pi = rdsManager.pi,
+            frequency = currentFreq
+        )
+
+        if (spotifyEnabled && !coverUrl.isNullOrBlank()) {
+            // Spotify cover available
             if (coverUrl.startsWith("/")) {
                 carouselNowPlayingCover?.load(java.io.File(coverUrl)) {
                     crossfade(true)
-                    placeholder(android.R.drawable.ic_menu_gallery)
-                    error(android.R.drawable.ic_menu_gallery)
+                    placeholder(R.drawable.ic_radio)
+                    error(R.drawable.ic_radio)
                 }
             } else {
                 carouselNowPlayingCover?.load(coverUrl) {
                     crossfade(true)
-                    placeholder(android.R.drawable.ic_menu_gallery)
-                    error(android.R.drawable.ic_menu_gallery)
+                    placeholder(R.drawable.ic_radio)
+                    error(R.drawable.ic_radio)
                 }
+            }
+        } else if (stationLogo != null) {
+            // Station logo available
+            carouselNowPlayingCover?.load(java.io.File(stationLogo)) {
+                crossfade(true)
+                placeholder(R.drawable.ic_radio)
+                error(R.drawable.ic_radio)
             }
         } else {
-            // Try station logo
-            val stationLogo = radioLogoRepository.getLogoForStation(
-                ps = rdsManager.ps,
-                pi = rdsManager.pi,
-                frequency = frequencyScale.getFrequency()
-            )
-            if (stationLogo != null) {
-                carouselNowPlayingCover?.load(java.io.File(stationLogo)) {
-                    crossfade(true)
-                    placeholder(android.R.drawable.ic_menu_gallery)
-                    error(android.R.drawable.ic_menu_gallery)
-                }
-            } else {
-                carouselNowPlayingCover?.setImageResource(android.R.drawable.ic_menu_gallery)
-            }
+            // Fallback: Radio icon
+            carouselNowPlayingCover?.setImageResource(R.drawable.ic_radio)
         }
 
         // Show bar
@@ -1862,58 +2059,65 @@ class MainActivity : AppCompatActivity() {
         updateCorrectionHelpersVisibility()
 
         // Trash button - ignore this RT completely
-        btnCorrectionTrash?.setOnClickListener {
-            val currentRt = rtCombiner?.getCurrentRt() ?: return@setOnClickListener
-            val dao = rtCorrectionDao ?: return@setOnClickListener
-
-            CoroutineScope(Dispatchers.IO).launch {
-                val correction = RtCorrection(
-                    rtNormalized = RtCorrection.normalizeRt(currentRt),
-                    rtOriginal = currentRt,
-                    type = RtCorrection.TYPE_IGNORED
-                )
-                dao.insert(correction)
-                android.util.Log.i("fytFM", "RT ignored: $currentRt")
-
-                withContext(Dispatchers.Main) {
-                    // Hide the Now Playing bar
-                    hideNowPlayingBarExplicit()
-                    android.widget.Toast.makeText(
-                        this@MainActivity,
-                        "RT wird ignoriert",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
-            }
-        }
+        btnCorrectionTrash?.setOnClickListener { handleCorrectionTrash() }
 
         // Refresh button - skip this track and search for another
-        btnCorrectionRefresh?.setOnClickListener {
-            val currentRt = rtCombiner?.getCurrentRt() ?: return@setOnClickListener
-            val currentTrack = rtCombiner?.getCurrentTrackInfo() ?: return@setOnClickListener
-            val dao = rtCorrectionDao ?: return@setOnClickListener
+        btnCorrectionRefresh?.setOnClickListener { handleCorrectionRefresh() }
 
-            CoroutineScope(Dispatchers.IO).launch {
-                val correction = RtCorrection(
-                    rtNormalized = RtCorrection.normalizeRt(currentRt),
-                    rtOriginal = currentRt,
-                    type = RtCorrection.TYPE_SKIP_TRACK,
-                    skipTrackId = currentTrack.trackId,
-                    skipTrackArtist = currentTrack.artist,
-                    skipTrackTitle = currentTrack.title
-                )
-                dao.insert(correction)
-                android.util.Log.i("fytFM", "Track skipped: ${currentTrack.artist} - ${currentTrack.title} for RT: $currentRt")
+        // Carousel versions - same logic
+        btnCarouselCorrectionTrash?.setOnClickListener { handleCorrectionTrash() }
+        btnCarouselCorrectionRefresh?.setOnClickListener { handleCorrectionRefresh() }
+    }
 
-                withContext(Dispatchers.Main) {
-                    // Force re-process to find a different track
-                    rtCombiner?.forceReprocess()
-                    android.widget.Toast.makeText(
-                        this@MainActivity,
-                        "Suche anderen Track...",
-                        android.widget.Toast.LENGTH_SHORT
-                    ).show()
-                }
+    private fun handleCorrectionTrash() {
+        val currentRt = rtCombiner?.getCurrentRt() ?: return
+        val dao = rtCorrectionDao ?: return
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val correction = RtCorrection(
+                rtNormalized = RtCorrection.normalizeRt(currentRt),
+                rtOriginal = currentRt,
+                type = RtCorrection.TYPE_IGNORED
+            )
+            dao.insert(correction)
+            android.util.Log.i("fytFM", "RT ignored: $currentRt")
+
+            withContext(Dispatchers.Main) {
+                // Reset displayed track but keep bar visible
+                lastDisplayedTrackId = null
+                android.widget.Toast.makeText(
+                    this@MainActivity,
+                    "RT wird ignoriert",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun handleCorrectionRefresh() {
+        val currentRt = rtCombiner?.getCurrentRt() ?: return
+        val currentTrack = rtCombiner?.getCurrentTrackInfo() ?: return
+        val dao = rtCorrectionDao ?: return
+
+        CoroutineScope(Dispatchers.IO).launch {
+            val correction = RtCorrection(
+                rtNormalized = RtCorrection.normalizeRt(currentRt),
+                rtOriginal = currentRt,
+                type = RtCorrection.TYPE_SKIP_TRACK,
+                skipTrackId = currentTrack.trackId,
+                skipTrackArtist = currentTrack.artist,
+                skipTrackTitle = currentTrack.title
+            )
+            dao.insert(correction)
+            android.util.Log.i("fytFM", "Track skipped: ${currentTrack.artist} - ${currentTrack.title} for RT: $currentRt")
+
+            withContext(Dispatchers.Main) {
+                rtCombiner?.forceReprocess()
+                android.widget.Toast.makeText(
+                    this@MainActivity,
+                    "Suche anderen Track...",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
             }
         }
     }
@@ -1924,6 +2128,69 @@ class MainActivity : AppCompatActivity() {
     fun updateCorrectionHelpersVisibility() {
         val enabled = presetRepository.isCorrectionHelpersEnabled()
         nowPlayingCorrectionButtons?.visibility = if (enabled) View.VISIBLE else View.GONE
+        carouselCorrectionButtons?.visibility = if (enabled) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Setup Spotify toggle button
+     */
+    private fun setupSpotifyToggle() {
+        // Load saved state for current frequency
+        updateSpotifyToggleForCurrentFrequency()
+
+        // Click handlers for both toggles (normal and carousel)
+        val toggleAction = {
+            val currentFreq = frequencyScale.getFrequency()
+            val newState = !presetRepository.isSpotifyEnabledForFrequency(currentFreq)
+            presetRepository.setSpotifyEnabledForFrequency(currentFreq, newState)
+            updateSpotifyToggleAppearance(newState)
+
+            if (newState) {
+                // Spotify enabled - trigger reprocessing of current RT
+                rtCombiner?.forceReprocess()
+                android.widget.Toast.makeText(this, "Spotify aktiviert", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                // Spotify disabled - immediately show raw RT with radio icon
+                val currentRt = rdsManager.rt
+                if (!currentRt.isNullOrBlank()) {
+                    val displayInfo = parseRawRtToTrackInfo(currentRt)
+                    lastDisplayedTrackId = null  // Force update
+                    updateNowPlaying(displayInfo)
+                    nowPlayingRawRt?.text = currentRt
+                    carouselNowPlayingRawRt?.text = currentRt
+                    updateIgnoredIndicator(currentRt)
+                }
+                // Clear carousel cover
+                stationCarouselAdapter?.updateCurrentCover(null, null)
+                android.widget.Toast.makeText(this, "Spotify deaktiviert", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnSpotifyToggle?.setOnClickListener { toggleAction() }
+        btnCarouselSpotifyToggle?.setOnClickListener { toggleAction() }
+    }
+
+    /**
+     * Update Spotify toggle button for current frequency
+     * Call this when frequency changes
+     */
+    fun updateSpotifyToggleForCurrentFrequency() {
+        val currentFreq = frequencyScale.getFrequency()
+        val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(currentFreq)
+        updateSpotifyToggleAppearance(spotifyEnabled)
+    }
+
+    /**
+     * Update Spotify toggle button appearance based on state
+     */
+    private fun updateSpotifyToggleAppearance(enabled: Boolean) {
+        val bg = if (enabled) R.drawable.toggle_selected else android.R.color.transparent
+        btnSpotifyToggle?.setBackgroundResource(bg)
+        btnCarouselSpotifyToggle?.setBackgroundResource(bg)
+        // Also adjust alpha to indicate state
+        val alpha = if (enabled) 1.0f else 0.4f
+        btnSpotifyToggle?.alpha = alpha
+        btnCarouselSpotifyToggle?.alpha = alpha
     }
 
     /**
@@ -2315,18 +2582,30 @@ class MainActivity : AppCompatActivity() {
             // Clear RDS data on frequency change for fresh data
             rdsManager.clearRds()
             rtCombiner?.clearAll()
-            // Reset Spotify debug overlay and Now Playing Bar
+            // Reset Spotify debug overlay
             updateSpotifyDebugInfo("Waiting...", null, null, null, null)
-            hideNowPlayingBarExplicit()
+            // Reset displayed track
+            lastDisplayedTrackId = null
             // Log station change
             val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
             rdsLogRepository.onStationChange(frequency, isAM)
-            // Update MediaService with new frequency and radio logo immediately
-            val radioLogoPath = radioLogoRepository.getLogoForStation(null, null, frequency)
-            android.util.Log.d("fytFM", "Station change: freq=$frequency, radioLogoPath=$radioLogoPath")
+
+            // Get saved station for this frequency
+            val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
+            val savedStation = stations.find { Math.abs(it.frequency - frequency) < 0.05f }
+            val savedStationName = savedStation?.name
+
+            // Get radio logo for this station
+            val radioLogoPath = radioLogoRepository.getLogoForStation(savedStationName, null, frequency)
+
+            // Update Now Playing bar with station info (logo + name)
+            resetNowPlayingBarForStation(savedStationName, radioLogoPath, frequency, isAM)
+
+            // Update MediaService with new frequency, saved station name and radio logo immediately
+            android.util.Log.d("fytFM", "Station change: freq=$frequency, stationName=$savedStationName, radioLogoPath=$radioLogoPath")
             FytFMMediaService.instance?.updateMetadata(
                 frequency = frequency,
-                ps = null,
+                ps = savedStationName,  // Use saved station name instead of null
                 rt = null,
                 isAM = isAM,
                 coverUrl = null,
@@ -2339,6 +2618,8 @@ class MainActivity : AppCompatActivity() {
             saveLastFrequency(frequency)
             // Update favorite button
             updateFavoriteButton()
+            // Update Spotify toggle for this station
+            updateSpotifyToggleForCurrentFrequency()
             // Update carousel selection if in carousel mode
             if (isCarouselMode) {
                 updateCarouselSelection()
@@ -3106,6 +3387,12 @@ class MainActivity : AppCompatActivity() {
         dialogView.findViewById<View>(R.id.itemViewCorrections).setOnClickListener {
             dialog.dismiss()
             showCorrectionsViewerDialog()
+        }
+
+        // Bug Report item
+        dialogView.findViewById<View>(R.id.itemBugReport).setOnClickListener {
+            dialog.dismiss()
+            showBugReportInputDialog()
         }
 
         // Close App button
@@ -4479,18 +4766,41 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showEditStationDialog(station: at.planqton.fytfm.data.RadioStation, onSave: (String) -> Unit) {
+        // Create container for name input and Spotify toggle
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(48, 32, 48, 16)
+        }
+
+        // Name input
         val input = android.widget.EditText(this).apply {
             setText(station.name ?: "")
             hint = "Sendername"
-            setPadding(48, 32, 48, 32)
         }
+        container.addView(input)
+
+        // Spotify toggle
+        val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(station.frequency)
+        val spotifySwitch = android.widget.Switch(this).apply {
+            text = "Spotify/Lokal Suche"
+            isChecked = spotifyEnabled
+            setPadding(0, 24, 0, 0)
+        }
+        container.addView(spotifySwitch)
 
         AlertDialog.Builder(this)
             .setTitle("Sender bearbeiten")
             .setMessage(station.getDisplayFrequency())
-            .setView(input)
+            .setView(container)
             .setPositiveButton("Speichern") { _, _ ->
+                // Save station name
                 onSave(input.text.toString())
+                // Save Spotify setting for this frequency
+                presetRepository.setSpotifyEnabledForFrequency(station.frequency, spotifySwitch.isChecked)
+                // Update toggle if this is current frequency
+                if (Math.abs(frequencyScale.getFrequency() - station.frequency) < 0.05f) {
+                    updateSpotifyToggleForCurrentFrequency()
+                }
             }
             .setNegativeButton("Abbrechen", null)
             .show()
@@ -4818,7 +5128,7 @@ class MainActivity : AppCompatActivity() {
                     if (foundFreq != null) {
                         rdsManager.clearRds()
                         rtCombiner?.clearAll()
-                        hideNowPlayingBarExplicit()
+                        lastDisplayedTrackId = null  // Reset but keep bar visible
                         frequencyScale.setFrequency(foundFreq)
                         saveLastFrequency(foundFreq)
                     } else {
