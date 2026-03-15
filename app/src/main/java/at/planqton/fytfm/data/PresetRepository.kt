@@ -375,4 +375,13 @@ class PresetRepository(context: Context) {
     fun setAskedAboutImport(asked: Boolean) {
         settingsPrefs.edit().putBoolean("asked_about_import", asked).apply()
     }
+
+    // Station Change Toast (für Lenkradtasten im Hintergrund)
+    fun isShowStationChangeToast(): Boolean {
+        return settingsPrefs.getBoolean("show_station_change_toast", true)
+    }
+
+    fun setShowStationChangeToast(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("show_station_change_toast", enabled).apply()
+    }
 }

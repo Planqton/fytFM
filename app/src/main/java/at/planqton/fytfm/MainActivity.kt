@@ -346,6 +346,9 @@ class MainActivity : AppCompatActivity() {
         // Initialize Spotify Integration
         initSpotifyIntegration()
 
+        // Start Overlay Service for steering wheel controls
+        startOverlayServiceIfEnabled()
+
         // Update Badge auf Settings-Button
         updateBadge = findViewById(R.id.updateBadge)
         updateRepository.setStateListener { state ->
@@ -555,6 +558,33 @@ class MainActivity : AppCompatActivity() {
             android.util.Log.i("fytFM", "Steering wheel broadcast receiver registered (via $method)")
         }
         */
+    }
+
+    /**
+     * Startet den Overlay-Service wenn Setting aktiviert und Permission vorhanden
+     */
+    private fun startOverlayServiceIfEnabled() {
+        if (!presetRepository.isShowStationChangeToast()) return
+
+        // Prüfe Overlay-Permission
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            if (!android.provider.Settings.canDrawOverlays(this)) {
+                android.util.Log.w("fytFM", "Overlay permission not granted")
+                return
+            }
+        }
+
+        try {
+            val intent = android.content.Intent(this, StationChangeOverlayService::class.java)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            android.util.Log.i("fytFM", "StationChangeOverlayService started")
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Failed to start overlay service: ${e.message}")
+        }
     }
 
     /**
@@ -3076,6 +3106,40 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
 
+        // Station Change Toast toggle
+        val switchStationChangeToast = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchStationChangeToast)
+        switchStationChangeToast.isChecked = presetRepository.isShowStationChangeToast()
+        switchStationChangeToast.setOnCheckedChangeListener { _, isChecked ->
+            if (isChecked) {
+                // Prüfe Overlay-Permission
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M &&
+                    !android.provider.Settings.canDrawOverlays(this)) {
+                    // Permission fehlt - Benutzer zu Settings leiten
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("Overlay-Berechtigung")
+                        .setMessage("fytFM benötigt die Berechtigung \"Über anderen Apps einblenden\" um das Popup anzuzeigen.")
+                        .setPositiveButton("Einstellungen öffnen") { _, _ ->
+                            val intent = android.content.Intent(
+                                android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                android.net.Uri.parse("package:$packageName")
+                            )
+                            startActivity(intent)
+                        }
+                        .setNegativeButton("Abbrechen") { _, _ ->
+                            switchStationChangeToast.isChecked = false
+                        }
+                        .show()
+                    return@setOnCheckedChangeListener
+                }
+                presetRepository.setShowStationChangeToast(true)
+                startOverlayServiceIfEnabled()
+            } else {
+                presetRepository.setShowStationChangeToast(false)
+                // Service stoppen
+                stopService(android.content.Intent(this, StationChangeOverlayService::class.java))
+            }
+        }
+
         // LOC Local Mode toggle
         val switchLocalMode = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchLocalMode)
         switchLocalMode.isChecked = presetRepository.isLocalMode()
@@ -4935,6 +4999,7 @@ class MainActivity : AppCompatActivity() {
         prevStation?.let {
             android.util.Log.i("fytFM", "skipToPreviousStation: ${currentFreq} -> ${it.frequency} MHz")
             frequencyScale.setFrequency(it.frequency)
+            showStationChangeOverlay(it.frequency)
         }
     }
 
@@ -4950,6 +5015,25 @@ class MainActivity : AppCompatActivity() {
         nextStation?.let {
             android.util.Log.i("fytFM", "skipToNextStation: ${currentFreq} -> ${it.frequency} MHz")
             frequencyScale.setFrequency(it.frequency)
+            showStationChangeOverlay(it.frequency)
+        }
+    }
+
+    private fun showStationChangeOverlay(frequency: Float) {
+        if (!presetRepository.isShowStationChangeToast()) return
+
+        val intent = android.content.Intent(this, StationChangeOverlayService::class.java).apply {
+            action = StationChangeOverlayService.ACTION_SHOW_OVERLAY
+            putExtra(StationChangeOverlayService.EXTRA_FREQUENCY, frequency)
+        }
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Failed to show overlay: ${e.message}")
         }
     }
 
