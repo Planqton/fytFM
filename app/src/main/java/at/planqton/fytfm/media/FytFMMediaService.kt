@@ -2,11 +2,15 @@ package at.planqton.fytfm.media
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Binder
 import android.os.IBinder
 import android.os.Looper
 import android.util.Log
+import androidx.core.content.FileProvider
+import java.io.ByteArrayOutputStream
+import java.io.File
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.session.LibraryResult
@@ -180,39 +184,14 @@ class FytFMMediaService : MediaLibraryService() {
         }
         val stationName = ps ?: freqDisplay
 
-        // Cover-URI bestimmen
-        // WICHTIG: Lokale Pfade werden über CoverServer bereitgestellt (http://127.0.0.1:8765)
-        // da manche Car-Launcher keine externen URLs oder lokale file:// URIs laden können
-        Log.d(TAG, "Cover selection: coverUrl=$coverUrl, localCoverPath=$localCoverPath, radioLogoPath=$radioLogoPath, cacheEnabled=${presetRepository.isDeezerCacheEnabled()}")
-        val artworkUri: Uri? = when {
-            // 1. Lokaler Cache-Pfad verfügbar → über CoverServer (zuverlässiger für Car-Launcher)
-            !localCoverPath.isNullOrBlank() && localCoverPath.startsWith("/") -> {
-                Log.d(TAG, "Using local cached cover via CoverServer")
-                ensureCoverServerRunning()
-                coverServer?.setCoverPath(localCoverPath)
-                coverServer?.getCoverUrl()?.let { Uri.parse(it) }
-            }
-            // 2. Radio-Logo als Fallback (offline-fähig)
-            !radioLogoPath.isNullOrBlank() -> {
-                Log.d(TAG, "Using radio logo via CoverServer")
-                ensureCoverServerRunning()
-                coverServer?.setCoverPath(radioLogoPath)
-                coverServer?.getCoverUrl()?.let { Uri.parse(it) }
-            }
-            // 3. Spotify URL als letzter Fallback (funktioniert nicht bei allen Car-Launchern)
-            !coverUrl.isNullOrBlank() && coverUrl.startsWith("http") -> {
-                Log.d(TAG, "Using Spotify URL (fallback)")
-                Uri.parse(coverUrl)
-            }
-            else -> {
-                Log.d(TAG, "No cover available")
-                null
-            }
-        }
-
         // Title: RT wenn vorhanden, sonst Stationsname
         // Artist/Subtitle: Frequenz (manche Player zeigen Artist, andere Subtitle)
         val displayTitle = rt?.takeIf { it.isNotBlank() } ?: stationName
+
+        // Deezer CDN URL für Artwork
+        val artworkUri: Uri? = if (!coverUrl.isNullOrBlank() && coverUrl.startsWith("http")) {
+            Uri.parse(coverUrl)
+        } else null
 
         val metadata = MediaMetadata.Builder()
             .setTitle(displayTitle)                                    // RT oder Stationsname
@@ -226,6 +205,7 @@ class FytFMMediaService : MediaLibraryService() {
             .apply {
                 if (artworkUri != null) {
                     setArtworkUri(artworkUri)
+                    Log.d(TAG, "Setting artworkUri: $artworkUri")
                 }
             }
             .build()
@@ -256,6 +236,54 @@ class FytFMMediaService : MediaLibraryService() {
     fun stopCoverServer() {
         coverServer?.stop()
         coverServer = null
+    }
+
+    /**
+     * Lädt ein Bild als Byte-Array für MediaMetadata.setArtworkData()
+     * Resized auf max 300x300 für bessere Kompatibilität
+     */
+    private fun loadImageAsBytes(imagePath: String): ByteArray? {
+        return try {
+            // Erst Dimensionen lesen ohne zu dekodieren
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeFile(imagePath, options)
+
+            // Sample-Size berechnen für max 300x300
+            val maxSize = 300
+            var sampleSize = 1
+            while (options.outWidth / sampleSize > maxSize || options.outHeight / sampleSize > maxSize) {
+                sampleSize *= 2
+            }
+
+            // Jetzt mit Sample-Size dekodieren
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+            }
+            val bitmap = BitmapFactory.decodeFile(imagePath, decodeOptions)
+
+            if (bitmap != null) {
+                // Auf exakt 300x300 skalieren
+                val scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, 300, 300, true)
+                if (scaled != bitmap) {
+                    bitmap.recycle()
+                }
+
+                val stream = ByteArrayOutputStream()
+                scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, stream)
+                val bytes = stream.toByteArray()
+                scaled.recycle()
+                Log.d(TAG, "Loaded artwork: ${bytes.size} bytes (300x300 JPEG) from $imagePath")
+                bytes
+            } else {
+                Log.w(TAG, "Failed to decode bitmap: $imagePath")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading artwork: $imagePath", e)
+            null
+        }
     }
 
     /**

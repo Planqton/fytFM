@@ -146,6 +146,6 @@
                 android:value="overlay_display" />
         </service>
 
-    </application>
+            </application>
 
 </manifest>

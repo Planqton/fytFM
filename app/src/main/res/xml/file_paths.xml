@@ -6,4 +6,7 @@
     <cache-path
         name="export"
         path="export/" />
+    <files-path
+        name="deezer_covers"
+        path="deezer_covers/" />
 </paths>
