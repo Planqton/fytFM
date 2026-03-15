@@ -5425,10 +5425,8 @@ class MainActivity : AppCompatActivity() {
         rdsLogRepository.destroy()
         // steeringWheelKeyManager?.unregister()  // Fallback disabled
         syuToolkitManager?.disconnect()
-        // Turn off radio when app closes
-        if (isRadioOn) {
-            fmNative.powerOff()
-        }
+        // Radio NICHT ausschalten - läuft im MediaService weiter (auch im Sleep)
+        // fmNative.powerOff() wird nur vom User manuell ausgelöst
     }
 
     private fun saveLastFrequency(frequency: Float) {

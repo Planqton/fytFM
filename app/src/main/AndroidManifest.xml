@@ -126,6 +126,7 @@
         <service
             android:name=".media.FytFMMediaService"
             android:foregroundServiceType="mediaPlayback"
+            android:persistent="true"
             android:enabled="true"
             android:exported="true"
             tools:ignore="ExportedService">
