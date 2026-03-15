@@ -104,9 +104,13 @@ class StationCarouselAdapter(
             holder.stationName.visibility = View.GONE
         }
 
+        // Logo immer sichtbar - mit FM/AM Platzhalter falls kein Logo
+        holder.stationLogo.visibility = View.VISIBLE
+        val placeholder = if (station.isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
+
         // For selected item, use Spotify cover if available
         if (isSelected) {
-            // Cover image: Spotify URL > Local cached > Radio logo
+            // Cover image: Spotify URL > Local cached > Radio logo > Placeholder
             val coverSource = when {
                 !currentCoverUrl.isNullOrBlank() && currentCoverUrl!!.startsWith("http") -> currentCoverUrl
                 !currentLocalCoverPath.isNullOrBlank() -> currentLocalCoverPath
@@ -115,7 +119,6 @@ class StationCarouselAdapter(
             }
 
             if (!coverSource.isNullOrBlank()) {
-                holder.stationLogo.visibility = View.VISIBLE
                 if (coverSource.startsWith("http")) {
                     holder.stationLogo.load(coverSource) {
                         crossfade(true)
@@ -126,17 +129,16 @@ class StationCarouselAdapter(
                     }
                 }
             } else {
-                holder.stationLogo.visibility = View.GONE
+                holder.stationLogo.setImageResource(placeholder)
             }
         } else {
-            // Non-selected items: show only radio logo
+            // Non-selected items: show radio logo or placeholder
             if (!station.logoPath.isNullOrBlank()) {
-                holder.stationLogo.visibility = View.VISIBLE
                 holder.stationLogo.load(File(station.logoPath)) {
                     crossfade(true)
                 }
             } else {
-                holder.stationLogo.visibility = View.GONE
+                holder.stationLogo.setImageResource(placeholder)
             }
         }
 

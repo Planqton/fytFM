@@ -246,13 +246,28 @@ class StationChangeOverlayService : Service() {
                     if (newPosition >= 0) {
                         recyclerView?.let { rv ->
                             val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return@let
+
+                            // Erst sicherstellen dass Item sichtbar ist
                             val targetView = layoutManager.findViewByPosition(newPosition)
                             if (targetView != null) {
-                                // Berechne wie weit scrollen um zu zentrieren
+                                // Item ist sichtbar - berechne Scroll zum Zentrieren
                                 val rvCenter = rv.width / 2
                                 val viewCenter = targetView.left + targetView.width / 2
                                 val scrollBy = viewCenter - rvCenter
                                 rv.smoothScrollBy(scrollBy, 0)
+                            } else {
+                                // Item nicht sichtbar - erst hinscrollenund dann zentrieren
+                                rv.smoothScrollToPosition(newPosition)
+                                // Nach dem Scroll nochmal zentrieren
+                                rv.postDelayed({
+                                    val view = layoutManager.findViewByPosition(newPosition)
+                                    if (view != null) {
+                                        val rvCenter = rv.width / 2
+                                        val viewCenter = view.left + view.width / 2
+                                        val scrollBy = viewCenter - rvCenter
+                                        rv.smoothScrollBy(scrollBy, 0)
+                                    }
+                                }, 300)
                             }
                         }
                     }
@@ -418,14 +433,16 @@ class StationChangeOverlayService : Service() {
                 holder.stationName.visibility = View.GONE
             }
 
-            // Logo
+            // Logo - mit FM/AM Platzhalter falls kein Logo vorhanden
+            holder.stationLogo.visibility = View.VISIBLE
             if (!station.logoPath.isNullOrBlank()) {
-                holder.stationLogo.visibility = View.VISIBLE
                 holder.stationLogo.load(File(station.logoPath)) {
                     crossfade(true)
                 }
             } else {
-                holder.stationLogo.visibility = View.GONE
+                // Platzhalter je nach Band
+                val placeholder = if (station.isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
+                holder.stationLogo.setImageResource(placeholder)
             }
         }
 
