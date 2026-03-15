@@ -17,7 +17,14 @@ import com.syu.ipc.IRemoteToolkit
  * Manager for connecting to the FYT syu service and receiving key events.
  * This is the correct way to receive steering wheel button events on FYT head units.
  *
- * Based on reverse engineering of navradio (com.navimods.radio_free).
+ * Based on reverse engineering of NavRadio+ (com.navimods.radio_free) and com.syu.ms.
+ *
+ * Key findings:
+ * - NavRadio+ uses Module ID 1 (com.syu.ms.radio)
+ * - It registers for ALL event types 0-99 on that module
+ * - Key events arrive with callback type = 60 (0x3C)
+ * - Frequency updates arrive with callback type = 1
+ * - FYT key codes are 0-6, NOT Android standard keycodes (87, 88, etc.)
  */
 class SyuToolkitManager(
     private val context: Context,
@@ -30,25 +37,46 @@ class SyuToolkitManager(
         private const val SYU_MS_PACKAGE = "com.syu.ms"
         private const val TOOLKIT_SERVICE_CLASS = "app.ToolkitService"
 
-        // Module IDs
-        private const val MODULE_ID_MS = 0  // com.syu.ms module
-        private const val MODULE_ID_SS = 1  // com.syu.ss module (if needed)
+        // Module IDs from com.syu.ms/ModuleService
+        // NavRadio+ uses MODULE_ID_RADIO (1) for key events!
+        private const val MODULE_ID_MAIN = 0     // com.syu.ms.main
+        private const val MODULE_ID_RADIO = 1    // com.syu.ms.radio - NavRadio+ uses this!
+        private const val MODULE_ID_BT = 2       // com.syu.ms.bt
+        private const val MODULE_ID_DVD = 3      // com.syu.ms.dvd
+        private const val MODULE_ID_SOUND = 4    // com.syu.ms.sound
+        private const val MODULE_ID_IPOD = 5     // com.syu.ms.ipod
+        private const val MODULE_ID_TV = 6       // com.syu.ms.tv
+        private const val MODULE_ID_CANBUS = 7   // com.syu.ms.canbus
+        private const val MODULE_ID_TPMS = 8     // com.syu.ms.tpms
+        private const val MODULE_ID_DVR = 9      // com.syu.ms.dvr
+        private const val MODULE_ID_STEER = 10   // com.syu.ms.steer
 
-        // Event types for registration
-        private const val EVENT_TYPE_KEY = 0x22  // Key events (34 decimal)
-        private const val EVENT_TYPE_RADIO = 0x100  // Radio events (possible)
+        // Callback event types (the 'type' parameter in update callback)
+        private const val CALLBACK_TYPE_FREQUENCY = 1    // Frequency update
+        private const val CALLBACK_TYPE_PRESET_FREQ = 4  // 0x04 - Preset frequencies (index, freq)
+        private const val CALLBACK_TYPE_PRESET_NAME = 14 // 0x0E - Preset names (index in intData, name in stringData)
+        private const val CALLBACK_TYPE_KEY_EVENT_FYT = 28  // 0x1C - Key events on FYT devices (NEXT/PREV)
+        private const val CALLBACK_TYPE_KEY_EVENT_NAVRADIO = 60   // 0x3C - Key events (NavRadio+ style)
+        private const val CALLBACK_TYPE_UNKNOWN_61 = 61  // 0x3D - Unknown
+
+        // Preset index offset for AM (FM: 0-11, AM: 65536+)
+        private const val AM_PRESET_OFFSET = 65536
 
         // Registration flags
         private const val REGISTER_FLAG_DEFAULT = 1
 
-        // Key codes from FYT system
-        private const val KEYCODE_MEDIA_NEXT = 87
-        private const val KEYCODE_MEDIA_PREVIOUS = 88
-        private const val KEYCODE_MEDIA_PLAY_PAUSE = 85
-        private const val KEYCODE_MEDIA_PLAY = 126
-        private const val KEYCODE_MEDIA_PAUSE = 127
-        private const val KEYCODE_VOLUME_UP = 24
-        private const val KEYCODE_VOLUME_DOWN = 25
+        // Max event types to register for (NavRadio+ registers 0-99)
+        private const val MAX_EVENT_TYPES = 100
+
+        // FYT-specific key codes (0-6 range, need to be discovered experimentally)
+        // These are NOT Android standard keycodes!
+        private const val FYT_KEY_0 = 0  // Possibly NEXT or MODE
+        private const val FYT_KEY_1 = 1  // Possibly PREV
+        private const val FYT_KEY_2 = 2  // Possibly VOL+
+        private const val FYT_KEY_3 = 3  // Possibly VOL-
+        private const val FYT_KEY_4 = 4  // Possibly MUTE
+        private const val FYT_KEY_5 = 5  // Possibly ANSWER
+        private const val FYT_KEY_6 = 6  // Possibly HANGUP
     }
 
     interface KeyEventListener {
@@ -59,6 +87,11 @@ class SyuToolkitManager(
         fun onVolumeDown()
         fun onKeyEvent(keyCode: Int, intData: IntArray?)
         fun onFrequencyUpdate(frequencyKhz: Int)  // e.g., 10490 = 104.9 MHz
+        fun onRawCallback(type: Int, intData: IntArray?, floatData: FloatArray?, stringData: Array<String>?)
+
+        // Preset callbacks for station import
+        fun onPresetReceived(index: Int, frequencyMhz: Float, isAM: Boolean) {}
+        fun onPresetNameReceived(index: Int, name: String, isAM: Boolean) {}
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -66,34 +99,98 @@ class SyuToolkitManager(
     private val serviceHandler = Handler(handlerThread.looper)
 
     private var toolkit: IRemoteToolkit? = null
-    private var msModule: IRemoteModule? = null
-    private var ssModule: IRemoteModule? = null
+    private var radioModule: IRemoteModule? = null
     private var isConnected = false
     private var isRegistered = false
+
+    // Track registered event types for proper unregistration
+    private val registeredEventTypes = mutableListOf<Int>()
 
     // Module callback to receive events
     private val moduleCallback = object : IModuleCallback.Stub() {
         override fun update(type: Int, intData: IntArray?, floatData: FloatArray?, stringData: Array<String>?) {
-            Log.d(TAG, "=== update: type=$type, intData=${intData?.toList()}, floatData=${floatData?.toList()}, stringData=${stringData?.toList()} ===")
+            Log.d(TAG, "=== Callback: type=$type (0x${type.toString(16)}), intData=${intData?.toList()}, floatData=${floatData?.toList()}, stringData=${stringData?.toList()} ===")
 
-            val value = intData?.firstOrNull() ?: return
-
-            // Type 1 = Frequency update from com.syu.music
-            // Value is frequency in 10kHz units (e.g., 9880 = 98.8 MHz, 10490 = 104.9 MHz)
-            if (type == 1 && value > 8700 && value < 10900) {
-                Log.i(TAG, "Frequency update received: ${value / 100.0} MHz")
-                mainHandler.post {
-                    listener?.onFrequencyUpdate(value)
-                }
-                return
+            // Always notify raw callback for debugging
+            mainHandler.post {
+                listener?.onRawCallback(type, intData, floatData, stringData)
             }
 
-            // Type 0 = Key events or other notifications
-            Log.i(TAG, "Event received: type=$type, value=$value")
+            when (type) {
+                CALLBACK_TYPE_FREQUENCY -> {
+                    // Type 1 = Frequency update
+                    // Value is frequency in 10kHz units (e.g., 9880 = 98.8 MHz, 10490 = 104.9 MHz)
+                    val value = intData?.firstOrNull() ?: return
+                    if (value > 8700 && value < 10900) {
+                        Log.i(TAG, "Frequency update: ${value / 100.0} MHz")
+                        mainHandler.post {
+                            listener?.onFrequencyUpdate(value)
+                        }
+                    }
+                }
 
-            mainHandler.post {
-                handleKeyCode(value)
-                listener?.onKeyEvent(value, intData)
+                CALLBACK_TYPE_PRESET_FREQ -> {
+                    // Type 4 = Preset frequencies
+                    // intData[0] = Preset index (0-11 for FM, 65536+ for AM)
+                    // intData[1] = Frequency in 10kHz (e.g., 9040 = 90.4 MHz)
+                    val presetIndex = intData?.getOrNull(0) ?: return
+                    val frequency = intData.getOrNull(1) ?: 0
+                    if (frequency > 0) {
+                        val freqMhz = frequency / 100f
+                        val isAM = presetIndex >= AM_PRESET_OFFSET
+                        val actualIndex = if (isAM) presetIndex - AM_PRESET_OFFSET else presetIndex
+                        Log.i(TAG, "Preset received: index=$actualIndex, freq=$freqMhz MHz, isAM=$isAM")
+                        mainHandler.post {
+                            listener?.onPresetReceived(actualIndex, freqMhz, isAM)
+                        }
+                    }
+                }
+
+                CALLBACK_TYPE_PRESET_NAME -> {
+                    // Type 14 = Preset names
+                    // intData[0] = Preset index
+                    // stringData[0] = Station name
+                    val presetIndex = intData?.getOrNull(0) ?: return
+                    val name = stringData?.getOrNull(0)
+                    if (!name.isNullOrBlank()) {
+                        val isAM = presetIndex >= AM_PRESET_OFFSET
+                        val actualIndex = if (isAM) presetIndex - AM_PRESET_OFFSET else presetIndex
+                        Log.i(TAG, "Preset name received: index=$actualIndex, name='$name', isAM=$isAM")
+                        mainHandler.post {
+                            listener?.onPresetNameReceived(actualIndex, name, isAM)
+                        }
+                    }
+                }
+
+                CALLBACK_TYPE_KEY_EVENT_FYT -> {
+                    // Type 28 (0x1C) = Key events on FYT devices
+                    // intData[0]: 1 = NEXT, 0 = PREV (based on observation)
+                    val keyCode = intData?.firstOrNull() ?: return
+                    Log.i(TAG, "FYT KEY EVENT: keyCode=$keyCode (${if (keyCode == 1) "NEXT" else "PREV"})")
+                    mainHandler.post {
+                        when (keyCode) {
+                            1 -> listener?.onNextPressed()
+                            0 -> listener?.onPrevPressed()
+                            else -> Log.d(TAG, "Unknown FYT keyCode: $keyCode")
+                        }
+                        listener?.onKeyEvent(keyCode, intData)
+                    }
+                }
+
+                CALLBACK_TYPE_KEY_EVENT_NAVRADIO -> {
+                    // Type 60 (0x3C) = Key events (NavRadio+ style, may not be used on all devices)
+                    val keyCode = intData?.firstOrNull() ?: return
+                    Log.i(TAG, "NAVRADIO KEY EVENT: keyCode=$keyCode")
+                    mainHandler.post {
+                        handleFytKeyCode(keyCode)
+                        listener?.onKeyEvent(keyCode, intData)
+                    }
+                }
+
+                else -> {
+                    // Log unknown types for discovery
+                    Log.d(TAG, "Unknown callback type: $type (0x${type.toString(16)})")
+                }
             }
         }
     }
@@ -123,8 +220,8 @@ class SyuToolkitManager(
                     isConnected = true
                     Log.i(TAG, "IRemoteToolkit obtained successfully")
 
-                    // Register for key events
-                    registerForKeyEvents()
+                    // Register for events like NavRadio+ does
+                    registerForAllEvents()
 
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to initialize toolkit", e)
@@ -137,8 +234,8 @@ class SyuToolkitManager(
             isConnected = false
             isRegistered = false
             toolkit = null
-            msModule = null
-            ssModule = null
+            radioModule = null
+            registeredEventTypes.clear()
 
             // Try to reconnect after a delay
             serviceHandler.postDelayed({
@@ -147,85 +244,79 @@ class SyuToolkitManager(
         }
     }
 
-    private fun registerForKeyEvents() {
+    /**
+     * Register for all events like NavRadio+ does.
+     * NavRadio+ uses Module ID 1 (radio) and registers for event types 0-99.
+     */
+    private fun registerForAllEvents() {
         try {
-            // Get MS module (module 0) - Main System events
-            msModule = toolkit?.getRemoteModule(MODULE_ID_MS)
+            // Get Radio module (module 1) - this is what NavRadio+ uses!
+            radioModule = toolkit?.getRemoteModule(MODULE_ID_RADIO)
 
-            if (msModule == null) {
-                Log.e(TAG, "Failed to get MS module")
-            } else {
-                Log.d(TAG, "Got MS module, registering for key events...")
+            if (radioModule == null) {
+                Log.e(TAG, "Failed to get Radio module (ID=$MODULE_ID_RADIO)")
+                return
+            }
 
-                // Register for key events (type 0x22)
-                msModule?.register(moduleCallback, EVENT_TYPE_KEY, REGISTER_FLAG_DEFAULT)
-                Log.i(TAG, "MS module: registered for key events (eventType=$EVENT_TYPE_KEY)")
+            Log.d(TAG, "Got Radio module, registering for ALL event types 0-${MAX_EVENT_TYPES - 1}...")
 
-                // Also try to register for other event types that might contain key events
-                val eventTypes = listOf(0, 1, 2, 3, 4, 5, 10, 20, 32, 0x100)
-                for (eventType in eventTypes) {
-                    try {
-                        msModule?.register(moduleCallback, eventType, REGISTER_FLAG_DEFAULT)
-                        Log.d(TAG, "MS module: registered for eventType=$eventType")
-                    } catch (e: Exception) {
-                        Log.d(TAG, "MS module: could not register for eventType=$eventType: ${e.message}")
-                    }
+            // Register for ALL event types 0-99 like NavRadio+ does
+            var successCount = 0
+            for (eventType in 0 until MAX_EVENT_TYPES) {
+                try {
+                    radioModule?.register(moduleCallback, eventType, REGISTER_FLAG_DEFAULT)
+                    registeredEventTypes.add(eventType)
+                    successCount++
+                } catch (e: Exception) {
+                    // Some event types may not be supported, that's OK
+                    Log.v(TAG, "Could not register for eventType=$eventType: ${e.message}")
                 }
             }
 
-            // Get SS module (module 1) - System Settings events
-            ssModule = toolkit?.getRemoteModule(MODULE_ID_SS)
-
-            if (ssModule == null) {
-                Log.w(TAG, "Failed to get SS module")
-            } else {
-                Log.d(TAG, "Got SS module, registering for events...")
-
-                // Register for key events
-                val eventTypes = listOf(0, EVENT_TYPE_KEY, 1, 2, 3, 4, 5, 10, 20, 32, 0x100)
-                for (eventType in eventTypes) {
-                    try {
-                        ssModule?.register(moduleCallback, eventType, REGISTER_FLAG_DEFAULT)
-                        Log.d(TAG, "SS module: registered for eventType=$eventType")
-                    } catch (e: Exception) {
-                        Log.d(TAG, "SS module: could not register for eventType=$eventType: ${e.message}")
-                    }
-                }
-            }
-
+            Log.i(TAG, "Registered for $successCount event types on Radio module")
             isRegistered = true
 
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to register for key events", e)
+            Log.e(TAG, "Failed to register for events", e)
         }
     }
 
-    private fun handleKeyCode(keyCode: Int) {
-        Log.d(TAG, "Handling keyCode: $keyCode")
+    /**
+     * Handle FYT-specific key codes.
+     * These are 0-6 range, NOT Android standard keycodes.
+     * The exact mapping needs to be discovered experimentally on your device.
+     */
+    private fun handleFytKeyCode(keyCode: Int) {
+        Log.d(TAG, "Handling FYT keyCode: $keyCode")
 
+        // TODO: These mappings need to be verified on actual device!
+        // Press each steering wheel button and check the logs to find the correct mapping.
         when (keyCode) {
-            KEYCODE_MEDIA_NEXT -> {
-                Log.i(TAG, "NEXT pressed")
+            FYT_KEY_0 -> {
+                Log.i(TAG, "FYT_KEY_0 pressed - assuming NEXT")
                 listener?.onNextPressed()
             }
-            KEYCODE_MEDIA_PREVIOUS -> {
-                Log.i(TAG, "PREV pressed")
+            FYT_KEY_1 -> {
+                Log.i(TAG, "FYT_KEY_1 pressed - assuming PREV")
                 listener?.onPrevPressed()
             }
-            KEYCODE_MEDIA_PLAY_PAUSE, KEYCODE_MEDIA_PLAY, KEYCODE_MEDIA_PAUSE -> {
-                Log.i(TAG, "PLAY/PAUSE pressed")
-                listener?.onPlayPausePressed()
-            }
-            KEYCODE_VOLUME_UP -> {
-                Log.d(TAG, "VOL UP pressed")
+            FYT_KEY_2 -> {
+                Log.i(TAG, "FYT_KEY_2 pressed - assuming VOL+")
                 listener?.onVolumeUp()
             }
-            KEYCODE_VOLUME_DOWN -> {
-                Log.d(TAG, "VOL DOWN pressed")
+            FYT_KEY_3 -> {
+                Log.i(TAG, "FYT_KEY_3 pressed - assuming VOL-")
                 listener?.onVolumeDown()
             }
+            FYT_KEY_4 -> {
+                Log.i(TAG, "FYT_KEY_4 pressed - assuming PLAY/PAUSE")
+                listener?.onPlayPausePressed()
+            }
+            FYT_KEY_5, FYT_KEY_6 -> {
+                Log.i(TAG, "FYT_KEY_$keyCode pressed - unknown function")
+            }
             else -> {
-                Log.d(TAG, "Unknown keyCode: $keyCode")
+                Log.d(TAG, "Unknown FYT keyCode: $keyCode")
             }
         }
     }
@@ -273,9 +364,17 @@ class SyuToolkitManager(
      */
     fun disconnect() {
         try {
-            if (isRegistered && msModule != null) {
-                msModule?.unregister(moduleCallback, EVENT_TYPE_KEY)
-                Log.d(TAG, "Unregistered from key events")
+            // Unregister from all registered event types
+            if (isRegistered && radioModule != null) {
+                for (eventType in registeredEventTypes) {
+                    try {
+                        radioModule?.unregister(moduleCallback, eventType)
+                    } catch (e: Exception) {
+                        Log.v(TAG, "Could not unregister eventType=$eventType")
+                    }
+                }
+                registeredEventTypes.clear()
+                Log.d(TAG, "Unregistered from all event types")
             }
 
             if (isConnected) {
@@ -289,8 +388,7 @@ class SyuToolkitManager(
         isConnected = false
         isRegistered = false
         toolkit = null
-        msModule = null
-        ssModule = null
+        radioModule = null
     }
 
     /**

@@ -103,6 +103,12 @@ class MainActivity : AppCompatActivity() {
     private var steeringWheelKeyManager: SteeringWheelKeyManager? = null
     private var syuToolkitManager: SyuToolkitManager? = null
 
+    // Preset Import via SYU Service Callbacks
+    private var isCollectingPresets = false
+    private val collectedPresets = mutableMapOf<Int, Pair<Float, String?>>()  // index -> (freq, name)
+    private val presetImportHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var presetImportTimeoutRunnable: Runnable? = null
+
     // Now Playing Bar
     private var nowPlayingBar: View? = null
     private var nowPlayingCover: ImageView? = null
@@ -386,6 +392,10 @@ class MainActivity : AppCompatActivity() {
         updateModeButton()
         loadFavoritesFilterState()
         loadStationsForCurrentMode()
+
+        // Check if user wants to import stations from original app (via SYU callbacks)
+        checkAndOfferStationImport()
+
         updatePowerButton()
         updateFavoriteButton()
 
@@ -425,36 +435,40 @@ class MainActivity : AppCompatActivity() {
             context = this,
             listener = object : SyuToolkitManager.KeyEventListener {
                 override fun onNextPressed() {
+                    android.util.Log.i("fytFM", "SYU onNextPressed called! isRadioOn=$isRadioOn")
                     runOnUiThread {
-                        logSwcEvent("SYU: NEXT")
-                        if (isRadioOn) skipToNextStation()
+                        // Always allow station changes via steering wheel
+                        skipToNextStation()
                     }
                 }
 
                 override fun onPrevPressed() {
+                    android.util.Log.i("fytFM", "SYU onPrevPressed called! isRadioOn=$isRadioOn")
                     runOnUiThread {
-                        logSwcEvent("SYU: PREV")
-                        if (isRadioOn) skipToPreviousStation()
+                        // Always allow station changes via steering wheel
+                        skipToPreviousStation()
                     }
                 }
 
                 override fun onPlayPausePressed() {
                     runOnUiThread {
-                        logSwcEvent("SYU: PLAY/PAUSE")
                         toggleRadioPower()
                     }
                 }
 
                 override fun onVolumeUp() {
-                    runOnUiThread { logSwcEvent("SYU: VOL+") }
+                    // Volume handled by system
                 }
 
                 override fun onVolumeDown() {
-                    runOnUiThread { logSwcEvent("SYU: VOL-") }
+                    // Volume handled by system
                 }
 
                 override fun onKeyEvent(keyCode: Int, intData: IntArray?) {
                     android.util.Log.d("fytFM", "SYU: Raw key event: keyCode=$keyCode, intData=${intData?.toList()}")
+                    val keyName = getKeyName(keyCode)
+                    val display = if (keyName != null) "SYU: $keyCode ($keyName)" else "SYU: $keyCode"
+                    runOnUiThread { logSwcEvent(display) }
                 }
 
                 override fun onFrequencyUpdate(frequencyKhz: Int) {
@@ -462,42 +476,75 @@ class MainActivity : AppCompatActivity() {
                     val frequencyMhz = frequencyKhz / 100.0f
                     android.util.Log.d("fytFM", "SYU: Frequency update ignoriert: $frequencyMhz MHz")
                 }
+
+                override fun onRawCallback(type: Int, intData: IntArray?, floatData: FloatArray?, stringData: Array<String>?) {
+                    // Debug: Log all raw callbacks to discover event types
+                    android.util.Log.d("fytFM", "SYU RAW: type=$type (0x${type.toString(16)}), intData=${intData?.toList()}, floatData=${floatData?.toList()}, stringData=${stringData?.toList()}")
+                    runOnUiThread {
+                        logSwcEvent("SYU RAW type=$type int=${intData?.firstOrNull()}")
+                    }
+                }
+
+                override fun onPresetReceived(index: Int, frequencyMhz: Float, isAM: Boolean) {
+                    if (!isAM && isCollectingPresets && frequencyMhz in 87.5f..108.0f) {
+                        android.util.Log.i("fytFM", "Import: Preset empfangen - index=$index, freq=$frequencyMhz MHz")
+                        runOnUiThread {
+                            val existing = collectedPresets[index]
+                            collectedPresets[index] = Pair(frequencyMhz, existing?.second)
+                        }
+                    }
+                }
+
+                override fun onPresetNameReceived(index: Int, name: String, isAM: Boolean) {
+                    if (!isAM && isCollectingPresets) {
+                        android.util.Log.i("fytFM", "Import: Preset-Name empfangen - index=$index, name='$name'")
+                        runOnUiThread {
+                            val existing = collectedPresets[index]
+                            if (existing != null) {
+                                collectedPresets[index] = Pair(existing.first, name)
+                            }
+                        }
+                    }
+                }
             }
         )
         syuToolkitManager?.connect()
         android.util.Log.i("fytFM", "SYU Toolkit Manager connecting...")
 
-        // Fallback method: Broadcast receiver for /customize/radio/* actions
+        // Fallback method: DISABLED - using SyuToolkitManager only
+        /*
         steeringWheelKeyManager = SteeringWheelKeyManager(
             context = this,
             listener = object : SteeringWheelKeyManager.KeyEventListener {
                 override fun onNextPressed() {
                     runOnUiThread {
-                        logSwcEvent("BC: NEXT")
                         if (isRadioOn) skipToNextStation()
                     }
                 }
 
                 override fun onPrevPressed() {
                     runOnUiThread {
-                        logSwcEvent("BC: PREV")
                         if (isRadioOn) skipToPreviousStation()
                     }
                 }
 
                 override fun onPlayPausePressed() {
                     runOnUiThread {
-                        logSwcEvent("BC: PLAY/PAUSE")
                         toggleRadioPower()
                     }
                 }
 
                 override fun onVolumeUp() {
-                    runOnUiThread { logSwcEvent("BC: VOL+") }
+                    // Volume handled by system
                 }
 
                 override fun onVolumeDown() {
-                    runOnUiThread { logSwcEvent("BC: VOL-") }
+                    // Volume handled by system
+                }
+
+                override fun onRawKeyEvent(keyCode: Int, keyName: String?) {
+                    val display = if (keyName != null) "BC: $keyCode ($keyName)" else "BC: $keyCode"
+                    runOnUiThread { logSwcEvent(display) }
                 }
             }
         )
@@ -507,6 +554,7 @@ class MainActivity : AppCompatActivity() {
             val method = if (steeringWheelKeyManager?.isUtilServiceAvailable() == true) "util_service" else "broadcast"
             android.util.Log.i("fytFM", "Steering wheel broadcast receiver registered (via $method)")
         }
+        */
     }
 
     /**
@@ -1334,6 +1382,20 @@ class MainActivity : AppCompatActivity() {
                 }
                 else -> false
             }
+        }
+    }
+
+    private fun getKeyName(keyCode: Int): String? {
+        return when (keyCode) {
+            87 -> "NEXT"
+            88 -> "PREV"
+            85 -> "PLAY/PAUSE"
+            126 -> "PLAY"
+            127 -> "PAUSE"
+            79 -> "HOOK"
+            24 -> "VOL+"
+            25 -> "VOL-"
+            else -> null
         }
     }
 
@@ -4863,6 +4925,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun skipToPreviousStation() {
         val stations = stationAdapter.getStations()
+        android.util.Log.d("fytFM", "skipToPreviousStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
 
         val currentFreq = frequencyScale.getFrequency()
@@ -4870,12 +4933,14 @@ class MainActivity : AppCompatActivity() {
             ?: stations.lastOrNull()
 
         prevStation?.let {
+            android.util.Log.i("fytFM", "skipToPreviousStation: ${currentFreq} -> ${it.frequency} MHz")
             frequencyScale.setFrequency(it.frequency)
         }
     }
 
     private fun skipToNextStation() {
         val stations = stationAdapter.getStations()
+        android.util.Log.d("fytFM", "skipToNextStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
 
         val currentFreq = frequencyScale.getFrequency()
@@ -4883,6 +4948,7 @@ class MainActivity : AppCompatActivity() {
             ?: stations.firstOrNull()
 
         nextStation?.let {
+            android.util.Log.i("fytFM", "skipToNextStation: ${currentFreq} -> ${it.frequency} MHz")
             frequencyScale.setFrequency(it.frequency)
         }
     }
@@ -5273,7 +5339,7 @@ class MainActivity : AppCompatActivity() {
         twUtil?.close()
         updateRepository.destroy()
         rdsLogRepository.destroy()
-        steeringWheelKeyManager?.unregister()
+        // steeringWheelKeyManager?.unregister()  // Fallback disabled
         syuToolkitManager?.disconnect()
         // Turn off radio when app closes
         if (isRadioOn) {
@@ -5289,5 +5355,122 @@ class MainActivity : AppCompatActivity() {
     private fun loadLastFrequency(): Float {
         val prefs = getSharedPreferences("fytfm_prefs", Context.MODE_PRIVATE)
         return prefs.getFloat("last_frequency", 90.4f) // Default: 90.4 MHz
+    }
+
+    // === Station Import from Original Radio App ===
+
+    /**
+     * Checks if station list is empty and if we haven't asked yet.
+     * Shows dialog to offer importing from original radio app.
+     */
+    private fun checkAndOfferStationImport() {
+        // Only check FM stations for now
+        val fmStations = presetRepository.loadFmStations()
+        val hasAsked = presetRepository.hasAskedAboutImport()
+
+        android.util.Log.i("fytFM", "checkAndOfferStationImport: fmStations.size=${fmStations.size}, hasAsked=$hasAsked")
+
+        if (fmStations.isEmpty() && !hasAsked) {
+            android.util.Log.i("fytFM", "checkAndOfferStationImport: Zeige Import-Dialog")
+            showImportStationsDialog()
+        } else {
+            android.util.Log.d("fytFM", "checkAndOfferStationImport: Dialog nicht nötig")
+        }
+    }
+
+    private fun showImportStationsDialog() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Sender importieren?")
+            .setMessage("Die Senderliste ist leer.\n\nMöchtest du die Sender von der Original-Radio-App importieren?")
+            .setPositiveButton("Ja") { _, _ ->
+                presetRepository.setAskedAboutImport(true)
+                importStationsFromOriginalApp()
+            }
+            .setNegativeButton("Nein") { _, _ ->
+                presetRepository.setAskedAboutImport(true)
+                android.widget.Toast.makeText(this, "Du kannst später Sender scannen oder manuell hinzufügen", android.widget.Toast.LENGTH_LONG).show()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Import stations from the original FYT radio app via SYU Service Callbacks.
+     * Uses Type 4 (preset frequencies) and Type 14 (preset names) callbacks.
+     */
+    private fun importStationsFromOriginalApp() {
+        android.util.Log.i("fytFM", "Import: Starte Preset-Sammlung via SYU Callbacks...")
+        android.widget.Toast.makeText(this, "Sammle Sender vom SYU Service...", android.widget.Toast.LENGTH_SHORT).show()
+
+        // Clear previous data and start collecting
+        collectedPresets.clear()
+        isCollectingPresets = true
+
+        // Cancel any existing timeout
+        presetImportTimeoutRunnable?.let { presetImportHandler.removeCallbacks(it) }
+
+        // Set timeout to finish collecting after 3 seconds
+        presetImportTimeoutRunnable = Runnable {
+            finishPresetCollection()
+        }
+        presetImportHandler.postDelayed(presetImportTimeoutRunnable!!, 3000)
+
+        // Request presets from SYU service (may trigger callbacks)
+        try {
+            // Query each preset slot 0-11 for FM
+            for (i in 0..11) {
+                syuToolkitManager?.getModuleData(1, 4, intArrayOf(i), null, null)
+                syuToolkitManager?.getModuleData(1, 14, intArrayOf(i), null, null)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Import: Error querying presets", e)
+        }
+    }
+
+    /**
+     * Called after timeout to finish collecting presets and save them.
+     */
+    private fun finishPresetCollection() {
+        isCollectingPresets = false
+        presetImportTimeoutRunnable = null
+
+        android.util.Log.i("fytFM", "Import: Sammlung beendet, ${collectedPresets.size} Presets empfangen")
+
+        if (collectedPresets.isEmpty()) {
+            android.widget.Toast.makeText(this, "Keine Sender von der Original-App empfangen", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // Convert collected presets to RadioStation list
+        val stations = collectedPresets.values
+            .filter { (freq, _) -> freq in 87.5f..108.0f }
+            .map { (freq, name) ->
+                at.planqton.fytfm.data.RadioStation(
+                    frequency = freq,
+                    name = name,
+                    rssi = 0,
+                    isAM = false,
+                    isFavorite = true  // Imported presets are favorites
+                )
+            }
+            .sortedBy { it.frequency }
+            .distinctBy { (it.frequency * 10).toInt() }
+
+        if (stations.isEmpty()) {
+            android.widget.Toast.makeText(this, "Keine gültigen Sender gefunden", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // Save and reload
+        presetRepository.saveFmStations(stations)
+        loadStationsForCurrentMode()
+
+        android.widget.Toast.makeText(this, "${stations.size} Sender importiert!", android.widget.Toast.LENGTH_SHORT).show()
+        android.util.Log.i("fytFM", "Import: ${stations.size} Sender gespeichert")
+
+        // Log imported stations
+        stations.forEach { station ->
+            android.util.Log.d("fytFM", "Import: ${station.frequency} MHz - ${station.name ?: "(kein Name)"}")
+        }
     }
 }

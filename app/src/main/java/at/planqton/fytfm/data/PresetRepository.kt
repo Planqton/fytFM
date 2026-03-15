@@ -366,4 +366,13 @@ class PresetRepository(context: Context) {
     fun setCarouselMode(enabled: Boolean) {
         settingsPrefs.edit().putBoolean("carousel_mode", enabled).apply()
     }
+
+    // Import Dialog - nur einmal beim ersten Start fragen
+    fun hasAskedAboutImport(): Boolean {
+        return settingsPrefs.getBoolean("asked_about_import", false)
+    }
+
+    fun setAskedAboutImport(asked: Boolean) {
+        settingsPrefs.edit().putBoolean("asked_about_import", asked).apply()
+    }
 }

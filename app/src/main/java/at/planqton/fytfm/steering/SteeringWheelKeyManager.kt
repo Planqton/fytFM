@@ -116,6 +116,7 @@ class SteeringWheelKeyManager(
         fun onPlayPausePressed()
         fun onVolumeUp()
         fun onVolumeDown()
+        fun onRawKeyEvent(keyCode: Int, keyName: String?) {}  // Default empty implementation
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -268,6 +269,22 @@ class SteeringWheelKeyManager(
 
     private fun handleKeyCode(keyCode: Int) {
         Log.d(TAG, "Handling keyCode: $keyCode")
+
+        // Determine key name for debug display
+        val keyName = when (keyCode) {
+            KEYCODE_MEDIA_NEXT -> "NEXT"
+            KEYCODE_MEDIA_PREVIOUS -> "PREV"
+            KEYCODE_MEDIA_PLAY_PAUSE -> "PLAY/PAUSE"
+            KEYCODE_MEDIA_PLAY -> "PLAY"
+            KEYCODE_MEDIA_PAUSE -> "PAUSE"
+            KEYCODE_HEADSETHOOK -> "HOOK"
+            KEYCODE_VOLUME_UP -> "VOL+"
+            KEYCODE_VOLUME_DOWN -> "VOL-"
+            else -> null
+        }
+
+        // Always notify raw key event (for debug display)
+        listener?.onRawKeyEvent(keyCode, keyName)
 
         when (keyCode) {
             KEYCODE_MEDIA_NEXT -> {
