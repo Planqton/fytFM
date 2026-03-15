@@ -1,16 +1,21 @@
 package at.planqton.fytfm.media
 
+import android.content.Context
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import java.io.File
 import java.io.FileInputStream
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 /**
  * Simple HTTP server that serves cover images locally.
- * Used as fallback when Spotify URL is not available but local cached image exists.
- * Only started when local Spotify cache is enabled.
+ * Binds to all interfaces so other apps can access it.
  */
-class CoverHttpServer(private val port: Int = 8765) : NanoHTTPD(port) {
+class CoverHttpServer(
+    private val context: Context,
+    private val port: Int = 8765
+) : NanoHTTPD("0.0.0.0", port) {
 
     companion object {
         private const val TAG = "CoverHttpServer"
@@ -32,13 +37,40 @@ class CoverHttpServer(private val port: Int = 8765) : NanoHTTPD(port) {
     }
 
     /**
-     * Get the URL to access the current cover
-     * Includes timestamp parameter to prevent client caching
+     * Get the URL to access the current cover using device IP
      */
     fun getCoverUrl(): String? {
-        return if (currentCoverPath != null) {
+        if (currentCoverPath == null) return null
+        val ip = getDeviceIpAddress()
+        return if (ip != null) {
+            "http://$ip:$port/cover.jpg?v=$coverVersion"
+        } else {
+            // Fallback to localhost
             "http://127.0.0.1:$port/cover.jpg?v=$coverVersion"
-        } else null
+        }
+    }
+
+    /**
+     * Get the device's IP address
+     */
+    private fun getDeviceIpAddress(): String? {
+        // Use NetworkInterface (doesn't need permissions)
+        try {
+            NetworkInterface.getNetworkInterfaces()?.toList()?.forEach { networkInterface ->
+                networkInterface.inetAddresses?.toList()?.forEach { address ->
+                    if (!address.isLoopbackAddress && address is Inet4Address) {
+                        val ip = address.hostAddress
+                        if (ip != null && ip != "0.0.0.0") {
+                            Log.d(TAG, "Using network interface IP: $ip")
+                            return ip
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting IP address", e)
+        }
+        return null
     }
 
     override fun serve(session: IHTTPSession): Response {

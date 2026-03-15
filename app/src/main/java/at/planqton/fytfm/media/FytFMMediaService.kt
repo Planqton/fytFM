@@ -188,9 +188,10 @@ class FytFMMediaService : MediaLibraryService() {
         // Artist/Subtitle: Frequenz (manche Player zeigen Artist, andere Subtitle)
         val displayTitle = rt?.takeIf { it.isNotBlank() } ?: stationName
 
-        // Deezer CDN URL für Artwork
-        val artworkUri: Uri? = if (!coverUrl.isNullOrBlank() && coverUrl.startsWith("http")) {
-            Uri.parse(coverUrl)
+        // Artwork nur als Bitmap-Daten
+        val artworkPath = localCoverPath ?: radioLogoPath
+        val artworkData: ByteArray? = if (!artworkPath.isNullOrBlank() && File(artworkPath).exists()) {
+            loadImageAsBytes(artworkPath)
         } else null
 
         val metadata = MediaMetadata.Builder()
@@ -203,9 +204,9 @@ class FytFMMediaService : MediaLibraryService() {
             .setIsPlayable(true)
             .setIsBrowsable(false)
             .apply {
-                if (artworkUri != null) {
-                    setArtworkUri(artworkUri)
-                    Log.d(TAG, "Setting artworkUri: $artworkUri")
+                if (artworkData != null) {
+                    setArtworkData(artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    Log.d(TAG, "Setting artworkData: ${artworkData.size} bytes")
                 }
             }
             .build()
@@ -218,7 +219,7 @@ class FytFMMediaService : MediaLibraryService() {
         val coverForLegacy = localCoverPath ?: radioLogoPath
         mediaButtonSession?.updateMetadata(displayForLegacy, frequency, coverForLegacy)
 
-        Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt | cover=$artworkUri | radioLogo=$radioLogoPath")
+        Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt | data=${artworkData?.size ?: 0}b")
     }
 
     /**
@@ -226,7 +227,7 @@ class FytFMMediaService : MediaLibraryService() {
      */
     private fun ensureCoverServerRunning() {
         if (coverServer == null) {
-            coverServer = CoverHttpServer().also { it.start() }
+            coverServer = CoverHttpServer(this).also { it.start() }
         }
     }
 
