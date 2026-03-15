@@ -704,6 +704,16 @@
             android:buttonTint="#FFFFFF"
             android:checked="false" />
 
+        <CheckBox
+            android:id="@+id/checkStationOverlayDebug"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Station Overlay"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:buttonTint="#FFFFFF"
+            android:checked="false" />
+
         <!-- Global Alpha Slider for all Debug Overlays -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -1634,6 +1644,82 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Station Overlay Debug Window -->
+    <LinearLayout
+        android:id="@+id/debugStationOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="16dp"
+        android:background="@drawable/debug_overlay_background"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:minWidth="220dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Station Overlay Debug"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <CheckBox
+            android:id="@+id/checkStationOverlayPermanent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Permanent anzeigen"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:buttonTint="#FFFFFF"
+            android:checked="false" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Status:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugStationOverlayStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="hidden"
+                android:textColor="#FFAA00"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:text="Stations:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugStationOverlayCount"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp"
                 android:fontFamily="monospace" />

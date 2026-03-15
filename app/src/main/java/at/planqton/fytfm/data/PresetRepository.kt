@@ -384,4 +384,22 @@ class PresetRepository(context: Context) {
     fun setShowStationChangeToast(enabled: Boolean) {
         settingsPrefs.edit().putBoolean("show_station_change_toast", enabled).apply()
     }
+
+    // Permanent Station Overlay (Debug - zeigt Overlay permanent an)
+    fun isPermanentStationOverlay(): Boolean {
+        return settingsPrefs.getBoolean("permanent_station_overlay", false)
+    }
+
+    fun setPermanentStationOverlay(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("permanent_station_overlay", enabled).apply()
+    }
+
+    // Revert Prev/Next (Lenkradtasten Richtung umkehren)
+    fun isRevertPrevNext(): Boolean {
+        return settingsPrefs.getBoolean("revert_prev_next", false)
+    }
+
+    fun setRevertPrevNext(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("revert_prev_next", enabled).apply()
+    }
 }

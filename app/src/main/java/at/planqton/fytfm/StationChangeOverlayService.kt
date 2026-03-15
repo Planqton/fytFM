@@ -16,29 +16,59 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.TextView
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.LinearSmoothScroller
+import androidx.recyclerview.widget.RecyclerView
 import at.planqton.fytfm.data.PresetRepository
+import coil.load
+import java.io.File
 
 class StationChangeOverlayService : Service() {
 
     companion object {
         const val ACTION_SHOW_OVERLAY = "at.planqton.fytfm.SHOW_STATION_OVERLAY"
+        const val ACTION_SHOW_PERMANENT = "at.planqton.fytfm.SHOW_PERMANENT_OVERLAY"
+        const val ACTION_HIDE_OVERLAY = "at.planqton.fytfm.HIDE_OVERLAY"
         const val EXTRA_FREQUENCY = "frequency"
+        const val EXTRA_OLD_FREQUENCY = "old_frequency"
+        const val EXTRA_STATIONS = "stations"
+        const val EXTRA_IS_AM = "is_am"
+        const val EXTRA_APP_IN_FOREGROUND = "app_in_foreground"
         private const val CHANNEL_ID = "station_change_overlay"
         private const val NOTIFICATION_ID = 2001
-        private const val OVERLAY_DURATION_MS = 2500L
     }
+
+    data class StationData(
+        val frequency: Float,
+        val name: String?,
+        val logoPath: String?,
+        val isAM: Boolean = false
+    )
 
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
+    private var recyclerView: RecyclerView? = null
+    private var carouselAdapter: OverlayCarouselAdapter? = null
     private var isOverlayVisible = false
+    private var isPermanentMode = false
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var presetRepository: PresetRepository
+
+    private var currentStations: List<StationData> = emptyList()
 
     private val hideOverlayRunnable = Runnable {
         hideOverlay()
     }
+
+    private var scrollToNewRunnable: Runnable? = null
+    private var centerRunnable: Runnable? = null
+
+    // Anker-Position: Der Sender der zentriert war als Overlay ERSTMALS aufging
+    private var anchorPosition: Int = -1
 
     private val stationChangeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -58,7 +88,6 @@ class StationChangeOverlayService : Service() {
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
 
-        // Register broadcast receiver
         val filter = IntentFilter(ACTION_SHOW_OVERLAY)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(stationChangeReceiver, filter, RECEIVER_NOT_EXPORTED)
@@ -74,9 +103,7 @@ class StationChangeOverlayService : Service() {
         hideOverlay()
         try {
             unregisterReceiver(stationChangeReceiver)
-        } catch (e: Exception) {
-            // Receiver not registered
-        }
+        } catch (e: Exception) {}
         android.util.Log.i("fytFM", "StationChangeOverlayService stopped")
     }
 
@@ -84,36 +111,158 @@ class StationChangeOverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent?.let {
-            if (it.action == ACTION_SHOW_OVERLAY) {
-                val frequency = it.getFloatExtra(EXTRA_FREQUENCY, 0f)
-                if (frequency > 0 && presetRepository.isShowStationChangeToast()) {
-                    showOverlay(frequency)
+            when (it.action) {
+                ACTION_SHOW_OVERLAY -> {
+                    val frequency = it.getFloatExtra(EXTRA_FREQUENCY, 0f)
+                    val oldFrequency = it.getFloatExtra(EXTRA_OLD_FREQUENCY, 0f)
+                    val isAM = it.getBooleanExtra(EXTRA_IS_AM, false)
+                    val appInForeground = it.getBooleanExtra(EXTRA_APP_IN_FOREGROUND, false)
+
+                    // Don't show overlay if app is in foreground (unless permanent mode)
+                    if (appInForeground && !isPermanentMode) {
+                        return@let
+                    }
+
+                    // Parse stations from intent
+                    val stationsJson = it.getStringExtra(EXTRA_STATIONS)
+                    if (!stationsJson.isNullOrBlank()) {
+                        parseStations(stationsJson)
+                    }
+
+                    if (frequency > 0 && (presetRepository.isShowStationChangeToast() || isPermanentMode)) {
+                        // Don't change isPermanentMode here - keep it as is
+                        showOverlay(frequency, isAM, oldFrequency)
+                    }
+                }
+                ACTION_SHOW_PERMANENT -> {
+                    val frequency = it.getFloatExtra(EXTRA_FREQUENCY, 0f)
+                    val isAM = it.getBooleanExtra(EXTRA_IS_AM, false)
+
+                    // Parse stations from intent
+                    val stationsJson = it.getStringExtra(EXTRA_STATIONS)
+                    if (!stationsJson.isNullOrBlank()) {
+                        parseStations(stationsJson)
+                    }
+
+                    if (frequency > 0) {
+                        isPermanentMode = true
+                        showOverlay(frequency, isAM)
+                    }
+                }
+                ACTION_HIDE_OVERLAY -> {
+                    isPermanentMode = false
+                    hideOverlay()
                 }
             }
         }
         return START_STICKY
     }
 
-    private fun showOverlay(frequency: Float) {
+    private fun parseStations(json: String) {
+        try {
+            val stations = mutableListOf<StationData>()
+            val jsonArray = org.json.JSONArray(json)
+            for (i in 0 until jsonArray.length()) {
+                val obj = jsonArray.getJSONObject(i)
+                stations.add(StationData(
+                    frequency = obj.getDouble("frequency").toFloat(),
+                    name = obj.optString("name").takeIf { it.isNotBlank() },
+                    logoPath = obj.optString("logoPath").takeIf { it.isNotBlank() },
+                    isAM = obj.optBoolean("isAM", false)
+                ))
+            }
+            currentStations = stations
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Error parsing stations: ${e.message}")
+        }
+    }
+
+    private fun showOverlay(frequency: Float, isAM: Boolean = false, oldFrequency: Float = 0f) {
         handler.post {
             try {
-                // Cancel any pending hide
+                // Cancel all previous callbacks
                 handler.removeCallbacks(hideOverlayRunnable)
+                scrollToNewRunnable?.let { handler.removeCallbacks(it) }
+                centerRunnable?.let { handler.removeCallbacks(it) }
 
                 if (overlayView == null) {
                     createOverlayView()
                 }
 
-                // Update frequency text
-                overlayView?.findViewById<TextView>(R.id.tvFrequency)?.text =
-                    String.format("%.1f MHz", frequency)
+                // Update adapter - mark the NEW station as selected
+                carouselAdapter?.setStations(currentStations, frequency, isAM)
 
-                if (!isOverlayVisible) {
-                    addOverlayToWindow()
+                // Find position of NEW station (aktuell gewählt, große Kachel)
+                val newPosition = currentStations.indexOfFirst {
+                    Math.abs(it.frequency - frequency) < 0.05f && it.isAM == isAM
                 }
 
-                // Schedule hide
-                handler.postDelayed(hideOverlayRunnable, OVERLAY_DURATION_MS)
+                val wasAlreadyVisible = isOverlayVisible
+
+                if (!wasAlreadyVisible) {
+                    // ERSTMALIGES Öffnen - Anker = vorheriger Sender
+                    anchorPosition = if (oldFrequency > 0) {
+                        currentStations.indexOfFirst {
+                            Math.abs(it.frequency - oldFrequency) < 0.05f && it.isAM == isAM
+                        }
+                    } else {
+                        newPosition
+                    }
+
+                    // Overlay unsichtbar hinzufügen
+                    overlayView?.alpha = 0f
+                    addOverlayToWindow()
+
+                    // Nach Layout: Scroll so dass BEIDE (Anker und neuer) sichtbar sind
+                    recyclerView?.post {
+                        val layoutManager = recyclerView?.layoutManager as? LinearLayoutManager ?: return@post
+                        // Scroll zum Anker (der sollte links/mitte sein, neuer rechts davon)
+                        if (anchorPosition >= 0) {
+                            // Berechne Position so dass Anker etwa 1/3 vom linken Rand ist
+                            val cardWidth = (216 * resources.displayMetrics.density).toInt()
+                            val rvWidth = recyclerView?.width ?: 0
+                            val offset = rvWidth / 4  // ~1/4 vom linken Rand
+                            layoutManager.scrollToPositionWithOffset(anchorPosition, offset)
+                        }
+                        overlayView?.alpha = 1f
+                    }
+                } else {
+                    // Netflix-Style: Nur scrollen wenn neues Item am Rand oder außerhalb
+                    recyclerView?.let { rv ->
+                        val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return@let
+                        val firstComplete = layoutManager.findFirstCompletelyVisibleItemPosition()
+                        val lastComplete = layoutManager.findLastCompletelyVisibleItemPosition()
+
+                        // Scroll nur wenn außerhalb des KOMPLETT sichtbaren Bereichs
+                        if (newPosition < firstComplete || newPosition > lastComplete) {
+                            rv.smoothScrollToPosition(newPosition)
+                        }
+                        // Sonst: Fokus wandert einfach, kein Scroll
+                    }
+                }
+
+                // Nach 2 Sek: Fokussiertes Item in die Mitte scrollen
+                centerRunnable = Runnable {
+                    if (newPosition >= 0) {
+                        recyclerView?.let { rv ->
+                            val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return@let
+                            val targetView = layoutManager.findViewByPosition(newPosition)
+                            if (targetView != null) {
+                                // Berechne wie weit scrollen um zu zentrieren
+                                val rvCenter = rv.width / 2
+                                val viewCenter = targetView.left + targetView.width / 2
+                                val scrollBy = viewCenter - rvCenter
+                                rv.smoothScrollBy(scrollBy, 0)
+                            }
+                        }
+                    }
+                }
+                handler.postDelayed(centerRunnable!!, 2000)
+
+                // Step 4: After 2 + 1 = 3 sec total, hide overlay (unless permanent mode)
+                if (!isPermanentMode) {
+                    handler.postDelayed(hideOverlayRunnable, 3000)
+                }
 
             } catch (e: Exception) {
                 android.util.Log.e("fytFM", "Error showing overlay: ${e.message}")
@@ -123,14 +272,26 @@ class StationChangeOverlayService : Service() {
 
     private fun createOverlayView() {
         val inflater = LayoutInflater.from(this)
-        overlayView = inflater.inflate(R.layout.overlay_station_change, null)
+        overlayView = inflater.inflate(R.layout.overlay_station_carousel, null)
+
+        recyclerView = overlayView?.findViewById(R.id.carouselRecyclerView)
+        recyclerView?.layoutManager = LinearLayoutManager(this, LinearLayoutManager.HORIZONTAL, false)
+        recyclerView?.clipToPadding = false
+
+        // Netflix-Style: Mehrere Items sichtbar, Fokus wandert, scrollt nur am Rand
+        // Kleines Padding nur für Abstand zum Bildschirmrand
+        val edgePadding = (24 * resources.displayMetrics.density).toInt()
+        recyclerView?.setPadding(edgePadding, 0, edgePadding, 0)
+
+        carouselAdapter = OverlayCarouselAdapter()
+        recyclerView?.adapter = carouselAdapter
     }
 
     private fun addOverlayToWindow() {
         if (overlayView == null || isOverlayVisible) return
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -143,12 +304,12 @@ class StationChangeOverlayService : Service() {
         )
 
         params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-        params.y = 50 // Abstand vom oberen Rand
+        params.y = 20
 
         try {
             windowManager?.addView(overlayView, params)
             isOverlayVisible = true
-            android.util.Log.d("fytFM", "Overlay shown")
+            android.util.Log.d("fytFM", "Carousel overlay shown")
         } catch (e: Exception) {
             android.util.Log.e("fytFM", "Failed to add overlay: ${e.message}")
         }
@@ -159,8 +320,12 @@ class StationChangeOverlayService : Service() {
             if (isOverlayVisible && overlayView != null) {
                 try {
                     windowManager?.removeView(overlayView)
+                    overlayView = null
+                    recyclerView = null
+                    carouselAdapter = null
                     isOverlayVisible = false
-                    android.util.Log.d("fytFM", "Overlay hidden")
+                    anchorPosition = -1  // Anker zurücksetzen
+                    android.util.Log.d("fytFM", "Carousel overlay hidden")
                 } catch (e: Exception) {
                     android.util.Log.e("fytFM", "Failed to remove overlay: ${e.message}")
                 }
@@ -199,6 +364,79 @@ class StationChangeOverlayService : Service() {
                 .setSmallIcon(R.drawable.ic_radio)
                 .setOngoing(true)
                 .build()
+        }
+    }
+
+    // Inner Adapter for Carousel
+    inner class OverlayCarouselAdapter : RecyclerView.Adapter<OverlayCarouselAdapter.ViewHolder>() {
+
+        private var stations: List<StationData> = emptyList()
+        private var selectedFrequency: Float = 0f
+        private var selectedIsAM: Boolean = false
+
+        fun setStations(newStations: List<StationData>, frequency: Float, isAM: Boolean) {
+            stations = newStations
+            selectedFrequency = frequency
+            selectedIsAM = isAM
+            notifyDataSetChanged()
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val view = LayoutInflater.from(parent.context)
+                .inflate(R.layout.item_station_card, parent, false)
+            return ViewHolder(view)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val station = stations[position]
+            val isSelected = Math.abs(station.frequency - selectedFrequency) < 0.05f &&
+                             station.isAM == selectedIsAM
+
+            // Format frequency
+            val freqText = if (station.isAM) {
+                station.frequency.toInt().toString()
+            } else {
+                "%.2f".format(station.frequency).replace(".", ",")
+            }
+            holder.frequencyText.text = freqText
+            holder.bandLabel.text = if (station.isAM) "AM" else "FM"
+
+            // Station name inline
+            holder.stationNameInline.text = if (!station.name.isNullOrBlank()) " ${station.name}" else ""
+
+            // Scaling for selected
+            val scale = if (isSelected) 1.0f else 0.75f
+            holder.itemView.scaleX = scale
+            holder.itemView.scaleY = scale
+            holder.itemView.alpha = if (isSelected) 1.0f else 0.5f
+
+            // Station name
+            if (!station.name.isNullOrBlank()) {
+                holder.stationName.text = station.name
+                holder.stationName.visibility = View.VISIBLE
+            } else {
+                holder.stationName.visibility = View.GONE
+            }
+
+            // Logo
+            if (!station.logoPath.isNullOrBlank()) {
+                holder.stationLogo.visibility = View.VISIBLE
+                holder.stationLogo.load(File(station.logoPath)) {
+                    crossfade(true)
+                }
+            } else {
+                holder.stationLogo.visibility = View.GONE
+            }
+        }
+
+        override fun getItemCount(): Int = stations.size
+
+        inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+            val frequencyText: TextView = view.findViewById(R.id.frequencyText)
+            val bandLabel: TextView = view.findViewById(R.id.bandLabel)
+            val stationName: TextView = view.findViewById(R.id.stationName)
+            val stationNameInline: TextView = view.findViewById(R.id.stationNameInline)
+            val stationLogo: ImageView = view.findViewById(R.id.stationLogo)
         }
     }
 }

@@ -89,6 +89,11 @@ class MainActivity : AppCompatActivity() {
     private var checkDebugButtons: CheckBox? = null
     private var checkSwcInfo: CheckBox? = null
     private var checkCarouselInfo: CheckBox? = null
+    private var checkStationOverlayDebug: CheckBox? = null
+    private var debugStationOverlay: View? = null
+    private var checkStationOverlayPermanent: CheckBox? = null
+    private var debugStationOverlayStatus: TextView? = null
+    private var debugStationOverlayCount: TextView? = null
     private var debugButtonsOverlay: View? = null
     private var debugSwcOverlay: View? = null
     private var debugSwcLog: TextView? = null
@@ -160,6 +165,7 @@ class MainActivity : AppCompatActivity() {
     private var stationCarouselAdapter: at.planqton.fytfm.ui.StationCarouselAdapter? = null
     private var isCarouselMode = false
     private var carouselNeedsInitialScroll = true  // Flag for first scroll after app start
+    private var isAppInForeground = false
 
     // Carousel auto-centering
     private val carouselCenterHandler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -835,8 +841,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isAppInForeground = true
         // Re-check PiP mode when resuming (wichtig für Start im kleinen Fenster)
         recheckPipMode("onResume")
+    }
+
+    override fun onPause() {
+        super.onPause()
+        isAppInForeground = false
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -945,6 +957,11 @@ class MainActivity : AppCompatActivity() {
         checkDebugButtons = findViewById(R.id.checkDebugButtons)
         checkSwcInfo = findViewById(R.id.checkSwcInfo)
         checkCarouselInfo = findViewById(R.id.checkCarouselInfo)
+        checkStationOverlayDebug = findViewById(R.id.checkStationOverlayDebug)
+        debugStationOverlay = findViewById(R.id.debugStationOverlay)
+        checkStationOverlayPermanent = findViewById(R.id.checkStationOverlayPermanent)
+        debugStationOverlayStatus = findViewById(R.id.debugStationOverlayStatus)
+        debugStationOverlayCount = findViewById(R.id.debugStationOverlayCount)
         debugButtonsOverlay = findViewById(R.id.debugButtonsOverlay)
         debugSwcOverlay = findViewById(R.id.debugSwcOverlay)
         debugSwcLog = findViewById(R.id.debugSwcLog)
@@ -1014,6 +1031,7 @@ class MainActivity : AppCompatActivity() {
         setupDebugButtonsOverlayDrag()
         setupDebugSwcOverlayDrag()
         setupDebugCarouselOverlayDrag()
+        setupDebugStationOverlayDrag()
         setupDebugChecklistDrag()
         setupDebugChecklistListeners()
         setupDebugButtonsListeners()
@@ -1164,6 +1182,27 @@ class MainActivity : AppCompatActivity() {
                 debugCarouselOverlay?.post { restoreDebugWindowPosition("carousel", debugCarouselOverlay) }
             }
         }
+        checkStationOverlayDebug?.setOnCheckedChangeListener { _, isChecked ->
+            debugStationOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+            presetRepository.setDebugWindowOpen("stationoverlay", isChecked)
+            if (isChecked) {
+                debugStationOverlay?.post { restoreDebugWindowPosition("stationoverlay", debugStationOverlay) }
+                // Update station count (only if adapter is initialized)
+                if (::stationAdapter.isInitialized) {
+                    debugStationOverlayCount?.text = stationAdapter.getStations().size.toString()
+                }
+            }
+        }
+        checkStationOverlayPermanent?.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setPermanentStationOverlay(isChecked)
+            if (isChecked) {
+                showPermanentStationOverlay()
+                debugStationOverlayStatus?.text = "visible"
+            } else {
+                hidePermanentStationOverlay()
+                debugStationOverlayStatus?.text = "hidden"
+            }
+        }
     }
 
     private fun restoreDebugWindowStates() {
@@ -1175,6 +1214,8 @@ class MainActivity : AppCompatActivity() {
         checkDebugButtons?.isChecked = presetRepository.isDebugWindowOpen("buttons", false)
         checkSwcInfo?.isChecked = presetRepository.isDebugWindowOpen("swc", false)
         checkCarouselInfo?.isChecked = presetRepository.isDebugWindowOpen("carousel", false)
+        checkStationOverlayDebug?.isChecked = presetRepository.isDebugWindowOpen("stationoverlay", false)
+        checkStationOverlayPermanent?.isChecked = presetRepository.isPermanentStationOverlay()
 
         // Restore positions (post to ensure views are laid out)
         debugOverlay?.post { restoreDebugWindowPosition("rds", debugOverlay) }
@@ -1184,6 +1225,7 @@ class MainActivity : AppCompatActivity() {
         debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
         debugSwcOverlay?.post { restoreDebugWindowPosition("swc", debugSwcOverlay) }
         debugCarouselOverlay?.post { restoreDebugWindowPosition("carousel", debugCarouselOverlay) }
+        debugStationOverlay?.post { restoreDebugWindowPosition("stationoverlay", debugStationOverlay) }
         debugChecklist?.post { restoreDebugWindowPosition("checklist", debugChecklist) }
     }
 
@@ -1408,6 +1450,34 @@ class MainActivity : AppCompatActivity() {
                 }
                 MotionEvent.ACTION_UP -> {
                     saveDebugWindowPosition("carousel", view)
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun setupDebugStationOverlayDrag() {
+        val overlay = debugStationOverlay ?: return
+        var dX = 0f
+        var dY = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = view.x - event.rawX
+                    dY = view.y - event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (event.rawX + dX).coerceIn(0f, (view.parent as View).width - view.width.toFloat())
+                    val newY = (event.rawY + dY).coerceIn(0f, (view.parent as View).height - view.height.toFloat())
+                    view.x = newX
+                    view.y = newY
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    saveDebugWindowPosition("stationoverlay", view)
                     true
                 }
                 else -> false
@@ -3138,6 +3208,13 @@ class MainActivity : AppCompatActivity() {
                 // Service stoppen
                 stopService(android.content.Intent(this, StationChangeOverlayService::class.java))
             }
+        }
+
+        // Revert Prev/Next toggle
+        val switchRevertPrevNext = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchRevertPrevNext)
+        switchRevertPrevNext.isChecked = presetRepository.isRevertPrevNext()
+        switchRevertPrevNext.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setRevertPrevNext(isChecked)
         }
 
         // LOC Local Mode toggle
@@ -4988,6 +5065,22 @@ class MainActivity : AppCompatActivity() {
     // Scanner-Funktionen deaktiviert
 
     private fun skipToPreviousStation() {
+        if (presetRepository.isRevertPrevNext()) {
+            doSkipToNext()
+        } else {
+            doSkipToPrevious()
+        }
+    }
+
+    private fun skipToNextStation() {
+        if (presetRepository.isRevertPrevNext()) {
+            doSkipToPrevious()
+        } else {
+            doSkipToNext()
+        }
+    }
+
+    private fun doSkipToPrevious() {
         val stations = stationAdapter.getStations()
         android.util.Log.d("fytFM", "skipToPreviousStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
@@ -4998,12 +5091,13 @@ class MainActivity : AppCompatActivity() {
 
         prevStation?.let {
             android.util.Log.i("fytFM", "skipToPreviousStation: ${currentFreq} -> ${it.frequency} MHz")
+            val oldFreq = currentFreq
             frequencyScale.setFrequency(it.frequency)
-            showStationChangeOverlay(it.frequency)
+            showStationChangeOverlay(it.frequency, oldFreq)
         }
     }
 
-    private fun skipToNextStation() {
+    private fun doSkipToNext() {
         val stations = stationAdapter.getStations()
         android.util.Log.d("fytFM", "skipToNextStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
@@ -5014,17 +5108,44 @@ class MainActivity : AppCompatActivity() {
 
         nextStation?.let {
             android.util.Log.i("fytFM", "skipToNextStation: ${currentFreq} -> ${it.frequency} MHz")
+            val oldFreq = currentFreq
             frequencyScale.setFrequency(it.frequency)
-            showStationChangeOverlay(it.frequency)
+            showStationChangeOverlay(it.frequency, oldFreq)
         }
     }
 
-    private fun showStationChangeOverlay(frequency: Float) {
+    private fun showStationChangeOverlay(frequency: Float, oldFrequency: Float = 0f) {
         if (!presetRepository.isShowStationChangeToast()) return
+
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+
+        // Build stations JSON
+        val stationsJson = try {
+            val jsonArray = org.json.JSONArray()
+            val stations = stationAdapter.getStations()
+            stations.forEach { station ->
+                val logoPath = radioLogoRepository.getLogoForStation(station.name, null, station.frequency)
+                val obj = org.json.JSONObject().apply {
+                    put("frequency", station.frequency.toDouble())
+                    put("name", station.name ?: "")
+                    put("logoPath", logoPath ?: "")
+                    put("isAM", station.isAM)
+                }
+                jsonArray.put(obj)
+            }
+            jsonArray.toString()
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Error building stations JSON: ${e.message}")
+            null
+        }
 
         val intent = android.content.Intent(this, StationChangeOverlayService::class.java).apply {
             action = StationChangeOverlayService.ACTION_SHOW_OVERLAY
             putExtra(StationChangeOverlayService.EXTRA_FREQUENCY, frequency)
+            putExtra(StationChangeOverlayService.EXTRA_OLD_FREQUENCY, oldFrequency)
+            putExtra(StationChangeOverlayService.EXTRA_IS_AM, isAM)
+            putExtra(StationChangeOverlayService.EXTRA_APP_IN_FOREGROUND, isAppInForeground)
+            stationsJson?.let { putExtra(StationChangeOverlayService.EXTRA_STATIONS, it) }
         }
         try {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
@@ -5034,6 +5155,58 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             android.util.Log.e("fytFM", "Failed to show overlay: ${e.message}")
+        }
+    }
+
+    private fun showPermanentStationOverlay() {
+        val frequency = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+
+        // Build stations JSON
+        val stationsJson = try {
+            val jsonArray = org.json.JSONArray()
+            val stations = stationAdapter.getStations()
+            stations.forEach { station ->
+                val logoPath = radioLogoRepository.getLogoForStation(station.name, null, station.frequency)
+                val obj = org.json.JSONObject().apply {
+                    put("frequency", station.frequency.toDouble())
+                    put("name", station.name ?: "")
+                    put("logoPath", logoPath ?: "")
+                    put("isAM", station.isAM)
+                }
+                jsonArray.put(obj)
+            }
+            jsonArray.toString()
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Error building stations JSON: ${e.message}")
+            null
+        }
+
+        val intent = android.content.Intent(this, StationChangeOverlayService::class.java).apply {
+            action = StationChangeOverlayService.ACTION_SHOW_PERMANENT
+            putExtra(StationChangeOverlayService.EXTRA_FREQUENCY, frequency)
+            putExtra(StationChangeOverlayService.EXTRA_IS_AM, isAM)
+            stationsJson?.let { putExtra(StationChangeOverlayService.EXTRA_STATIONS, it) }
+        }
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Failed to show permanent overlay: ${e.message}")
+        }
+    }
+
+    private fun hidePermanentStationOverlay() {
+        val intent = android.content.Intent(this, StationChangeOverlayService::class.java).apply {
+            action = StationChangeOverlayService.ACTION_HIDE_OVERLAY
+        }
+        try {
+            startService(intent)
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Failed to hide overlay: ${e.message}")
         }
     }
 
