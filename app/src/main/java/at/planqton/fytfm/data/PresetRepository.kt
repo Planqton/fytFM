@@ -207,53 +207,32 @@ class PresetRepository(context: Context) {
         settingsPrefs.edit().putBoolean("auto_scan_sensitivity", enabled).apply()
     }
 
-    // Spotify API Credentials
-    fun getSpotifyClientId(): String {
-        return settingsPrefs.getString("spotify_client_id", "") ?: ""
-    }
-
-    fun setSpotifyClientId(clientId: String) {
-        settingsPrefs.edit().putString("spotify_client_id", clientId).apply()
-    }
-
-    fun getSpotifyClientSecret(): String {
-        return settingsPrefs.getString("spotify_client_secret", "") ?: ""
-    }
-
-    fun setSpotifyClientSecret(clientSecret: String) {
-        settingsPrefs.edit().putString("spotify_client_secret", clientSecret).apply()
-    }
-
-    fun hasSpotifyCredentials(): Boolean {
-        return getSpotifyClientId().isNotBlank() && getSpotifyClientSecret().isNotBlank()
-    }
-
-    // Spotify Enabled/Disabled Toggle - per station (frequency)
+    // Deezer Enabled/Disabled Toggle - per station (frequency)
     // Default is enabled, we store frequencies where it's DISABLED
-    fun isSpotifyEnabledForFrequency(frequency: Float): Boolean {
-        val disabledFreqs = settingsPrefs.getStringSet("spotify_disabled_frequencies", emptySet()) ?: emptySet()
+    fun isDeezerEnabledForFrequency(frequency: Float): Boolean {
+        val disabledFreqs = settingsPrefs.getStringSet("deezer_disabled_frequencies", emptySet()) ?: emptySet()
         val freqKey = "%.1f".format(frequency)
         return !disabledFreqs.contains(freqKey)
     }
 
-    fun setSpotifyEnabledForFrequency(frequency: Float, enabled: Boolean) {
-        val disabledFreqs = settingsPrefs.getStringSet("spotify_disabled_frequencies", emptySet())?.toMutableSet() ?: mutableSetOf()
+    fun setDeezerEnabledForFrequency(frequency: Float, enabled: Boolean) {
+        val disabledFreqs = settingsPrefs.getStringSet("deezer_disabled_frequencies", emptySet())?.toMutableSet() ?: mutableSetOf()
         val freqKey = "%.1f".format(frequency)
         if (enabled) {
             disabledFreqs.remove(freqKey)
         } else {
             disabledFreqs.add(freqKey)
         }
-        settingsPrefs.edit().putStringSet("spotify_disabled_frequencies", disabledFreqs).apply()
+        settingsPrefs.edit().putStringSet("deezer_disabled_frequencies", disabledFreqs).apply()
     }
 
-    // Spotify Local Cache Setting
-    fun isSpotifyCacheEnabled(): Boolean {
-        return settingsPrefs.getBoolean("spotify_cache_enabled", true) // Default: enabled
+    // Deezer Local Cache Setting
+    fun isDeezerCacheEnabled(): Boolean {
+        return settingsPrefs.getBoolean("deezer_cache_enabled", true) // Default: enabled
     }
 
-    fun setSpotifyCacheEnabled(enabled: Boolean) {
-        settingsPrefs.edit().putBoolean("spotify_cache_enabled", enabled).apply()
+    fun setDeezerCacheEnabled(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("deezer_cache_enabled", enabled).apply()
     }
 
     /**

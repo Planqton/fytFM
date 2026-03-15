@@ -183,7 +183,7 @@ class FytFMMediaService : MediaLibraryService() {
         // Cover-URI bestimmen
         // WICHTIG: Lokale Pfade werden über CoverServer bereitgestellt (http://127.0.0.1:8765)
         // da manche Car-Launcher keine externen URLs oder lokale file:// URIs laden können
-        Log.d(TAG, "Cover selection: coverUrl=$coverUrl, localCoverPath=$localCoverPath, radioLogoPath=$radioLogoPath, cacheEnabled=${presetRepository.isSpotifyCacheEnabled()}")
+        Log.d(TAG, "Cover selection: coverUrl=$coverUrl, localCoverPath=$localCoverPath, radioLogoPath=$radioLogoPath, cacheEnabled=${presetRepository.isDeezerCacheEnabled()}")
         val artworkUri: Uri? = when {
             // 1. Lokaler Cache-Pfad verfügbar → über CoverServer (zuverlässiger für Car-Launcher)
             !localCoverPath.isNullOrBlank() && localCoverPath.startsWith("/") -> {

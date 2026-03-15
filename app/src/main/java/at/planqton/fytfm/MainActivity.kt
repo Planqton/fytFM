@@ -41,10 +41,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.android.fmradio.FmNative
 import com.syu.jni.SyuJniNative
-import at.planqton.fytfm.spotify.SpotifyClient
-import at.planqton.fytfm.spotify.SpotifyCache
-import at.planqton.fytfm.spotify.RtCombiner
-import at.planqton.fytfm.spotify.TrackInfo
+import at.planqton.fytfm.deezer.DeezerClient
+import at.planqton.fytfm.deezer.DeezerCache
+import at.planqton.fytfm.deezer.RtCombiner
+import at.planqton.fytfm.deezer.TrackInfo
 import at.planqton.fytfm.steering.SteeringWheelKeyManager
 import at.planqton.fytfm.steering.SyuToolkitManager
 import coil.load
@@ -80,10 +80,10 @@ class MainActivity : AppCompatActivity() {
     private var checkRdsInfo: CheckBox? = null
     private var checkLayoutInfo: CheckBox? = null
     private var checkBuildInfo: CheckBox? = null
-    private var checkSpotifyInfo: CheckBox? = null
+    private var checkDeezerInfo: CheckBox? = null
     private var debugLayoutOverlay: View? = null
     private var debugBuildOverlay: View? = null
-    private var debugSpotifyOverlay: View? = null
+    private var debugDeezerOverlay: View? = null
     private var debugScreenInfo: TextView? = null
     private var debugDensityInfo: TextView? = null
     private var checkDebugButtons: CheckBox? = null
@@ -149,8 +149,8 @@ class MainActivity : AppCompatActivity() {
     private var carouselCorrectionButtons: View? = null
     private var btnCarouselCorrectionRefresh: ImageButton? = null
     private var btnCarouselCorrectionTrash: ImageButton? = null
-    private var btnSpotifyToggle: ImageView? = null
-    private var btnCarouselSpotifyToggle: ImageView? = null
+    private var btnDeezerToggle: ImageView? = null
+    private var btnCarouselDeezerToggle: ImageView? = null
     private var rtCorrectionDao: RtCorrectionDao? = null
     private var editStringDao: EditStringDao? = null
 
@@ -179,7 +179,7 @@ class MainActivity : AppCompatActivity() {
         private set
 
     // Debug: Spotify/Local blockieren (nur RDS anzeigen)
-    var debugSpotifyBlocked = false
+    var debugDeezerBlocked = false
         private set
 
     private lateinit var presetRepository: PresetRepository
@@ -194,35 +194,35 @@ class MainActivity : AppCompatActivity() {
     private var settingsUpdateListener: ((UpdateState) -> Unit)? = null
     private var twUtil: TWUtilHelper? = null
 
-    // Spotify Integration
-    private var spotifyClient: SpotifyClient? = null
-    private var spotifyCache: SpotifyCache? = null
+    // Deezer Integration
+    private var deezerClient: DeezerClient? = null
+    private var deezerCache: DeezerCache? = null
     private var rtCombiner: RtCombiner? = null
 
-    // Bug Report: Aktuelle Spotify-Status-Daten
-    private var currentSpotifyStatus: String? = null
-    private var currentSpotifyOriginalRt: String? = null
-    private var currentSpotifyStrippedRt: String? = null
-    private var currentSpotifyQuery: String? = null
-    private var currentSpotifyTrackInfo: TrackInfo? = null
+    // Bug Report: Aktuelle Deezer-Status-Daten
+    private var currentDeezerStatus: String? = null
+    private var currentDeezerOriginalRt: String? = null
+    private var currentDeezerStrippedRt: String? = null
+    private var currentDeezerQuery: String? = null
+    private var currentDeezerTrackInfo: TrackInfo? = null
 
-    // Spotify Cache Export/Import launchers
-    private val spotifyCacheExportLauncher = registerForActivityResult(
+    // Deezer Cache Export/Import launchers
+    private val deezerCacheExportLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
             result.data?.data?.let { uri ->
-                exportSpotifyCacheToUri(uri)
+                exportDeezerCacheToUri(uri)
             }
         }
     }
 
-    private val spotifyCacheImportLauncher = registerForActivityResult(
+    private val deezerCacheImportLauncher = registerForActivityResult(
         androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == RESULT_OK) {
             result.data?.data?.let { uri ->
-                importSpotifyCacheFromUri(uri)
+                importDeezerCacheFromUri(uri)
             }
         }
     }
@@ -350,7 +350,7 @@ class MainActivity : AppCompatActivity() {
         radioLogoRepository = at.planqton.fytfm.data.logo.RadioLogoRepository(this)
 
         // Initialize Spotify Integration
-        initSpotifyIntegration()
+        initDeezerIntegration()
 
         // Start Overlay Service for steering wheel controls
         startOverlayServiceIfEnabled()
@@ -594,15 +594,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Initialisiert Spotify Client und RT Combiner wenn Credentials vorhanden
+     * Initialisiert Deezer Client und RT Combiner
+     * Deezer benötigt keine API-Credentials!
      */
-    private fun initSpotifyIntegration() {
-        val clientId = presetRepository.getSpotifyClientId()
-        val clientSecret = presetRepository.getSpotifyClientSecret()
-
+    private fun initDeezerIntegration() {
         // Always create cache (for offline fallback)
-        if (spotifyCache == null) {
-            spotifyCache = SpotifyCache(this)
+        if (deezerCache == null) {
+            deezerCache = DeezerCache(this)
         }
 
         // Initialize correction DAOs
@@ -613,64 +611,34 @@ class MainActivity : AppCompatActivity() {
             editStringDao = RdsDatabase.getInstance(this).editStringDao()
         }
 
-        if (clientId.isNotBlank() && clientSecret.isNotBlank()) {
-            spotifyClient = SpotifyClient(clientId, clientSecret)
-            rtCombiner = RtCombiner(
-                spotifyClient = spotifyClient,
-                spotifyCache = spotifyCache,
-                isCacheEnabled = { presetRepository.isSpotifyCacheEnabled() },
-                isNetworkAvailable = { isNetworkAvailable() },
-                correctionDao = rtCorrectionDao,
-                editStringDao = editStringDao
-            ) { status, originalRt, strippedRt, query, trackInfo ->
-                runOnUiThread {
-                    // Store for bug reports
-                    currentSpotifyStatus = status
-                    currentSpotifyOriginalRt = originalRt
-                    currentSpotifyStrippedRt = strippedRt
-                    currentSpotifyQuery = query
-                    currentSpotifyTrackInfo = trackInfo
-                    updateSpotifyDebugInfo(status, originalRt, strippedRt, query, trackInfo)
-                    // Bei keinem Match: Raw RT parsen und anzeigen
-                    val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
-                    updateNowPlaying(displayInfo)
-                    nowPlayingRawRt?.text = strippedRt ?: ""
-                    carouselNowPlayingRawRt?.text = strippedRt ?: ""
-                    updateIgnoredIndicator(strippedRt)
-                    updatePipDisplay()
-                }
+        // Deezer doesn't need credentials - just create the client
+        deezerClient = DeezerClient()
+        rtCombiner = RtCombiner(
+            deezerClient = deezerClient,
+            deezerCache = deezerCache,
+            isCacheEnabled = { presetRepository.isDeezerCacheEnabled() },
+            isNetworkAvailable = { isNetworkAvailable() },
+            correctionDao = rtCorrectionDao,
+            editStringDao = editStringDao
+        ) { status, originalRt, strippedRt, query, trackInfo ->
+            runOnUiThread {
+                // Store for bug reports
+                currentDeezerStatus = status
+                currentDeezerOriginalRt = originalRt
+                currentDeezerStrippedRt = strippedRt
+                currentDeezerQuery = query
+                currentDeezerTrackInfo = trackInfo
+                updateDeezerDebugInfo(status, originalRt, strippedRt, query, trackInfo)
+                // Bei keinem Match: Raw RT parsen und anzeigen
+                val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
+                updateNowPlaying(displayInfo)
+                nowPlayingRawRt?.text = strippedRt ?: ""
+                carouselNowPlayingRawRt?.text = strippedRt ?: ""
+                updateIgnoredIndicator(strippedRt)
+                updatePipDisplay()
             }
-            android.util.Log.i("fytFM", "Spotify integration initialized")
-        } else {
-            spotifyClient = null
-            // Still create RtCombiner with cache only for offline mode
-            rtCombiner = RtCombiner(
-                spotifyClient = null,
-                spotifyCache = spotifyCache,
-                isCacheEnabled = { presetRepository.isSpotifyCacheEnabled() },
-                isNetworkAvailable = { isNetworkAvailable() },
-                correctionDao = rtCorrectionDao,
-                editStringDao = editStringDao
-            ) { status, originalRt, strippedRt, query, trackInfo ->
-                runOnUiThread {
-                    // Store for bug reports
-                    currentSpotifyStatus = status
-                    currentSpotifyOriginalRt = originalRt
-                    currentSpotifyStrippedRt = strippedRt
-                    currentSpotifyQuery = query
-                    currentSpotifyTrackInfo = trackInfo
-                    updateSpotifyDebugInfo(status, originalRt, strippedRt, query, trackInfo)
-                    // Bei keinem Match: Raw RT parsen und anzeigen
-                    val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
-                    updateNowPlaying(displayInfo)
-                    nowPlayingRawRt?.text = strippedRt ?: ""
-                    carouselNowPlayingRawRt?.text = strippedRt ?: ""
-                    updateIgnoredIndicator(strippedRt)
-                    updatePipDisplay()
-                }
-            }
-            android.util.Log.i("fytFM", "Spotify credentials not configured, using cache only")
         }
+        android.util.Log.i("fytFM", "Deezer integration initialized")
     }
 
     private fun isNetworkAvailable(): Boolean {
@@ -681,11 +649,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Reinitialize Spotify integration (called when credentials change)
+     * Reinitialize Deezer integration
      */
-    fun reinitSpotifyIntegration() {
+    fun reinitDeezerIntegration() {
         rtCombiner?.destroy()
-        initSpotifyIntegration()
+        initDeezerIntegration()
     }
 
     /**
@@ -700,8 +668,8 @@ class MainActivity : AppCompatActivity() {
                 // Process RT through Spotify integration if available (unless blocked or disabled for this station)
                 val combiner = rtCombiner
                 val currentFrequency = frequencyScale.getFrequency()
-                val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(currentFrequency)
-                if (combiner != null && !rt.isNullOrBlank() && !debugSpotifyBlocked && spotifyEnabled) {
+                val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(currentFrequency)
+                if (combiner != null && !rt.isNullOrBlank() && !debugDeezerBlocked && deezerEnabled) {
                     CoroutineScope(Dispatchers.IO).launch {
                         val combinedRt = combiner.processRt(pi, rt, currentFrequency)
                         val finalRt = combinedRt ?: rt
@@ -717,7 +685,7 @@ class MainActivity : AppCompatActivity() {
                             val currentFreq = frequencyScale.getFrequency()
                             val radioLogoPath = radioLogoRepository.getLogoForStation(ps, pi, currentFreq)
                             // Lokalen Cover-Pfad aus Cache holen (zuverlässiger als trackInfo.coverUrl)
-                            val localCover = spotifyCache?.getLocalCoverPath(trackInfo?.trackId)
+                            val localCover = deezerCache?.getLocalCoverPath(trackInfo?.trackId)
                                 ?: trackInfo?.coverUrl?.takeIf { it.startsWith("/") }
                             FytFMMediaService.instance?.updateMetadata(
                                 frequency = currentFreq,
@@ -890,7 +858,7 @@ class MainActivity : AppCompatActivity() {
             debugChecklist?.visibility = View.GONE
             debugLayoutOverlay?.visibility = View.GONE
             debugBuildOverlay?.visibility = View.GONE
-            debugSpotifyOverlay?.visibility = View.GONE
+            debugDeezerOverlay?.visibility = View.GONE
             debugButtonsOverlay?.visibility = View.GONE
 
             // Show PiP specific layout
@@ -912,7 +880,7 @@ class MainActivity : AppCompatActivity() {
             debugChecklist?.visibility = View.VISIBLE
             debugLayoutOverlay?.visibility = if (checkLayoutInfo?.isChecked == true) View.VISIBLE else View.GONE
             debugBuildOverlay?.visibility = if (checkBuildInfo?.isChecked == true) View.VISIBLE else View.GONE
-            debugSpotifyOverlay?.visibility = if (checkSpotifyInfo?.isChecked == true) View.VISIBLE else View.GONE
+            debugDeezerOverlay?.visibility = if (checkDeezerInfo?.isChecked == true) View.VISIBLE else View.GONE
             debugButtonsOverlay?.visibility = if (checkDebugButtons?.isChecked == true) View.VISIBLE else View.GONE
 
             // Hide PiP specific layout
@@ -948,10 +916,10 @@ class MainActivity : AppCompatActivity() {
         checkRdsInfo = findViewById(R.id.checkRdsInfo)
         checkLayoutInfo = findViewById(R.id.checkLayoutInfo)
         checkBuildInfo = findViewById(R.id.checkBuildInfo)
-        checkSpotifyInfo = findViewById(R.id.checkSpotifyInfo)
+        checkDeezerInfo = findViewById(R.id.checkDeezerInfo)
         debugLayoutOverlay = findViewById(R.id.debugLayoutOverlay)
         debugBuildOverlay = findViewById(R.id.debugBuildOverlay)
-        debugSpotifyOverlay = findViewById(R.id.debugSpotifyOverlay)
+        debugDeezerOverlay = findViewById(R.id.debugDeezerOverlay)
         debugScreenInfo = findViewById(R.id.debugScreenInfo)
         debugDensityInfo = findViewById(R.id.debugDensityInfo)
         checkDebugButtons = findViewById(R.id.checkDebugButtons)
@@ -1009,9 +977,9 @@ class MainActivity : AppCompatActivity() {
         btnCarouselCorrectionRefresh = findViewById(R.id.btnCarouselCorrectionRefresh)
         btnCarouselCorrectionTrash = findViewById(R.id.btnCarouselCorrectionTrash)
         // Spotify Toggles
-        btnSpotifyToggle = findViewById(R.id.btnSpotifyToggle)
-        btnCarouselSpotifyToggle = findViewById(R.id.btnCarouselSpotifyToggle)
-        setupSpotifyToggle()
+        btnDeezerToggle = findViewById(R.id.btnDeezerToggle)
+        btnCarouselDeezerToggle = findViewById(R.id.btnCarouselDeezerToggle)
+        setupDeezerToggle()
         setupCorrectionHelpers()
 
         // View Mode Toggle
@@ -1027,7 +995,7 @@ class MainActivity : AppCompatActivity() {
         setupDebugOverlayDrag()
         setupDebugBuildOverlayDrag()
         setupDebugLayoutOverlayDrag()
-        setupDebugSpotifyOverlayDrag()
+        setupDebugDeezerOverlayDrag()
         setupDebugButtonsOverlayDrag()
         setupDebugSwcOverlayDrag()
         setupDebugCarouselOverlayDrag()
@@ -1154,11 +1122,11 @@ class MainActivity : AppCompatActivity() {
                 debugBuildOverlay?.post { restoreDebugWindowPosition("build", debugBuildOverlay) }
             }
         }
-        checkSpotifyInfo?.setOnCheckedChangeListener { _, isChecked ->
-            debugSpotifyOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
+        checkDeezerInfo?.setOnCheckedChangeListener { _, isChecked ->
+            debugDeezerOverlay?.visibility = if (isChecked) View.VISIBLE else View.GONE
             presetRepository.setDebugWindowOpen("spotify", isChecked)
             if (isChecked) {
-                debugSpotifyOverlay?.post { restoreDebugWindowPosition("spotify", debugSpotifyOverlay) }
+                debugDeezerOverlay?.post { restoreDebugWindowPosition("spotify", debugDeezerOverlay) }
             }
         }
         checkDebugButtons?.setOnCheckedChangeListener { _, isChecked ->
@@ -1210,7 +1178,7 @@ class MainActivity : AppCompatActivity() {
         checkRdsInfo?.isChecked = presetRepository.isDebugWindowOpen("rds", false)
         checkLayoutInfo?.isChecked = presetRepository.isDebugWindowOpen("layout", false)
         checkBuildInfo?.isChecked = presetRepository.isDebugWindowOpen("build", false)
-        checkSpotifyInfo?.isChecked = presetRepository.isDebugWindowOpen("spotify", false)
+        checkDeezerInfo?.isChecked = presetRepository.isDebugWindowOpen("spotify", false)
         checkDebugButtons?.isChecked = presetRepository.isDebugWindowOpen("buttons", false)
         checkSwcInfo?.isChecked = presetRepository.isDebugWindowOpen("swc", false)
         checkCarouselInfo?.isChecked = presetRepository.isDebugWindowOpen("carousel", false)
@@ -1221,7 +1189,7 @@ class MainActivity : AppCompatActivity() {
         debugOverlay?.post { restoreDebugWindowPosition("rds", debugOverlay) }
         debugLayoutOverlay?.post { restoreDebugWindowPosition("layout", debugLayoutOverlay) }
         debugBuildOverlay?.post { restoreDebugWindowPosition("build", debugBuildOverlay) }
-        debugSpotifyOverlay?.post { restoreDebugWindowPosition("spotify", debugSpotifyOverlay) }
+        debugDeezerOverlay?.post { restoreDebugWindowPosition("spotify", debugDeezerOverlay) }
         debugButtonsOverlay?.post { restoreDebugWindowPosition("buttons", debugButtonsOverlay) }
         debugSwcOverlay?.post { restoreDebugWindowPosition("swc", debugSwcOverlay) }
         debugCarouselOverlay?.post { restoreDebugWindowPosition("carousel", debugCarouselOverlay) }
@@ -1345,8 +1313,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupDebugSpotifyOverlayDrag() {
-        val overlay = debugSpotifyOverlay ?: return
+    private fun setupDebugDeezerOverlayDrag() {
+        val overlay = debugDeezerOverlay ?: return
         var dX = 0f
         var dY = 0f
 
@@ -1545,7 +1513,7 @@ class MainActivity : AppCompatActivity() {
         debugOverlay?.alpha = alpha
         debugLayoutOverlay?.alpha = alpha
         debugBuildOverlay?.alpha = alpha
-        debugSpotifyOverlay?.alpha = alpha
+        debugDeezerOverlay?.alpha = alpha
         debugButtonsOverlay?.alpha = alpha
         debugSwcOverlay?.alpha = alpha
         debugCarouselOverlay?.alpha = alpha
@@ -1556,7 +1524,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<android.widget.Button>(R.id.btnDebugKillInternet)?.setOnClickListener {
             debugInternetDisabled = !debugInternetDisabled
             // SpotifyClient Flag synchronisieren
-            SpotifyClient.debugInternetDisabled = debugInternetDisabled
+            DeezerClient.debugInternetDisabled = debugInternetDisabled
             val btn = it as android.widget.Button
             if (debugInternetDisabled) {
                 btn.text = "App Internet: OFF"
@@ -1575,14 +1543,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Block Spotify/Local Toggle Button
-        findViewById<android.widget.ToggleButton>(R.id.btnDebugBlockSpotify)?.setOnCheckedChangeListener { btn, isChecked ->
-            debugSpotifyBlocked = isChecked
+        findViewById<android.widget.ToggleButton>(R.id.btnDebugBlockDeezer)?.setOnCheckedChangeListener { btn, isChecked ->
+            debugDeezerBlocked = isChecked
             if (isChecked) {
                 btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF993333.toInt())
-                android.widget.Toast.makeText(this, "Spotify/Local blocked - RDS only", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, "Deezer/Local blocked - RDS only", android.widget.Toast.LENGTH_SHORT).show()
             } else {
                 btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFCC9933.toInt())
-                android.widget.Toast.makeText(this, "Spotify/Local enabled", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, "Deezer/Local enabled", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -1631,7 +1599,7 @@ class MainActivity : AppCompatActivity() {
         pipRawRt?.text = rawRt ?: ""
 
         // Update artist (from Spotify/Local track info)
-        val trackInfo = currentSpotifyTrackInfo
+        val trackInfo = currentDeezerTrackInfo
         if (trackInfo != null) {
             pipArtist?.text = "${trackInfo.artist} - ${trackInfo.title}"
             // Load cover image
@@ -1667,11 +1635,11 @@ class MainActivity : AppCompatActivity() {
             currentFrequency = frequencyScale.getFrequency(),
 
             // Spotify Data
-            spotifyStatus = currentSpotifyStatus,
-            spotifyOriginalRt = currentSpotifyOriginalRt,
-            spotifyStrippedRt = currentSpotifyStrippedRt,
-            spotifyQuery = currentSpotifyQuery,
-            spotifyTrackInfo = currentSpotifyTrackInfo
+            spotifyStatus = currentDeezerStatus,
+            spotifyOriginalRt = currentDeezerOriginalRt,
+            spotifyStrippedRt = currentDeezerStrippedRt,
+            spotifyQuery = currentDeezerQuery,
+            spotifyTrackInfo = currentDeezerTrackInfo
         )
 
         val reportPath = bugReportHelper.createBugReport(appState)
@@ -1717,11 +1685,11 @@ class MainActivity : AppCompatActivity() {
             rdsAfEnabled = rdsManager.isAfEnabled,
             rdsAfList = rdsManager.afList?.toList(),
             currentFrequency = frequencyScale.getFrequency(),
-            spotifyStatus = currentSpotifyStatus,
-            spotifyOriginalRt = currentSpotifyOriginalRt,
-            spotifyStrippedRt = currentSpotifyStrippedRt,
-            spotifyQuery = currentSpotifyQuery,
-            spotifyTrackInfo = currentSpotifyTrackInfo,
+            spotifyStatus = currentDeezerStatus,
+            spotifyOriginalRt = currentDeezerOriginalRt,
+            spotifyStrippedRt = currentDeezerStrippedRt,
+            spotifyQuery = currentDeezerQuery,
+            spotifyTrackInfo = currentDeezerTrackInfo,
             userDescription = userDescription.ifEmpty { null }
         )
 
@@ -1734,21 +1702,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Methode zum Aktualisieren der Spotify Debug-Anzeige
-    fun updateSpotifyDebugInfo(status: String, originalRt: String?, strippedRt: String?, query: String?, trackInfo: TrackInfo?) {
-        if (debugSpotifyOverlay?.visibility != View.VISIBLE) return
+    fun updateDeezerDebugInfo(status: String, originalRt: String?, strippedRt: String?, query: String?, trackInfo: TrackInfo?) {
+        if (debugDeezerOverlay?.visibility != View.VISIBLE) return
 
         // Status und Input immer setzen
-        findViewById<TextView>(R.id.debugSpotifyStatus)?.text = status
+        findViewById<TextView>(R.id.debugDeezerStatus)?.text = status
         // Show original RT and search string (always both)
         val orig = originalRt ?: "--"
         val search = strippedRt ?: "--"
         val rtDisplay = "Orig: $orig\nSuche: $search"
-        findViewById<TextView>(R.id.debugSpotifyRtInput)?.text = rtDisplay
+        findViewById<TextView>(R.id.debugDeezerRtInput)?.text = rtDisplay
 
         // Bei "Waiting..." explizit alles clearen (Senderwechsel)
         if (status == "Waiting...") {
             lastDebugTrackId = null
-            clearSpotifyDebugFields()
+            clearDeezerDebugFields()
             return
         }
 
@@ -1761,20 +1729,20 @@ class MainActivity : AppCompatActivity() {
         // Determine source based on status (immer aktualisieren!)
         val isFromLocalCache = status.contains("Cached", ignoreCase = true) ||
                                status.contains("offline", ignoreCase = true)
-        val isFromSpotifyOnline = status == "Found!"
+        val isFromDeezerOnline = status == "Found!"
 
         val sourceText = when {
             isFromLocalCache -> "LOKAL"
-            isFromSpotifyOnline -> "SPOTIFY"
+            isFromDeezerOnline -> "DEEZER"
             else -> "..."
         }
         val sourceColor = when {
             isFromLocalCache -> android.graphics.Color.parseColor("#FFAA00")  // Orange
-            isFromSpotifyOnline -> android.graphics.Color.parseColor("#1DB954")  // Spotify Green
+            isFromDeezerOnline -> android.graphics.Color.parseColor("#FEAA2D")  // Deezer Orange
             else -> android.graphics.Color.parseColor("#AAAAAA")
         }
-        findViewById<TextView>(R.id.debugSpotifySource)?.text = sourceText
-        findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(sourceColor)
+        findViewById<TextView>(R.id.debugDeezerSource)?.text = sourceText
+        findViewById<TextView>(R.id.debugDeezerSource)?.setTextColor(sourceColor)
 
         // Prüfen ob sich der Track geändert hat
         val newTrackId = trackInfo.trackId
@@ -1789,35 +1757,35 @@ class MainActivity : AppCompatActivity() {
             loadCoverImage(trackInfo.coverUrl ?: trackInfo.coverUrlMedium)
 
             // TRACK Section
-            findViewById<TextView>(R.id.debugSpotifyArtist)?.text = trackInfo.artist
-            findViewById<TextView>(R.id.debugSpotifyTitle)?.text = trackInfo.title
-            findViewById<TextView>(R.id.debugSpotifyAllArtists)?.text =
+            findViewById<TextView>(R.id.debugDeezerArtist)?.text = trackInfo.artist
+            findViewById<TextView>(R.id.debugDeezerTitle)?.text = trackInfo.title
+            findViewById<TextView>(R.id.debugDeezerAllArtists)?.text =
                 if (trackInfo.allArtists.isNotEmpty()) trackInfo.allArtists.joinToString(", ") else "--"
-            findViewById<TextView>(R.id.debugSpotifyDuration)?.text = formatDuration(trackInfo.durationMs)
-            findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "${trackInfo.popularity}/100"
-            findViewById<TextView>(R.id.debugSpotifyExplicit)?.text = if (trackInfo.explicit) "Yes" else "No"
-            findViewById<TextView>(R.id.debugSpotifyTrackDisc)?.text = "${trackInfo.trackNumber}/${trackInfo.discNumber}"
-            findViewById<TextView>(R.id.debugSpotifyISRC)?.text = trackInfo.isrc ?: "--"
+            findViewById<TextView>(R.id.debugDeezerDuration)?.text = formatDuration(trackInfo.durationMs)
+            findViewById<TextView>(R.id.debugDeezerPopularity)?.text = "${trackInfo.popularity}/100"
+            findViewById<TextView>(R.id.debugDeezerExplicit)?.text = if (trackInfo.explicit) "Yes" else "No"
+            findViewById<TextView>(R.id.debugDeezerTrackDisc)?.text = "${trackInfo.trackNumber}/${trackInfo.discNumber}"
+            findViewById<TextView>(R.id.debugDeezerISRC)?.text = trackInfo.isrc ?: "--"
 
             // ALBUM Section
-            findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = trackInfo.album ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyAlbumType)?.text = trackInfo.albumType ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyTotalTracks)?.text =
+            findViewById<TextView>(R.id.debugDeezerAlbum)?.text = trackInfo.album ?: "--"
+            findViewById<TextView>(R.id.debugDeezerAlbumType)?.text = trackInfo.albumType ?: "--"
+            findViewById<TextView>(R.id.debugDeezerTotalTracks)?.text =
                 if (trackInfo.totalTracks > 0) trackInfo.totalTracks.toString() else "--"
-            findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = trackInfo.releaseDate ?: "--"
+            findViewById<TextView>(R.id.debugDeezerReleaseDate)?.text = trackInfo.releaseDate ?: "--"
 
             // IDs & URLs Section
-            findViewById<TextView>(R.id.debugSpotifyTrackId)?.text = trackInfo.trackId ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyAlbumId)?.text = trackInfo.albumId ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyUrl)?.text = trackInfo.spotifyUrl ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyAlbumUrl)?.text = trackInfo.albumUrl ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyPreviewUrl)?.text = trackInfo.previewUrl ?: "--"
-            findViewById<TextView>(R.id.debugSpotifyCoverUrl)?.text = trackInfo.coverUrl ?: trackInfo.coverUrlMedium ?: "--"
+            findViewById<TextView>(R.id.debugDeezerTrackId)?.text = trackInfo.trackId ?: "--"
+            findViewById<TextView>(R.id.debugDeezerAlbumId)?.text = trackInfo.albumId ?: "--"
+            findViewById<TextView>(R.id.debugDeezerUrl)?.text = trackInfo.deezerUrl ?: "--"
+            findViewById<TextView>(R.id.debugDeezerAlbumUrl)?.text = trackInfo.albumUrl ?: "--"
+            findViewById<TextView>(R.id.debugDeezerPreviewUrl)?.text = trackInfo.previewUrl ?: "--"
+            findViewById<TextView>(R.id.debugDeezerCoverUrl)?.text = trackInfo.coverUrl ?: trackInfo.coverUrlMedium ?: "--"
         }
     }
 
     private fun loadCoverImage(coverPath: String?) {
-        val coverImageView = findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage) ?: return
+        val coverImageView = findViewById<android.widget.ImageView>(R.id.debugDeezerCoverImage) ?: return
 
         if (coverPath != null && coverPath.startsWith("/")) {
             // Local file path
@@ -1848,34 +1816,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun clearSpotifyDebugFields() {
-        findViewById<TextView>(R.id.debugSpotifySource)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifySource)?.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
-        findViewById<android.widget.ImageView>(R.id.debugSpotifyCoverImage)?.setImageResource(android.R.drawable.ic_menu_gallery)
+    private fun clearDeezerDebugFields() {
+        findViewById<TextView>(R.id.debugDeezerSource)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerSource)?.setTextColor(android.graphics.Color.parseColor("#AAAAAA"))
+        findViewById<android.widget.ImageView>(R.id.debugDeezerCoverImage)?.setImageResource(android.R.drawable.ic_menu_gallery)
 
         // Track fields
-        findViewById<TextView>(R.id.debugSpotifyArtist)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyTitle)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyAllArtists)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyDuration)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyPopularity)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyExplicit)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyTrackDisc)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyISRC)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerArtist)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerTitle)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerAllArtists)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerDuration)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerPopularity)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerExplicit)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerTrackDisc)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerISRC)?.text = "--"
 
         // Album fields
-        findViewById<TextView>(R.id.debugSpotifyAlbum)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyAlbumType)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyTotalTracks)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyReleaseDate)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerAlbum)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerAlbumType)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerTotalTracks)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerReleaseDate)?.text = "--"
 
         // IDs & URLs
-        findViewById<TextView>(R.id.debugSpotifyTrackId)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyAlbumId)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyUrl)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyAlbumUrl)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyPreviewUrl)?.text = "--"
-        findViewById<TextView>(R.id.debugSpotifyCoverUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerTrackId)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerAlbumId)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerAlbumUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerPreviewUrl)?.text = "--"
+        findViewById<TextView>(R.id.debugDeezerCoverUrl)?.text = "--"
     }
 
     private fun formatDuration(ms: Long): String {
@@ -1950,7 +1918,7 @@ class MainActivity : AppCompatActivity() {
             // Load cover image with Coil
             val currentFreq = frequencyScale.getFrequency()
             val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
-            val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(currentFreq)
+            val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(currentFreq)
 
             // Try station logo first (always available as fallback)
             val stationLogo = radioLogoRepository.getLogoForStation(
@@ -1959,7 +1927,7 @@ class MainActivity : AppCompatActivity() {
                 frequency = currentFreq
             )
 
-            if (spotifyEnabled && !coverUrl.isNullOrBlank()) {
+            if (deezerEnabled && !coverUrl.isNullOrBlank()) {
                 // Spotify cover available
                 if (coverUrl.startsWith("/")) {
                     nowPlayingCover?.load(java.io.File(coverUrl)) {
@@ -1989,7 +1957,7 @@ class MainActivity : AppCompatActivity() {
             // Update carousel if in carousel mode
             if (isCarouselMode) {
                 // Update carousel card cover - clear cover when Spotify is disabled for this station
-                if (!presetRepository.isSpotifyEnabledForFrequency(currentFreq)) {
+                if (!presetRepository.isDeezerEnabledForFrequency(currentFreq)) {
                     stationCarouselAdapter?.updateCurrentCover(null, null)
                 } else {
                     stationCarouselAdapter?.updateCurrentCover(
@@ -2126,7 +2094,7 @@ class MainActivity : AppCompatActivity() {
         // Load cover image
         val currentFreq = frequencyScale.getFrequency()
         val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
-        val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(currentFreq)
+        val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(currentFreq)
 
         // Try station logo first (always available as fallback)
         val stationLogo = radioLogoRepository.getLogoForStation(
@@ -2135,7 +2103,7 @@ class MainActivity : AppCompatActivity() {
             frequency = currentFreq
         )
 
-        if (spotifyEnabled && !coverUrl.isNullOrBlank()) {
+        if (deezerEnabled && !coverUrl.isNullOrBlank()) {
             // Spotify cover available
             if (coverUrl.startsWith("/")) {
                 carouselNowPlayingCover?.load(java.io.File(coverUrl)) {
@@ -2299,21 +2267,21 @@ class MainActivity : AppCompatActivity() {
     /**
      * Setup Spotify toggle button
      */
-    private fun setupSpotifyToggle() {
+    private fun setupDeezerToggle() {
         // Load saved state for current frequency
-        updateSpotifyToggleForCurrentFrequency()
+        updateDeezerToggleForCurrentFrequency()
 
         // Click handlers for both toggles (normal and carousel)
         val toggleAction = {
             val currentFreq = frequencyScale.getFrequency()
-            val newState = !presetRepository.isSpotifyEnabledForFrequency(currentFreq)
-            presetRepository.setSpotifyEnabledForFrequency(currentFreq, newState)
-            updateSpotifyToggleAppearance(newState)
+            val newState = !presetRepository.isDeezerEnabledForFrequency(currentFreq)
+            presetRepository.setDeezerEnabledForFrequency(currentFreq, newState)
+            updateDeezerToggleAppearance(newState)
 
             if (newState) {
                 // Spotify enabled - trigger reprocessing of current RT
                 rtCombiner?.forceReprocess()
-                android.widget.Toast.makeText(this, "Spotify aktiviert", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, "Deezer aktiviert", android.widget.Toast.LENGTH_SHORT).show()
             } else {
                 // Spotify disabled - immediately show raw RT with radio icon
                 val currentRt = rdsManager.rt
@@ -2327,35 +2295,35 @@ class MainActivity : AppCompatActivity() {
                 }
                 // Clear carousel cover
                 stationCarouselAdapter?.updateCurrentCover(null, null)
-                android.widget.Toast.makeText(this, "Spotify deaktiviert", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, "Deezer deaktiviert", android.widget.Toast.LENGTH_SHORT).show()
             }
         }
 
-        btnSpotifyToggle?.setOnClickListener { toggleAction() }
-        btnCarouselSpotifyToggle?.setOnClickListener { toggleAction() }
+        btnDeezerToggle?.setOnClickListener { toggleAction() }
+        btnCarouselDeezerToggle?.setOnClickListener { toggleAction() }
     }
 
     /**
      * Update Spotify toggle button for current frequency
      * Call this when frequency changes
      */
-    fun updateSpotifyToggleForCurrentFrequency() {
+    fun updateDeezerToggleForCurrentFrequency() {
         val currentFreq = frequencyScale.getFrequency()
-        val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(currentFreq)
-        updateSpotifyToggleAppearance(spotifyEnabled)
+        val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(currentFreq)
+        updateDeezerToggleAppearance(deezerEnabled)
     }
 
     /**
      * Update Spotify toggle button appearance based on state
      */
-    private fun updateSpotifyToggleAppearance(enabled: Boolean) {
+    private fun updateDeezerToggleAppearance(enabled: Boolean) {
         val bg = if (enabled) R.drawable.toggle_selected else android.R.color.transparent
-        btnSpotifyToggle?.setBackgroundResource(bg)
-        btnCarouselSpotifyToggle?.setBackgroundResource(bg)
+        btnDeezerToggle?.setBackgroundResource(bg)
+        btnCarouselDeezerToggle?.setBackgroundResource(bg)
         // Also adjust alpha to indicate state
         val alpha = if (enabled) 1.0f else 0.4f
-        btnSpotifyToggle?.alpha = alpha
-        btnCarouselSpotifyToggle?.alpha = alpha
+        btnDeezerToggle?.alpha = alpha
+        btnCarouselDeezerToggle?.alpha = alpha
     }
 
     /**
@@ -2748,7 +2716,7 @@ class MainActivity : AppCompatActivity() {
             rdsManager.clearRds()
             rtCombiner?.clearAll()
             // Reset Spotify debug overlay
-            updateSpotifyDebugInfo("Waiting...", null, null, null, null)
+            updateDeezerDebugInfo("Waiting...", null, null, null, null)
             // Reset displayed track
             lastDisplayedTrackId = null
             // Log station change
@@ -2784,7 +2752,7 @@ class MainActivity : AppCompatActivity() {
             // Update favorite button
             updateFavoriteButton()
             // Update Spotify toggle for this station
-            updateSpotifyToggleForCurrentFrequency()
+            updateDeezerToggleForCurrentFrequency()
             // Update carousel selection if in carousel mode
             if (isCarouselMode) {
                 updateCarouselSelection()
@@ -3453,80 +3421,55 @@ class MainActivity : AppCompatActivity() {
                 .show()
         }
 
-        // Spotify API Credentials
-        val editSpotifyClientId = dialogView.findViewById<android.widget.EditText>(R.id.editSpotifyClientId)
-        val editSpotifyClientSecret = dialogView.findViewById<android.widget.EditText>(R.id.editSpotifyClientSecret)
-
-        // Flag to prevent saving during initial load
-        var isLoadingSpotifyCredentials = true
-
-        // Add TextWatchers BEFORE setting text (they won't trigger during load due to flag)
-        editSpotifyClientId?.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
-                if (!isLoadingSpotifyCredentials) {
-                    presetRepository.setSpotifyClientId(s?.toString() ?: "")
-                    android.util.Log.d("fytFM", "Saved Spotify Client ID: ${s?.toString()?.take(8)}...")
-                    // Spotify sofort neu initialisieren
-                    initSpotifyIntegration()
-                }
-            }
-        })
-        editSpotifyClientSecret?.addTextChangedListener(object : android.text.TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: android.text.Editable?) {
-                if (!isLoadingSpotifyCredentials) {
-                    presetRepository.setSpotifyClientSecret(s?.toString() ?: "")
-                    android.util.Log.d("fytFM", "Saved Spotify Client Secret")
-                    // Spotify sofort neu initialisieren
-                    initSpotifyIntegration()
-                }
-            }
-        })
-
-        // Load saved values (TextWatchers won't save due to flag being true)
-        editSpotifyClientId?.setText(presetRepository.getSpotifyClientId())
-        editSpotifyClientSecret?.setText(presetRepository.getSpotifyClientSecret())
-
-        // Enable saving after initial load
-        isLoadingSpotifyCredentials = false
-
-        // Spotify Cache Enable Switch
-        val switchSpotifyCache = dialogView.findViewById<android.widget.Switch>(R.id.switchSpotifyCache)
-        switchSpotifyCache?.isChecked = presetRepository.isSpotifyCacheEnabled()
-        switchSpotifyCache?.setOnCheckedChangeListener { _, isChecked ->
-            presetRepository.setSpotifyCacheEnabled(isChecked)
+        // Deezer Cache Enable Switch (Deezer braucht keine API-Credentials!)
+        val switchDeezerCache = dialogView.findViewById<android.widget.Switch>(R.id.switchDeezerCache)
+        switchDeezerCache?.isChecked = presetRepository.isDeezerCacheEnabled()
+        switchDeezerCache?.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setDeezerCacheEnabled(isChecked)
         }
 
-        // Spotify Cache Stats and Export/Import
-        val tvSpotifyCacheStats = dialogView.findViewById<TextView>(R.id.tvSpotifyCacheStats)
-        val btnExportCache = dialogView.findViewById<TextView>(R.id.btnExportSpotifyCache)
-        val btnImportCache = dialogView.findViewById<TextView>(R.id.btnImportSpotifyCache)
+        // Deezer Cache Stats and Export/Import/Clear
+        val tvDeezerCacheStats = dialogView.findViewById<TextView>(R.id.tvDeezerCacheStats)
+        val btnExportCache = dialogView.findViewById<TextView>(R.id.btnExportDeezerCache)
+        val btnImportCache = dialogView.findViewById<TextView>(R.id.btnImportDeezerCache)
+        val btnClearCache = dialogView.findViewById<TextView>(R.id.btnClearDeezerCache)
 
         // Update cache stats display
         fun updateCacheStats() {
-            spotifyCache?.let { cache ->
+            deezerCache?.let { cache ->
                 val (trackCount, coverSize) = cache.getCacheStats()
                 val sizeStr = if (coverSize > 1024 * 1024) {
                     "%.1f MB".format(coverSize / 1024.0 / 1024.0)
                 } else {
                     "%.1f KB".format(coverSize / 1024.0)
                 }
-                tvSpotifyCacheStats?.text = "Cache: $trackCount Tracks ($sizeStr)"
+                tvDeezerCacheStats?.text = "Cache: $trackCount Tracks ($sizeStr)"
             }
         }
         updateCacheStats()
+
+        // Clear cache button
+        btnClearCache?.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Cache löschen")
+                .setMessage("Alle gecachten Tracks und Cover-Bilder werden gelöscht. Fortfahren?")
+                .setPositiveButton("Löschen") { _, _ ->
+                    deezerCache?.clearCache()
+                    updateCacheStats()
+                    android.widget.Toast.makeText(this, "Cache gelöscht", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("Abbrechen", null)
+                .show()
+        }
 
         // Export cache button
         btnExportCache?.setOnClickListener {
             val intent = android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(android.content.Intent.CATEGORY_OPENABLE)
                 type = "application/zip"
-                putExtra(android.content.Intent.EXTRA_TITLE, "spotify_cache_${System.currentTimeMillis()}.zip")
+                putExtra(android.content.Intent.EXTRA_TITLE, "deezer_cache_${System.currentTimeMillis()}.zip")
             }
-            spotifyCacheExportLauncher.launch(intent)
+            deezerCacheExportLauncher.launch(intent)
         }
 
         // Import cache button
@@ -3535,13 +3478,13 @@ class MainActivity : AppCompatActivity() {
                 addCategory(android.content.Intent.CATEGORY_OPENABLE)
                 type = "application/zip"
             }
-            spotifyCacheImportLauncher.launch(intent)
+            deezerCacheImportLauncher.launch(intent)
         }
 
         // View cache button
-        dialogView.findViewById<TextView>(R.id.btnViewSpotifyCache)?.setOnClickListener {
+        dialogView.findViewById<TextView>(R.id.btnViewDeezerCache)?.setOnClickListener {
             dialog.dismiss()
-            showSpotifyCacheDialog()
+            showDeezerCacheDialog()
         }
 
         // Language item (opens dialog)
@@ -3644,12 +3587,12 @@ class MainActivity : AppCompatActivity() {
         android.os.Process.killProcess(android.os.Process.myPid())
     }
 
-    private fun exportSpotifyCacheToUri(uri: android.net.Uri) {
+    private fun exportDeezerCacheToUri(uri: android.net.Uri) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 // Create temp file for zip
-                val tempFile = java.io.File(cacheDir, "spotify_cache_export.zip")
-                val success = spotifyCache?.exportToZip(tempFile) ?: false
+                val tempFile = java.io.File(cacheDir, "deezer_cache_export.zip")
+                val success = deezerCache?.exportToZip(tempFile) ?: false
 
                 if (success) {
                     // Copy temp file to user-selected location
@@ -3689,18 +3632,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun importSpotifyCacheFromUri(uri: android.net.Uri) {
+    private fun importDeezerCacheFromUri(uri: android.net.Uri) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 // Copy user file to temp location
-                val tempFile = java.io.File(cacheDir, "spotify_cache_import.zip")
+                val tempFile = java.io.File(cacheDir, "deezer_cache_import.zip")
                 contentResolver.openInputStream(uri)?.use { input ->
                     tempFile.outputStream().use { output ->
                         input.copyTo(output)
                     }
                 }
 
-                val importedCount = spotifyCache?.importFromZip(tempFile) ?: -1
+                val importedCount = deezerCache?.importFromZip(tempFile) ?: -1
                 tempFile.delete()
 
                 withContext(Dispatchers.Main) {
@@ -3731,8 +3674,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showSpotifyCacheDialog() {
-        val dialogView = layoutInflater.inflate(R.layout.dialog_spotify_cache, null)
+    private fun showDeezerCacheDialog() {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_deezer_cache, null)
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
             .create()
@@ -3743,14 +3686,14 @@ class MainActivity : AppCompatActivity() {
         val tvEmpty = dialogView.findViewById<TextView>(R.id.tvCacheEmpty)
         val btnClose = dialogView.findViewById<TextView>(R.id.btnCloseCache)
 
-        val adapter = at.planqton.fytfm.spotify.CachedTrackAdapter { track ->
-            // On track click - open Spotify URL if available
-            track.spotifyUrl?.let { url ->
+        val adapter = at.planqton.fytfm.deezer.CachedTrackAdapter { track ->
+            // On track click - open Deezer URL if available
+            track.deezerUrl?.let { url ->
                 try {
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
                     startActivity(intent)
                 } catch (e: Exception) {
-                    android.widget.Toast.makeText(this, "Kann Spotify nicht öffnen", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(this, "Kann Deezer nicht öffnen", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -3759,7 +3702,7 @@ class MainActivity : AppCompatActivity() {
         rvTracks.adapter = adapter
 
         // Load tracks
-        val tracks = spotifyCache?.getAllCachedTracks() ?: emptyList()
+        val tracks = deezerCache?.getAllCachedTracks() ?: emptyList()
         tvCount.text = "${tracks.size} Tracks"
 
         if (tracks.isEmpty()) {
@@ -4986,13 +4929,13 @@ class MainActivity : AppCompatActivity() {
         container.addView(input)
 
         // Spotify toggle
-        val spotifyEnabled = presetRepository.isSpotifyEnabledForFrequency(station.frequency)
-        val spotifySwitch = android.widget.Switch(this).apply {
-            text = "Spotify/Lokal Suche"
-            isChecked = spotifyEnabled
+        val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(station.frequency)
+        val deezerSwitch = android.widget.Switch(this).apply {
+            text = "Deezer/Lokal Suche"
+            isChecked = deezerEnabled
             setPadding(0, 24, 0, 0)
         }
-        container.addView(spotifySwitch)
+        container.addView(deezerSwitch)
 
         AlertDialog.Builder(this)
             .setTitle("Sender bearbeiten")
@@ -5002,10 +4945,10 @@ class MainActivity : AppCompatActivity() {
                 // Save station name
                 onSave(input.text.toString())
                 // Save Spotify setting for this frequency
-                presetRepository.setSpotifyEnabledForFrequency(station.frequency, spotifySwitch.isChecked)
+                presetRepository.setDeezerEnabledForFrequency(station.frequency, deezerSwitch.isChecked)
                 // Update toggle if this is current frequency
                 if (Math.abs(frequencyScale.getFrequency() - station.frequency) < 0.05f) {
-                    updateSpotifyToggleForCurrentFrequency()
+                    updateDeezerToggleForCurrentFrequency()
                 }
             }
             .setNegativeButton("Abbrechen", null)

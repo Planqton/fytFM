@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.os.Environment
 import android.util.Log
-import at.planqton.fytfm.spotify.TrackInfo
+import at.planqton.fytfm.deezer.TrackInfo
 import java.io.BufferedReader
 import java.io.File
 import java.io.InputStreamReader
@@ -133,7 +133,7 @@ class BugReportHelper(private val context: Context) {
                     appendLine("Release Date: ${track.releaseDate ?: "(none)"}")
                     appendLine("Track ID: ${track.trackId ?: "(none)"}")
                     appendLine("Album ID: ${track.albumId ?: "(none)"}")
-                    appendLine("Spotify URL: ${track.spotifyUrl ?: "(none)"}")
+                    appendLine("Spotify URL: ${track.deezerUrl ?: "(none)"}")
                     appendLine("Cover URL: ${track.coverUrl ?: track.coverUrlMedium ?: "(none)"}")
                 }
                 appendLine()
@@ -345,7 +345,7 @@ class BugReportHelper(private val context: Context) {
                     appendLine("Release Date: ${track.releaseDate ?: "(none)"}")
                     appendLine("Track ID: ${track.trackId ?: "(none)"}")
                     appendLine("Album ID: ${track.albumId ?: "(none)"}")
-                    appendLine("Spotify URL: ${track.spotifyUrl ?: "(none)"}")
+                    appendLine("Spotify URL: ${track.deezerUrl ?: "(none)"}")
                     appendLine("Cover URL: ${track.coverUrl ?: track.coverUrlMedium ?: "(none)"}")
                 }
                 appendLine()
