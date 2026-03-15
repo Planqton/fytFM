@@ -20,6 +20,7 @@ import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import androidx.media3.common.util.UnstableApi
 import at.planqton.fytfm.MainActivity
+import at.planqton.fytfm.R
 import at.planqton.fytfm.data.PresetRepository
 import com.android.fmradio.FmNative
 import com.google.common.collect.ImmutableList
@@ -188,11 +189,13 @@ class FytFMMediaService : MediaLibraryService() {
         // Artist/Subtitle: Frequenz (manche Player zeigen Artist, andere Subtitle)
         val displayTitle = rt?.takeIf { it.isNotBlank() } ?: stationName
 
-        // Artwork nur als Bitmap-Daten
+        // Artwork: Deezer-Cover → Radio-Logo → AM/FM Fallback
         val artworkPath = localCoverPath ?: radioLogoPath
-        val artworkData: ByteArray? = if (!artworkPath.isNullOrBlank() && File(artworkPath).exists()) {
-            loadImageAsBytes(artworkPath)
-        } else null
+        val fallbackDrawable = if (isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
+        val artworkData: ByteArray? = when {
+            !artworkPath.isNullOrBlank() && File(artworkPath).exists() -> loadImageAsBytes(artworkPath)
+            else -> loadDrawableAsBytes(fallbackDrawable)
+        }
 
         val metadata = MediaMetadata.Builder()
             .setTitle(displayTitle)                                    // RT oder Stationsname
@@ -283,6 +286,32 @@ class FytFMMediaService : MediaLibraryService() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error loading artwork: $imagePath", e)
+            null
+        }
+    }
+
+    /**
+     * Lädt ein Drawable als Byte-Array für MediaMetadata.setArtworkData()
+     * Verwendet für Fallback-Icon wenn kein Cover/Logo vorhanden
+     */
+    private fun loadDrawableAsBytes(drawableResId: Int): ByteArray? {
+        return try {
+            val drawable = androidx.core.content.ContextCompat.getDrawable(this, drawableResId)
+                ?: return null
+
+            val bitmap = android.graphics.Bitmap.createBitmap(300, 300, android.graphics.Bitmap.Config.ARGB_8888)
+            val canvas = android.graphics.Canvas(bitmap)
+            drawable.setBounds(0, 0, 300, 300)
+            drawable.draw(canvas)
+
+            val stream = ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+            val bytes = stream.toByteArray()
+            bitmap.recycle()
+            Log.d(TAG, "Loaded fallback drawable: ${bytes.size} bytes")
+            bytes
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading drawable: $drawableResId", e)
             null
         }
     }
