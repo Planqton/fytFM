@@ -59,6 +59,7 @@ class RtCombiner(
     private val lastSearchRt = mutableMapOf<Int, String>() // Track last stripped RT for debug display
     private val lastOriginalRt = mutableMapOf<Int, String>() // Track last original RT for debug display
     private val bufferResultRts = mutableMapOf<Int, Set<String>>() // RTs that were combined to find last result
+    private val currentResultRts = mutableMapOf<Int, Set<String>>() // All RTs belonging to current result (for silent early-out)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     data class RtEntry(
@@ -178,6 +179,28 @@ class RtCombiner(
         val trimmedRt = rt.trim()
         if (trimmedRt.isBlank()) return null
 
+        // Silent early-out: If this RT is part of the current result and nothing changed,
+        // return cached immediately WITHOUT any debug updates or UI triggers
+        val resultRts = currentResultRts[pi]
+        val rtLower = trimmedRt.lowercase()
+        val cachedResult = lastResult[pi]
+
+        if (resultRts != null && rtLower in resultRts && cachedResult != null) {
+            // RT is part of current result - return cached silently
+            return cachedResult
+        }
+
+        // If we have a cached result but this RT is NOT part of it,
+        // it means a NEW song is starting - clear old caches
+        if (resultRts != null && rtLower !in resultRts) {
+            Log.d(TAG, "New RT '$rtLower' detected (not in $resultRts) - clearing old caches")
+            currentResultRts.remove(pi)
+            bufferResultRts.remove(pi)
+            lastResult.remove(pi)
+            lastTrackInfo.remove(pi)
+            lastProcessedRt.remove(pi)
+        }
+
         // Check if RT is ignored
         val normalizedRt = RtCorrection.normalizeRt(trimmedRt)
         if (correctionDao?.isRtIgnored(normalizedRt) == true) {
@@ -259,6 +282,8 @@ class RtCombiner(
                     // Save all buffer RTs so they're recognized as "already processed"
                     val bufferTexts = buffer.map { it.text.lowercase() }.toSet()
                     bufferResultRts[pi] = bufferTexts
+                    currentResultRts[pi] = bufferTexts  // For silent early-out on next cycle
+                    Log.d(TAG, "SET currentResultRts[$pi] = $bufferTexts")
 
                     // Update display to show combined RT
                     val combinedRt = buffer.joinToString(" | ") { it.text }
@@ -315,6 +340,11 @@ class RtCombiner(
         if (buffer.size >= 2) {
             val (bufferResult, bufferTrack) = tryBufferCombinations(pi, buffer)
             if (bufferResult != null) {
+                // Save buffer RTs for silent early-out on next cycle
+                val bufferTexts = buffer.map { it.text.lowercase() }.toSet()
+                bufferResultRts[pi] = bufferTexts
+                currentResultRts[pi] = bufferTexts
+
                 lastResult[pi] = bufferResult
                 if (bufferTrack != null) lastTrackInfo[pi] = bufferTrack
                 clearBuffer(pi)
@@ -554,6 +584,7 @@ class RtCombiner(
         lastSearchRt.clear()
         lastOriginalRt.clear()
         bufferResultRts.clear()
+        currentResultRts.clear()
         currentRt = null
         currentTrackInfo = null
     }
@@ -569,6 +600,7 @@ class RtCombiner(
         lastSearchRt.entries.removeIf { true } // Clear all search RT
         lastTrackInfo.entries.removeIf { true } // Clear all track info
         lastResult.entries.removeIf { true } // Clear all results
+        currentResultRts.clear() // Clear silent early-out cache
         currentTrackInfo = null
         Log.d(TAG, "Force re-process triggered for RT: $rt")
     }
@@ -584,6 +616,7 @@ class RtCombiner(
         lastSearchRt.remove(pi)
         lastOriginalRt.remove(pi)
         bufferResultRts.remove(pi)
+        currentResultRts.remove(pi)
     }
 
     /**
@@ -608,5 +641,6 @@ class RtCombiner(
         lastSearchRt.clear()
         lastOriginalRt.clear()
         bufferResultRts.clear()
+        currentResultRts.clear()
     }
 }
