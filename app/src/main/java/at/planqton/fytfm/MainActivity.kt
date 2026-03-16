@@ -117,15 +117,19 @@ class MainActivity : AppCompatActivity() {
     // Now Playing Bar
     private var nowPlayingBar: View? = null
     private var nowPlayingCover: ImageView? = null
+    private var nowPlayingPs: TextView? = null
     private var nowPlayingArtist: TextView? = null
     private var nowPlayingTitle: TextView? = null
     private var nowPlayingRawRt: TextView? = null
     private var lastDisplayedTrackId: String? = null
+    private var psTapCount = 0
+    private var lastPsTapTime = 0L
     private var lastDebugTrackId: String? = null
 
     // Carousel Now Playing Bar
     private var carouselNowPlayingBar: View? = null
     private var carouselNowPlayingCover: ImageView? = null
+    private var carouselNowPlayingPs: TextView? = null
     private var carouselNowPlayingArtist: TextView? = null
     private var carouselNowPlayingTitle: TextView? = null
     private var carouselNowPlayingRawRt: TextView? = null
@@ -186,6 +190,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var stationAdapter: StationAdapter
     private lateinit var fmNative: FmNative
     private lateinit var rdsManager: RdsManager
+    private val lastSyncedPs = mutableMapOf<Int, String>()  // FreqKey -> letzter gesyncter PS
     private lateinit var radioScanner: at.planqton.fytfm.scanner.RadioScanner
     private lateinit var updateRepository: UpdateRepository
     private lateinit var rdsLogRepository: RdsLogRepository
@@ -722,6 +727,41 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 runOnUiThread {
+                    // Auto-Sync PS zu Preset wenn syncName aktiviert ist
+                    if (!ps.isNullOrBlank()) {
+                        val currentFreq = frequencyScale.getFrequency()
+                        val freqKey = (currentFreq * 10).toInt()
+                        val lastPs = lastSyncedPs[freqKey]
+
+                        // Nur synchen wenn PS sich geändert hat
+                        if (lastPs != ps) {
+                            val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                            val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
+                            val currentStation = stations.find { Math.abs(it.frequency - currentFreq) < 0.05f }
+
+                            // Sync wenn: Station existiert UND (syncName aktiv ODER name leer)
+                            if (currentStation != null && (currentStation.syncName || currentStation.name.isNullOrBlank())) {
+                                // Nur speichern wenn Name tatsächlich anders ist
+                                if (currentStation.name != ps) {
+                                    val updatedStations = stations.map {
+                                        if (Math.abs(it.frequency - currentFreq) < 0.05f) {
+                                            it.copy(name = ps)
+                                        } else it
+                                    }
+                                    if (isAM) {
+                                        presetRepository.saveAmStations(updatedStations)
+                                    } else {
+                                        presetRepository.saveFmStations(updatedStations)
+                                    }
+                                    loadStationsForCurrentMode()
+                                    android.util.Log.i("MainActivity", "Synced PS '$ps' to preset %.1f".format(currentFreq))
+                                }
+                            }
+                            // PS als gesynct markieren
+                            lastSyncedPs[freqKey] = ps
+                        }
+                    }
+
                     // Alter für jeden Wert holen
                     val psAge = rdsManager.psAgeMs
                     val piAge = rdsManager.piAgeMs
@@ -942,6 +982,7 @@ class MainActivity : AppCompatActivity() {
         // Now Playing Bar
         nowPlayingBar = findViewById(R.id.nowPlayingBar)
         nowPlayingCover = findViewById(R.id.nowPlayingCover)
+        nowPlayingPs = findViewById(R.id.nowPlayingPs)
         nowPlayingArtist = findViewById(R.id.nowPlayingArtist)
         nowPlayingTitle = findViewById(R.id.nowPlayingTitle)
         nowPlayingRawRt = findViewById(R.id.nowPlayingRawRt)
@@ -949,6 +990,7 @@ class MainActivity : AppCompatActivity() {
         // Carousel Now Playing Bar
         carouselNowPlayingBar = findViewById(R.id.carouselNowPlayingBar)
         carouselNowPlayingCover = findViewById(R.id.carouselNowPlayingCover)
+        carouselNowPlayingPs = findViewById(R.id.carouselNowPlayingPs)
         carouselNowPlayingArtist = findViewById(R.id.carouselNowPlayingArtist)
         carouselNowPlayingTitle = findViewById(R.id.carouselNowPlayingTitle)
         carouselNowPlayingRawRt = findViewById(R.id.carouselNowPlayingRawRt)
@@ -956,6 +998,13 @@ class MainActivity : AppCompatActivity() {
         // Ignored RT indicators
         nowPlayingIgnoredIndicator = findViewById(R.id.nowPlayingIgnoredIndicator)
         carouselIgnoredIndicator = findViewById(R.id.carouselIgnoredIndicator)
+
+        // PS triple-tap to rename station
+        val psTapListener = View.OnClickListener {
+            handlePsTripleTap()
+        }
+        nowPlayingPs?.setOnClickListener(psTapListener)
+        carouselNowPlayingPs?.setOnClickListener(psTapListener)
 
         // PiP Layout
         pipLayout = findViewById(R.id.pipLayout)
@@ -1905,6 +1954,18 @@ class MainActivity : AppCompatActivity() {
         lastDisplayedTrackId = newTrackId
 
         if (trackInfo != null) {
+            // Update PS (Station Name)
+            val ps = rdsManager.ps
+            if (!ps.isNullOrBlank()) {
+                nowPlayingPs?.text = ps
+                nowPlayingPs?.visibility = View.VISIBLE
+
+                // Auto-name station if name is null
+                autoNameStationIfNeeded(ps)
+            } else {
+                nowPlayingPs?.visibility = View.GONE
+            }
+
             // Update text - bei leerem Artist nur Titel zeigen
             if (trackInfo.artist.isBlank()) {
                 nowPlayingArtist?.visibility = View.GONE
@@ -1917,6 +1978,8 @@ class MainActivity : AppCompatActivity() {
 
             // Load cover image with Coil
             val currentFreq = frequencyScale.getFrequency()
+            val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+            val placeholderDrawable = if (isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
             val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
             val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(currentFreq)
 
@@ -1932,26 +1995,26 @@ class MainActivity : AppCompatActivity() {
                 if (coverUrl.startsWith("/")) {
                     nowPlayingCover?.load(java.io.File(coverUrl)) {
                         crossfade(true)
-                        placeholder(R.drawable.ic_radio)
-                        error(R.drawable.ic_radio)
+                        placeholder(placeholderDrawable)
+                        error(placeholderDrawable)
                     }
                 } else {
                     nowPlayingCover?.load(coverUrl) {
                         crossfade(true)
-                        placeholder(R.drawable.ic_radio)
-                        error(R.drawable.ic_radio)
+                        placeholder(placeholderDrawable)
+                        error(placeholderDrawable)
                     }
                 }
             } else if (stationLogo != null) {
                 // Station logo available
                 nowPlayingCover?.load(java.io.File(stationLogo)) {
                     crossfade(true)
-                    placeholder(R.drawable.ic_radio)
-                    error(R.drawable.ic_radio)
+                    placeholder(placeholderDrawable)
+                    error(placeholderDrawable)
                 }
             } else {
                 // Fallback: Radio icon
-                nowPlayingCover?.setImageResource(R.drawable.ic_radio)
+                nowPlayingCover?.setImageResource(placeholderDrawable)
             }
 
             // Update carousel if in carousel mode
@@ -1978,6 +2041,97 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Auto-names a station with PS value if the station has no name yet
+     */
+    private fun autoNameStationIfNeeded(ps: String) {
+        val frequency = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+
+        // Load stations and check if current frequency has no name
+        val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
+        val existingStation = stations.find { Math.abs(it.frequency - frequency) < 0.05f }
+
+        // Only auto-name if station exists but has no name
+        if (existingStation != null && existingStation.name.isNullOrBlank()) {
+            val updatedStations = stations.map {
+                if (Math.abs(it.frequency - frequency) < 0.05f) {
+                    it.copy(name = ps)
+                } else it
+            }
+
+            // Save updated stations
+            if (isAM) {
+                presetRepository.saveAmStations(updatedStations)
+            } else {
+                presetRepository.saveFmStations(updatedStations)
+            }
+
+            // Reload station list
+            loadStationsForCurrentMode()
+        }
+    }
+
+    /**
+     * Handles triple-tap on PS to rename station with PS value
+     */
+    private fun handlePsTripleTap() {
+        val currentTime = System.currentTimeMillis()
+        val ps = rdsManager.ps
+
+        // Reset counter if more than 500ms since last tap
+        if (currentTime - lastPsTapTime > 500) {
+            psTapCount = 0
+        }
+
+        psTapCount++
+        lastPsTapTime = currentTime
+
+        if (psTapCount >= 3 && !ps.isNullOrBlank()) {
+            psTapCount = 0
+
+            // Get current frequency and mode
+            val frequency = frequencyScale.getFrequency()
+            val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+
+            // Load stations and update the name
+            val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
+            val existingStation = stations.find { Math.abs(it.frequency - frequency) < 0.05f }
+
+            val updatedStations = if (existingStation != null) {
+                // Update existing station name
+                stations.map {
+                    if (Math.abs(it.frequency - frequency) < 0.05f) {
+                        it.copy(name = ps)
+                    } else it
+                }
+            } else {
+                // Add new station with PS name
+                val newStation = at.planqton.fytfm.data.RadioStation(
+                    frequency = frequency,
+                    name = ps,
+                    rssi = 0,
+                    isAM = isAM,
+                    isFavorite = false
+                )
+                (stations + newStation).sortedBy { it.frequency }
+            }
+
+            // Save updated stations
+            if (isAM) {
+                presetRepository.saveAmStations(updatedStations)
+            } else {
+                presetRepository.saveFmStations(updatedStations)
+            }
+
+            // Reload station list
+            loadStationsForCurrentMode()
+
+            // Show confirmation toast
+            android.widget.Toast.makeText(this, "Sender umbenannt: $ps", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
      * Setzt die Now Playing Bar zurück (ohne sie zu verstecken, da permanent sichtbar)
      */
     fun hideNowPlayingBarExplicit() {
@@ -1985,15 +2139,18 @@ class MainActivity : AppCompatActivity() {
         // Clear carousel cover
         stationCarouselAdapter?.updateCurrentCover(null, null)
         // Bar bleibt sichtbar, nur Inhalt zurücksetzen
+        nowPlayingPs?.visibility = View.GONE
         nowPlayingTitle?.text = ""
         nowPlayingArtist?.text = ""
         nowPlayingArtist?.visibility = View.GONE
-        nowPlayingCover?.setImageResource(R.drawable.ic_radio)
+        val placeholderDrawable = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM) R.drawable.placeholder_am else R.drawable.placeholder_fm
+        nowPlayingCover?.setImageResource(placeholderDrawable)
         // Carousel bar zurücksetzen
+        carouselNowPlayingPs?.visibility = View.GONE
         carouselNowPlayingTitle?.text = ""
         carouselNowPlayingArtist?.text = ""
         carouselNowPlayingArtist?.visibility = View.GONE
-        carouselNowPlayingCover?.setImageResource(R.drawable.ic_radio)
+        carouselNowPlayingCover?.setImageResource(placeholderDrawable)
     }
 
     /**
@@ -2010,6 +2167,18 @@ class MainActivity : AppCompatActivity() {
             "FM ${String.format("%.1f", frequency)}"
         }
 
+        // Update PS (Station Name from RDS)
+        val ps = rdsManager.ps
+        if (!ps.isNullOrBlank()) {
+            nowPlayingPs?.text = ps
+            nowPlayingPs?.visibility = View.VISIBLE
+            carouselNowPlayingPs?.text = ps
+            carouselNowPlayingPs?.visibility = View.VISIBLE
+        } else {
+            nowPlayingPs?.visibility = View.GONE
+            carouselNowPlayingPs?.visibility = View.GONE
+        }
+
         // Set text: Station name or frequency
         val displayName = stationName ?: freqDisplay
         nowPlayingTitle?.text = displayName
@@ -2017,14 +2186,15 @@ class MainActivity : AppCompatActivity() {
         nowPlayingArtist?.visibility = if (stationName != null) View.VISIBLE else View.GONE
 
         // Set cover: Station logo or radio icon
+        val placeholderDrawable = if (isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
         if (logoPath != null) {
             nowPlayingCover?.load(java.io.File(logoPath)) {
                 crossfade(true)
-                placeholder(R.drawable.ic_radio)
-                error(R.drawable.ic_radio)
+                placeholder(placeholderDrawable)
+                error(placeholderDrawable)
             }
         } else {
-            nowPlayingCover?.setImageResource(R.drawable.ic_radio)
+            nowPlayingCover?.setImageResource(placeholderDrawable)
         }
 
         // Clear raw RT display and hide ignored indicator
@@ -2041,11 +2211,11 @@ class MainActivity : AppCompatActivity() {
         if (logoPath != null) {
             carouselNowPlayingCover?.load(java.io.File(logoPath)) {
                 crossfade(true)
-                placeholder(R.drawable.ic_radio)
-                error(R.drawable.ic_radio)
+                placeholder(placeholderDrawable)
+                error(placeholderDrawable)
             }
         } else {
-            carouselNowPlayingCover?.setImageResource(R.drawable.ic_radio)
+            carouselNowPlayingCover?.setImageResource(placeholderDrawable)
         }
 
         // Clear carousel card cover
@@ -2081,6 +2251,15 @@ class MainActivity : AppCompatActivity() {
     private fun updateCarouselNowPlayingBar(trackInfo: TrackInfo) {
         val bar = carouselNowPlayingBar ?: return
 
+        // Update PS (Station Name)
+        val ps = rdsManager.ps
+        if (!ps.isNullOrBlank()) {
+            carouselNowPlayingPs?.text = ps
+            carouselNowPlayingPs?.visibility = View.VISIBLE
+        } else {
+            carouselNowPlayingPs?.visibility = View.GONE
+        }
+
         // Update text
         if (trackInfo.artist.isBlank()) {
             carouselNowPlayingArtist?.visibility = View.GONE
@@ -2093,6 +2272,8 @@ class MainActivity : AppCompatActivity() {
 
         // Load cover image
         val currentFreq = frequencyScale.getFrequency()
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val placeholderDrawable = if (isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
         val coverUrl = trackInfo.coverUrl ?: trackInfo.coverUrlMedium
         val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(currentFreq)
 
@@ -2108,26 +2289,26 @@ class MainActivity : AppCompatActivity() {
             if (coverUrl.startsWith("/")) {
                 carouselNowPlayingCover?.load(java.io.File(coverUrl)) {
                     crossfade(true)
-                    placeholder(R.drawable.ic_radio)
-                    error(R.drawable.ic_radio)
+                    placeholder(placeholderDrawable)
+                    error(placeholderDrawable)
                 }
             } else {
                 carouselNowPlayingCover?.load(coverUrl) {
                     crossfade(true)
-                    placeholder(R.drawable.ic_radio)
-                    error(R.drawable.ic_radio)
+                    placeholder(placeholderDrawable)
+                    error(placeholderDrawable)
                 }
             }
         } else if (stationLogo != null) {
             // Station logo available
             carouselNowPlayingCover?.load(java.io.File(stationLogo)) {
                 crossfade(true)
-                placeholder(R.drawable.ic_radio)
-                error(R.drawable.ic_radio)
+                placeholder(placeholderDrawable)
+                error(placeholderDrawable)
             }
         } else {
             // Fallback: Radio icon
-            carouselNowPlayingCover?.setImageResource(R.drawable.ic_radio)
+            carouselNowPlayingCover?.setImageResource(placeholderDrawable)
         }
 
         // Show bar
@@ -3273,20 +3454,6 @@ class MainActivity : AppCompatActivity() {
             AlertDialog.Builder(this)
                 .setTitle(R.string.auto_scan_sensitivity)
                 .setMessage(R.string.auto_scan_sensitivity_info)
-                .setPositiveButton(R.string.confirm, null)
-                .show()
-        }
-
-        // Overwrite Favorites toggle
-        val switchOverwriteFavorites = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchOverwriteFavorites)
-        switchOverwriteFavorites.isChecked = presetRepository.isOverwriteFavorites()
-        switchOverwriteFavorites.setOnCheckedChangeListener { _, isChecked ->
-            presetRepository.setOverwriteFavorites(isChecked)
-        }
-        dialogView.findViewById<ImageButton>(R.id.btnOverwriteFavoritesInfo).setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(R.string.overwrite_favorites)
-                .setMessage(R.string.overwrite_favorites_info)
                 .setPositiveButton(R.string.confirm, null)
                 .show()
         }
@@ -4876,13 +5043,21 @@ class MainActivity : AppCompatActivity() {
 
         val adapter = at.planqton.fytfm.ui.StationEditorAdapter(
             onEdit = { station ->
-                showEditStationDialog(station) { newName ->
-                    // Update station name
+                showEditStationDialog(station) { newName, syncName ->
+                    // Update station name and syncName
                     val updatedStations = stations.map {
-                        if (it.frequency == station.frequency) it.copy(name = newName) else it
+                        if (it.frequency == station.frequency) it.copy(name = newName, syncName = syncName) else it
                     }
                     saveStations(updatedStations)
                     loadStationsForCurrentMode()
+                    // Wenn Sync aktiviert wurde, Cache leeren damit nächster PS-Update synct
+                    if (syncName) {
+                        val freqKey = (station.frequency * 10).toInt()
+                        lastSyncedPs.remove(freqKey)
+                    }
+                    // Dialog neu öffnen mit aktualisierter Liste
+                    dialog.dismiss()
+                    showRadioEditorDialog()
                 }
             },
             onFavorite = { station ->
@@ -4890,7 +5065,10 @@ class MainActivity : AppCompatActivity() {
                     if (it.frequency == station.frequency) it.copy(isFavorite = !it.isFavorite) else it
                 }
                 saveStations(updatedStations)
-                rvStations.adapter?.notifyDataSetChanged()
+                loadStationsForCurrentMode()
+                // Dialog neu öffnen mit aktualisierter Liste
+                dialog.dismiss()
+                showRadioEditorDialog()
             },
             onDelete = { station ->
                 AlertDialog.Builder(this)
@@ -4914,8 +5092,8 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
 
-    private fun showEditStationDialog(station: at.planqton.fytfm.data.RadioStation, onSave: (String) -> Unit) {
-        // Create container for name input and Spotify toggle
+    private fun showEditStationDialog(station: at.planqton.fytfm.data.RadioStation, onSave: (String, Boolean) -> Unit) {
+        // Create container for name input and toggles
         val container = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
             setPadding(48, 32, 48, 16)
@@ -4928,12 +5106,20 @@ class MainActivity : AppCompatActivity() {
         }
         container.addView(input)
 
+        // Sync Name checkbox
+        val syncNameCheckbox = android.widget.CheckBox(this).apply {
+            text = "Sync mit RDS (PS)"
+            isChecked = station.syncName
+            setPadding(0, 24, 0, 0)
+        }
+        container.addView(syncNameCheckbox)
+
         // Spotify toggle
         val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(station.frequency)
         val deezerSwitch = android.widget.Switch(this).apply {
             text = "Deezer/Lokal Suche"
             isChecked = deezerEnabled
-            setPadding(0, 24, 0, 0)
+            setPadding(0, 16, 0, 0)
         }
         container.addView(deezerSwitch)
 
@@ -4942,8 +5128,8 @@ class MainActivity : AppCompatActivity() {
             .setMessage(station.getDisplayFrequency())
             .setView(container)
             .setPositiveButton("Speichern") { _, _ ->
-                // Save station name
-                onSave(input.text.toString())
+                // Save station name and syncName
+                onSave(input.text.toString(), syncNameCheckbox.isChecked)
                 // Save Spotify setting for this frequency
                 presetRepository.setDeezerEnabledForFrequency(station.frequency, deezerSwitch.isChecked)
                 // Update toggle if this is current frequency
@@ -4958,25 +5144,31 @@ class MainActivity : AppCompatActivity() {
     private fun showStationScanDialog() {
         val isFmMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM
         val highSensitivity = presetRepository.isAutoScanSensitivity()
-        val dialog = at.planqton.fytfm.ui.StationListDialog(
-            this,
-            radioScanner,
-            onStationsAdded = { stations ->
-                // Gefundene Sender mit bestehenden zusammenführen (Favoriten schützen)
-                val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
-                presetRepository.mergeScannedStations(stations, isAM)
-                loadStationsForCurrentMode()
-            },
-            onStationSelected = { station ->
-                // Station ausgewählt - tune zur Frequenz
-                frequencyScale.setFrequency(station.frequency)
-                updateFrequencyDisplay(station.frequency)
-                rdsManager.tune(station.frequency)
-            },
-            initialMode = isFmMode,
-            highSensitivity = highSensitivity
-        )
-        dialog.show()
+
+        // Erst ScanOptionsDialog anzeigen für Methode + Filter-Einstellungen
+        at.planqton.fytfm.ui.ScanOptionsDialog(this, presetRepository) { config ->
+            // Nach Auswahl den eigentlichen Scan-Dialog öffnen
+            val dialog = at.planqton.fytfm.ui.StationListDialog(
+                this,
+                radioScanner,
+                onStationsAdded = { stations ->
+                    // Gefundene Sender mit bestehenden zusammenführen (Favoriten schützen)
+                    val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                    presetRepository.mergeScannedStations(stations, isAM)
+                    loadStationsForCurrentMode()
+                },
+                onStationSelected = { station ->
+                    // Station ausgewählt - tune zur Frequenz
+                    frequencyScale.setFrequency(station.frequency)
+                    updateFrequencyDisplay(station.frequency)
+                    rdsManager.tune(station.frequency)
+                },
+                initialMode = isFmMode,
+                highSensitivity = highSensitivity,
+                config = config
+            )
+            dialog.show()
+        }.show()
     }
 
     private fun saveStations(stations: List<at.planqton.fytfm.data.RadioStation>) {

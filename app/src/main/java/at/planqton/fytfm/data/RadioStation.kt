@@ -5,7 +5,8 @@ data class RadioStation(
     val name: String? = null,
     val rssi: Int = 0,
     val isAM: Boolean = false,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val syncName: Boolean = true  // Auto-Sync mit RDS PS
 ) {
     fun getDisplayFrequency(): String {
         return if (isAM) {

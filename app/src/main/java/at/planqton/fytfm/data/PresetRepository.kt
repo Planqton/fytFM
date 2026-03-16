@@ -43,6 +43,7 @@ class PresetRepository(context: Context) {
                 put("name", station.name ?: "")
                 put("rssi", station.rssi)
                 put("isFavorite", station.isFavorite)
+                put("syncName", station.syncName)
             }
             jsonArray.put(obj)
         }
@@ -63,7 +64,8 @@ class PresetRepository(context: Context) {
                         name = obj.optString("name").takeIf { it.isNotBlank() },
                         rssi = obj.optInt("rssi", 0),
                         isAM = isAM,
-                        isFavorite = obj.optBoolean("isFavorite", false)
+                        isFavorite = obj.optBoolean("isFavorite", false),
+                        syncName = obj.optBoolean("syncName", true)  // Default true für alte Einträge
                     )
                 )
             }
@@ -247,34 +249,47 @@ class PresetRepository(context: Context) {
         val existingStations = if (isAM) loadAmStations() else loadFmStations()
         val overwriteFavorites = isOverwriteFavorites()
 
-        // Map für schnellen Zugriff auf existierende Sender nach Frequenz
-        val existingMap = existingStations.associateBy {
-            (it.frequency * 10).toInt() // Auf 0.1 MHz Genauigkeit runden
-        }.toMutableMap()
+        // Nur Favoriten aus bestehenden Sendern behalten
+        val favoritesMap = existingStations
+            .filter { it.isFavorite }
+            .associateBy { (it.frequency * 10).toInt() }
+            .toMutableMap()
 
+        // Neue Senderliste aufbauen
+        val resultMap = mutableMapOf<Int, RadioStation>()
+
+        // Zuerst alle gescannten Sender hinzufügen
         for (scanned in scannedStations) {
             val freqKey = (scanned.frequency * 10).toInt()
-            val existing = existingMap[freqKey]
+            val existingFavorite = favoritesMap[freqKey]
 
-            if (existing != null) {
-                // Sender existiert bereits
-                if (existing.isFavorite && !overwriteFavorites) {
-                    // Favorit behalten, aber evtl. Name updaten wenn leer
-                    if (existing.name.isNullOrBlank() && !scanned.name.isNullOrBlank()) {
-                        existingMap[freqKey] = existing.copy(name = scanned.name, rssi = scanned.rssi)
-                    }
-                    // Sonst: Favorit komplett behalten
+            if (existingFavorite != null) {
+                // Sender ist ein Favorit
+                if (overwriteFavorites) {
+                    // Überschreiben aber Favorit-Status behalten
+                    resultMap[freqKey] = scanned.copy(isFavorite = true)
                 } else {
-                    // Überschreiben (aber Favorit-Status behalten wenn er einer war)
-                    existingMap[freqKey] = scanned.copy(isFavorite = existing.isFavorite)
+                    // Favorit behalten, nur Name updaten wenn leer
+                    if (existingFavorite.name.isNullOrBlank() && !scanned.name.isNullOrBlank()) {
+                        resultMap[freqKey] = existingFavorite.copy(name = scanned.name, rssi = scanned.rssi)
+                    } else {
+                        resultMap[freqKey] = existingFavorite
+                    }
                 }
+                // Aus favoritesMap entfernen (wurde verarbeitet)
+                favoritesMap.remove(freqKey)
             } else {
-                // Neuer Sender - hinzufügen
-                existingMap[freqKey] = scanned
+                // Kein Favorit - neuen Sender hinzufügen
+                resultMap[freqKey] = scanned
             }
         }
 
-        val mergedStations = existingMap.values.sortedBy { it.frequency }
+        // Übrige Favoriten hinzufügen (die nicht im Scan gefunden wurden)
+        for ((freqKey, favorite) in favoritesMap) {
+            resultMap[freqKey] = favorite
+        }
+
+        val mergedStations = resultMap.values.sortedBy { it.frequency }
 
         // Speichern
         if (isAM) {

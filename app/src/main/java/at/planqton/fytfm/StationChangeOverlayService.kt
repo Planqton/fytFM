@@ -368,7 +368,7 @@ class StationChangeOverlayService : Service() {
             Notification.Builder(this, CHANNEL_ID)
                 .setContentTitle("fytFM")
                 .setContentText("Lenkradtasten aktiv")
-                .setSmallIcon(R.drawable.ic_radio)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setOngoing(true)
                 .build()
         } else {
@@ -376,7 +376,7 @@ class StationChangeOverlayService : Service() {
             Notification.Builder(this)
                 .setContentTitle("fytFM")
                 .setContentText("Lenkradtasten aktiv")
-                .setSmallIcon(R.drawable.ic_radio)
+                .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setOngoing(true)
                 .build()
         }

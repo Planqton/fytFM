@@ -14,6 +14,7 @@
     <color name="radio_text_secondary">#FF666666</color>
     <color name="radio_icon">#FF4A4A4A</color>
     <color name="radio_indicator">#FFC52322</color>
+    <color name="radio_accent">#FFC52322</color>
     <color name="radio_scale_line">#FF9E9E9E</color>
     <color name="radio_play_button_bg">#FFEEEEEE</color>
 </resources>

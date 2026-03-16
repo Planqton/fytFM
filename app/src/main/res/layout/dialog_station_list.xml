@@ -51,9 +51,17 @@
             android:id="@+id/scanProgress"
             style="@android:style/Widget.ProgressBar.Horizontal"
             android:layout_width="match_parent"
-            android:layout_height="8dp"
+            android:layout_height="16dp"
             android:max="100"
             android:progressDrawable="@drawable/scan_progress_bar" />
+
+        <ProgressBar
+            android:id="@+id/scanSpinner"
+            style="?android:attr/progressBarStyleLarge"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvScanStatus"
@@ -62,6 +70,18 @@
             android:layout_marginTop="8dp"
             android:text="Scanning..."
             android:textColor="@color/radio_text_secondary" />
+
+        <Button
+            android:id="@+id/btnSkip"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/button_background"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="Überspringen"
+            android:textColor="@color/radio_text_primary"
+            android:visibility="gone" />
 
     </LinearLayout>
 
@@ -83,41 +103,98 @@
         android:textColor="@color/radio_text_secondary"
         android:visibility="gone" />
 
-    <!-- Scan Filter Options -->
+    <!-- Filter-Optionen (nach Scan sichtbar) -->
     <LinearLayout
-        android:id="@+id/scanOptionsContainer"
+        android:id="@+id/filterOptionsContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
+        android:layout_marginTop="12dp"
         android:orientation="vertical"
         android:padding="8dp"
-        android:background="#22FFFFFF">
+        android:background="#22FFFFFF"
+        android:visibility="gone">
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Scan-Filter:"
+            android:text="RDS-Filter:"
             android:textColor="@color/radio_text_primary"
             android:textStyle="bold"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="4dp" />
 
-        <CheckBox
-            android:id="@+id/cbRequirePs"
+        <!-- Filter Checkboxen -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Muss Namen senden (PS)"
-            android:textColor="@color/radio_text_primary"
-            android:buttonTint="@color/radio_text_primary"
-            android:checked="false" />
+            android:orientation="horizontal"
+            android:layout_marginBottom="4dp">
 
-        <CheckBox
-            android:id="@+id/cbRequirePi"
+            <CheckBox
+                android:id="@+id/cbFilterPs"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="24dp"
+                android:text="PS (Name)"
+                android:textColor="@color/radio_text_primary"
+                android:buttonTint="@color/radio_text_primary" />
+
+            <CheckBox
+                android:id="@+id/cbFilterPi"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="PI (ID)"
+                android:textColor="@color/radio_text_primary"
+                android:buttonTint="@color/radio_text_primary" />
+
+        </LinearLayout>
+
+        <!-- Filter-Logik -->
+        <RadioGroup
+            android:id="@+id/rgFilterLogic"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Muss PI enthalten"
+            android:orientation="horizontal"
+            android:layout_marginBottom="8dp"
+            android:visibility="gone">
+
+            <RadioButton
+                android:id="@+id/rbFilterAnd"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="24dp"
+                android:text="Beide (UND)"
+                android:textColor="@color/radio_text_primary"
+                android:buttonTint="@color/radio_text_primary"
+                android:checked="true" />
+
+            <RadioButton
+                android:id="@+id/rbFilterOr"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Eines (ODER)"
+                android:textColor="@color/radio_text_primary"
+                android:buttonTint="@color/radio_text_primary" />
+
+        </RadioGroup>
+
+        <!-- RDS-Wartezeit -->
+        <TextView
+            android:id="@+id/tvRdsTimeout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RDS-Wartezeit: 8s"
             android:textColor="@color/radio_text_primary"
-            android:buttonTint="@color/radio_text_primary"
-            android:checked="false" />
+            android:layout_marginBottom="4dp" />
+
+        <SeekBar
+            android:id="@+id/seekRdsTimeout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:min="2"
+            android:max="16"
+            android:progress="8"
+            android:progressTint="@color/radio_text_primary"
+            android:thumbTint="@color/radio_text_primary" />
 
     </LinearLayout>
 
@@ -133,21 +210,33 @@
             android:id="@+id/btnScan"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:layout_marginEnd="16dp"
+            android:layout_marginEnd="8dp"
             android:background="@drawable/button_background"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"
-            android:text="Scan"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="Neu Scannen"
             android:textColor="@color/radio_text_primary" />
+
+        <Button
+            android:id="@+id/btnFilter"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/button_background"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="Filtern"
+            android:textColor="@color/radio_text_primary"
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/btnAdd"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
-            android:layout_marginEnd="16dp"
+            android:layout_marginEnd="8dp"
             android:background="@drawable/button_background"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
             android:text="Hinzufügen"
             android:textColor="@color/radio_text_primary"
             android:visibility="gone" />
@@ -157,9 +246,9 @@
             android:layout_width="wrap_content"
             android:layout_height="48dp"
             android:background="@drawable/button_background"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"
-            android:text="Close"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:text="Schließen"
             android:textColor="@color/radio_text_primary" />
 
     </LinearLayout>

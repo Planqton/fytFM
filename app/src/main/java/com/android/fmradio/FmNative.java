@@ -20,6 +20,7 @@ public class FmNative {
     private static final String TAG = "FmNative";
 
     // fmsyu_jni Command Codes (NavRadio-Stil)
+    public static final int CMD_AUTOSCAN = 0x01;       // 1 - Native AutoScan
     public static final int CMD_GETMONOSTERO = 0x09;   // 9 - Mono/Stereo Status lesen
     public static final int CMD_SETMONOSTERO = 0x0a;   // 10 - Mono/Stereo setzen
     public static final int CMD_GETRSSI = 0x0b;        // 11 - RSSI abrufen

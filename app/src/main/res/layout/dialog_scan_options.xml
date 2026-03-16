@@ -1,0 +1,247 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/radio_background"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Sendersuche"
+        android:textColor="@color/radio_text_primary"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Scan-Methode -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Scan-Methode:"
+        android:textColor="@color/radio_text_primary"
+        android:textStyle="bold"
+        android:layout_marginBottom="4dp" />
+
+    <RadioGroup
+        android:id="@+id/rgScanMethod"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="12dp">
+
+        <RadioButton
+            android:id="@+id/rbQuickScan"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Quick Scan (direkt hinzufügen)"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/rbNative"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Native (Schnell)"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary" />
+
+        <RadioButton
+            android:id="@+id/rbExperimental"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Experimentell (Frequenz-Scan)"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary" />
+
+    </RadioGroup>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#33FFFFFF"
+        android:layout_marginBottom="12dp" />
+
+    <!-- RDS-Filter -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="RDS-Filter:"
+        android:textColor="@color/radio_text_primary"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Filter Checkboxen -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="4dp">
+
+        <CheckBox
+            android:id="@+id/cbRequirePs"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="24dp"
+            android:text="PS (Name)"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary" />
+
+        <CheckBox
+            android:id="@+id/cbRequirePi"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="PI (ID)"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary" />
+
+    </LinearLayout>
+
+    <!-- Filter-Logik (nur wenn mindestens eine Checkbox aktiv) -->
+    <RadioGroup
+        android:id="@+id/rgFilterLogic"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="12dp"
+        android:visibility="gone">
+
+        <RadioButton
+            android:id="@+id/rbFilterAnd"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="24dp"
+            android:text="Beide (UND)"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary"
+            android:checked="true" />
+
+        <RadioButton
+            android:id="@+id/rbFilterOr"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Eines (ODER)"
+            android:textColor="@color/radio_text_primary"
+            android:buttonTint="@color/radio_text_primary" />
+
+    </RadioGroup>
+
+    <!-- RDS-Wartezeit -->
+    <LinearLayout
+        android:id="@+id/rdsTimeoutContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvRdsTimeout"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RDS-Wartezeit: 8s"
+            android:textColor="@color/radio_text_primary"
+            android:layout_marginBottom="4dp" />
+
+        <SeekBar
+            android:id="@+id/seekRdsTimeout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:min="2"
+            android:max="16"
+            android:progress="8"
+            android:progressTint="@color/radio_text_primary"
+            android:thumbTint="@color/radio_text_primary" />
+
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#33FFFFFF"
+        android:layout_marginBottom="12dp" />
+
+    <!-- Overwrite Favorites -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Favoriten überschreiben"
+                android:textColor="@color/radio_text_primary"
+                android:textSize="14sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Aktualisiert auch favorisierte Sender"
+                android:textColor="@color/radio_text_secondary"
+                android:textSize="12sp" />
+
+        </LinearLayout>
+
+        <Switch
+            android:id="@+id/switchOverwriteFavorites"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:thumbTint="@color/radio_text_primary"
+            android:trackTint="@color/radio_text_secondary" />
+
+    </LinearLayout>
+
+    <!-- Buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btnStart"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/button_background"
+            android:text="Starten"
+            android:textColor="@color/radio_text_primary" />
+
+        <Button
+            android:id="@+id/btnStartAndFilter"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/button_background"
+            android:text="Starten + Filter"
+            android:textColor="@color/radio_text_primary" />
+
+    </LinearLayout>
+
+    <!-- Cancel Button -->
+    <Button
+        android:id="@+id/btnCancel"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="4dp"
+        android:background="@android:color/transparent"
+        android:text="Abbrechen"
+        android:textColor="@color/radio_text_secondary" />
+
+</LinearLayout>

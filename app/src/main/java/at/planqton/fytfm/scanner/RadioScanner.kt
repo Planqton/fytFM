@@ -18,6 +18,17 @@ import kotlin.concurrent.thread
  */
 class RadioScanner(private val rdsManager: RdsManager) {
 
+    /**
+     * Filter-Modi für RDS-Verifizierung
+     */
+    enum class FilterMode {
+        NONE,            // Keine Filter, nur RDS-Namen sammeln
+        REQUIRE_PS,      // Muss PS (Sendername) haben
+        REQUIRE_PI,      // Muss PI (Program Identification) haben
+        REQUIRE_PS_AND_PI, // Muss beides haben (PS UND PI)
+        REQUIRE_PS_OR_PI // Muss PS ODER PI haben
+    }
+
     companion object {
         private const val TAG = "RadioScanner"
 
@@ -46,6 +57,7 @@ class RadioScanner(private val rdsManager: RdsManager) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var isScanning = false
     private var isCancelled = false
+    private var isSkipped = false  // Skip behält gefundene Sender, Cancel nicht
     private var fmNative: FmNative? = null
 
     init {
@@ -81,6 +93,7 @@ class RadioScanner(private val rdsManager: RdsManager) {
 
         isScanning = true
         isCancelled = false
+        isSkipped = false
 
         thread {
             val foundStations = mutableListOf<RadioStation>()
@@ -171,8 +184,13 @@ class RadioScanner(private val rdsManager: RdsManager) {
                 }
 
                 if (isCancelled) {
-                    Log.i(TAG, "Scan cancelled in Phase 1")
-                    mainHandler.post { onComplete(emptyList()) }
+                    if (isSkipped && foundStations.isNotEmpty()) {
+                        Log.i(TAG, "Scan skipped in Phase 1 - keeping ${foundStations.size} stations")
+                        mainHandler.post { onComplete(foundStations.sortedBy { it.frequency }) }
+                    } else {
+                        Log.i(TAG, "Scan cancelled in Phase 1")
+                        mainHandler.post { onComplete(emptyList()) }
+                    }
                     return@thread
                 }
 
@@ -248,10 +266,15 @@ class RadioScanner(private val rdsManager: RdsManager) {
                         }
                     }
 
-                    // Bei Abbruch: leere Liste zurückgeben
+                    // Bei Abbruch: bei Skip gefundene Sender behalten
                     if (isCancelled) {
-                        Log.i(TAG, "Scan cancelled in Phase 2 (with filter)")
-                        mainHandler.post { onComplete(emptyList()) }
+                        if (isSkipped && verifiedStations.isNotEmpty()) {
+                            Log.i(TAG, "Scan skipped in Phase 2 (with filter) - keeping ${verifiedStations.size} verified stations")
+                            mainHandler.post { onComplete(verifiedStations.sortedBy { it.frequency }) }
+                        } else {
+                            Log.i(TAG, "Scan cancelled in Phase 2 (with filter)")
+                            mainHandler.post { onComplete(emptyList()) }
+                        }
                         return@thread
                     }
 
@@ -305,10 +328,15 @@ class RadioScanner(private val rdsManager: RdsManager) {
                         }
                     }
 
-                    // Bei Abbruch: leere Liste zurückgeben
+                    // Bei Abbruch: bei Skip gefundene Sender behalten
                     if (isCancelled) {
-                        Log.i(TAG, "Scan cancelled in Phase 2 (no filter)")
-                        mainHandler.post { onComplete(emptyList()) }
+                        if (isSkipped && stationsWithNames.isNotEmpty()) {
+                            Log.i(TAG, "Scan skipped in Phase 2 (no filter) - keeping ${stationsWithNames.size} stations")
+                            mainHandler.post { onComplete(stationsWithNames.sortedBy { it.frequency }) }
+                        } else {
+                            Log.i(TAG, "Scan cancelled in Phase 2 (no filter)")
+                            mainHandler.post { onComplete(emptyList()) }
+                        }
                         return@thread
                     }
 
@@ -324,6 +352,253 @@ class RadioScanner(private val rdsManager: RdsManager) {
             } catch (e: Exception) {
                 Log.e(TAG, "Scan failed: ${e.message}", e)
                 mainHandler.post { onComplete(foundStations.sortedBy { it.frequency }) }
+            } finally {
+                isScanning = false
+            }
+        }
+    }
+
+    /**
+     * FM Signal-Scan (nur Phase 1, ohne RDS)
+     * Findet alle Sender mit Signal, aber ohne RDS-Namen.
+     * Für anschließende manuelle RDS-Filterung.
+     */
+    fun scanFMSignalOnly(
+        onProgress: (progress: Int, frequency: Float, remainingSeconds: Int, phase: String) -> Unit,
+        onStationFound: ((RadioStation) -> Unit)? = null,
+        onComplete: (List<RadioStation>) -> Unit,
+        highSensitivity: Boolean = false
+    ) {
+        if (isScanning) {
+            Log.w(TAG, "Scan already running")
+            return
+        }
+
+        isScanning = true
+        isCancelled = false
+        isSkipped = false
+
+        thread {
+            val foundStations = mutableListOf<RadioStation>()
+            val scanStartTime = System.currentTimeMillis()
+
+            try {
+                Log.i(TAG, "════════════════════════════════════════════════════")
+                Log.i(TAG, "         SIGNAL-ONLY SCAN (87.5-108.0 MHz)")
+                Log.i(TAG, "════════════════════════════════════════════════════")
+
+                val native = fmNative
+                if (native == null) {
+                    Log.e(TAG, "FmNative not available!")
+                    mainHandler.post { onComplete(emptyList()) }
+                    return@thread
+                }
+
+                // Radio initialisieren
+                try {
+                    native.openDev()
+                    native.powerUp(FM_MIN)
+                    native.setRds(true)
+                    Log.i(TAG, "Radio initialized for scanning")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Radio init failed (may already be on): ${e.message}")
+                }
+
+                // Noise Floor messen
+                Log.i(TAG, "Measuring noise floor...")
+                mainHandler.post { onProgress(0, FM_MIN, 60, "Noise Floor") }
+
+                val noiseFloor = measureNoiseFloor(native)
+                val rssiOffset = if (highSensitivity) SCAN_RSSI_OFFSET_SENSITIVE else SCAN_RSSI_OFFSET_NORMAL
+                val dynamicThreshold = noiseFloor + rssiOffset
+
+                Log.i(TAG, "╔════════════════════════════════════════════════")
+                Log.i(TAG, "║ NOISE FLOOR: $noiseFloor dBm")
+                Log.i(TAG, "║ SENSITIVITY: ${if (highSensitivity) "HIGH" else "NORMAL"}")
+                Log.i(TAG, "║ THRESHOLD:   $dynamicThreshold dBm (floor + $rssiOffset)")
+                Log.i(TAG, "╚════════════════════════════════════════════════")
+
+                val totalSteps = ((FM_MAX - FM_MIN) / FM_STEP).toInt() + 1
+                var currentStep = 0
+
+                var freq = FM_MIN
+                while (freq <= FM_MAX && !isCancelled) {
+                    currentStep++
+                    val progress = ((currentStep.toFloat() / totalSteps) * 100).toInt()
+                    val currentFreq = (freq * 10).toInt() / 10.0f
+
+                    val elapsedMs = System.currentTimeMillis() - scanStartTime
+                    val remainingSeconds = if (progress > 0) {
+                        val totalEstimatedMs = (elapsedMs * 100) / progress
+                        ((totalEstimatedMs - elapsedMs) / 1000).toInt()
+                    } else 60
+
+                    mainHandler.post { onProgress(progress, currentFreq, remainingSeconds, "Signal-Scan") }
+
+                    try {
+                        native.tune(currentFreq)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Tune failed at %.1f".format(currentFreq))
+                        freq += FM_STEP
+                        continue
+                    }
+
+                    Thread.sleep(SCAN_SETTLE_TIME_MS)
+
+                    val rssi = measureRssi(SCAN_RSSI_SAMPLES)
+
+                    if (rssi >= dynamicThreshold) {
+                        val station = RadioStation(currentFreq, null, rssi, false)
+                        foundStations.add(station)
+                        Log.i(TAG, "★ FOUND: %.1f MHz | RSSI: %d".format(currentFreq, rssi))
+                        mainHandler.post { onStationFound?.invoke(station) }
+                    }
+
+                    freq += FM_STEP
+                }
+
+                if (isCancelled) {
+                    if (isSkipped && foundStations.isNotEmpty()) {
+                        Log.i(TAG, "Scan skipped - keeping ${foundStations.size} stations")
+                        mainHandler.post { onComplete(foundStations.sortedBy { it.frequency }) }
+                    } else {
+                        Log.i(TAG, "Scan cancelled")
+                        mainHandler.post { onComplete(emptyList()) }
+                    }
+                    return@thread
+                }
+
+                Log.i(TAG, "Signal scan complete: ${foundStations.size} stations found")
+                logScanResults(foundStations)
+                mainHandler.post { onComplete(foundStations.sortedBy { it.frequency }) }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Signal scan failed: ${e.message}", e)
+                mainHandler.post { onComplete(foundStations.sortedBy { it.frequency }) }
+            } finally {
+                isScanning = false
+            }
+        }
+    }
+
+    /**
+     * RDS-Verifizierung für bereits gefundene Sender (Phase 2, separat aufrufbar)
+     * Sammelt RDS-Daten und filtert nach gewähltem Modus.
+     * @param rdsTimeoutMs Wartezeit pro Sender in Millisekunden (Standard: 8000ms)
+     */
+    fun collectRdsAndFilter(
+        stations: List<RadioStation>,
+        filterMode: FilterMode,
+        rdsTimeoutMs: Long = RDS_COLLECT_TIME_MS,
+        onProgress: (progress: Int, frequency: Float, remainingSeconds: Int, filteredCount: Int) -> Unit,
+        onStationVerified: ((RadioStation) -> Unit)? = null,
+        onComplete: (List<RadioStation>) -> Unit
+    ) {
+        if (isScanning) {
+            Log.w(TAG, "Scan already running")
+            return
+        }
+
+        if (stations.isEmpty()) {
+            mainHandler.post { onComplete(emptyList()) }
+            return
+        }
+
+        isScanning = true
+        isCancelled = false
+        isSkipped = false
+
+        thread {
+            val verifiedStations = mutableListOf<RadioStation>()
+            var filteredCount = 0
+            val startTime = System.currentTimeMillis()
+
+            try {
+                Log.i(TAG, "════════════════════════════════════════════════════")
+                Log.i(TAG, "         RDS FILTER (${stations.size} Sender, Mode: $filterMode)")
+                Log.i(TAG, "════════════════════════════════════════════════════")
+
+                // RdsManager Polling starten wenn nicht aktiv
+                if (!rdsManager.isPolling) {
+                    Log.w(TAG, "RdsManager polling not active - starting...")
+                    rdsManager.startPolling(null)
+                }
+
+                stations.forEachIndexed { index, station ->
+                    if (isCancelled) return@forEachIndexed
+
+                    val progress = ((index + 1).toFloat() / stations.size * 100).toInt()
+                    val elapsed = System.currentTimeMillis() - startTime
+                    val remainingSeconds = if (index > 0) {
+                        val avgPerStation = elapsed / index
+                        ((stations.size - index) * avgPerStation / 1000).toInt()
+                    } else {
+                        ((stations.size - index) * (rdsTimeoutMs / 1000)).toInt()
+                    }
+
+                    mainHandler.post { onProgress(progress, station.frequency, remainingSeconds, filteredCount) }
+
+                    // RDS zurücksetzen und zur Frequenz tunen
+                    rdsManager.clearRds()
+                    tuneToFrequency(station.frequency)
+
+                    // RDS-Daten sammeln
+                    val (hasPs, hasPi, psName, piCode) = collectRdsViaManager(rdsTimeoutMs)
+
+                    // Filtern basierend auf Modus
+                    val passesFilter = when (filterMode) {
+                        FilterMode.NONE -> true
+                        FilterMode.REQUIRE_PS -> hasPs
+                        FilterMode.REQUIRE_PI -> hasPi
+                        FilterMode.REQUIRE_PS_AND_PI -> hasPs && hasPi
+                        FilterMode.REQUIRE_PS_OR_PI -> hasPs || hasPi
+                    }
+
+                    if (!passesFilter) {
+                        filteredCount++
+                        val reason = when (filterMode) {
+                            FilterMode.REQUIRE_PS -> "kein PS"
+                            FilterMode.REQUIRE_PI -> "kein PI"
+                            FilterMode.REQUIRE_PS_AND_PI -> if (!hasPs && !hasPi) "weder PS noch PI" else if (!hasPs) "kein PS" else "kein PI"
+                            FilterMode.REQUIRE_PS_OR_PI -> "weder PS noch PI"
+                            else -> "unknown"
+                        }
+                        Log.i(TAG, "  %.1f MHz → GEFILTERT ($reason)".format(station.frequency))
+                        return@forEachIndexed
+                    }
+
+                    // Station mit RDS-Daten hinzufügen
+                    val verifiedStation = station.copy(name = if (psName.isNotEmpty()) psName else null)
+                    verifiedStations.add(verifiedStation)
+
+                    mainHandler.post { onStationVerified?.invoke(verifiedStation) }
+
+                    val piStr = if (piCode != 0) " [PI=0x%04X]".format(piCode) else ""
+                    if (psName.isNotEmpty()) {
+                        Log.i(TAG, "  %.1f MHz → \"%s\"$piStr ✓".format(station.frequency, psName))
+                    } else {
+                        Log.i(TAG, "  %.1f MHz → (kein Name)$piStr ✓".format(station.frequency))
+                    }
+                }
+
+                if (isCancelled) {
+                    if (isSkipped && verifiedStations.isNotEmpty()) {
+                        Log.i(TAG, "RDS filter skipped - keeping ${verifiedStations.size} verified stations")
+                        mainHandler.post { onComplete(verifiedStations.sortedBy { it.frequency }) }
+                    } else {
+                        Log.i(TAG, "RDS filter cancelled")
+                        mainHandler.post { onComplete(emptyList()) }
+                    }
+                    return@thread
+                }
+
+                Log.i(TAG, "RDS filter complete: ${verifiedStations.size} verified, $filteredCount filtered")
+                logScanResults(verifiedStations)
+                mainHandler.post { onComplete(verifiedStations.sortedBy { it.frequency }) }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "RDS filter failed: ${e.message}", e)
+                mainHandler.post { onComplete(verifiedStations.sortedBy { it.frequency }) }
             } finally {
                 isScanning = false
             }
@@ -428,6 +703,137 @@ class RadioScanner(private val rdsManager: RdsManager) {
             isCancelled = true
             Log.i(TAG, "Scan stop requested")
             fmNative?.stopScan()
+        }
+    }
+
+    /**
+     * Skip scan - behält bereits gefundene Sender
+     */
+    fun skipScan() {
+        if (isScanning) {
+            isSkipped = true
+            isCancelled = true
+            Log.i(TAG, "Scan skip requested - keeping found stations")
+            fmNative?.stopScan()
+        }
+    }
+
+    /**
+     * Native FM-Scan (NavRadio-Methode)
+     * Verwendet fmsyu_jni Command 0x01 (AUTOSCAN)
+     * Schneller als manueller Scan, aber ohne RDS-Verifizierung
+     */
+    fun scanFMNative(
+        onProgress: (progress: Int, frequency: Float, remainingSeconds: Int, filteredCount: Int, phase: String) -> Unit,
+        onStationFound: ((RadioStation) -> Unit)? = null,
+        onComplete: (List<RadioStation>) -> Unit,
+        highSensitivity: Boolean = false
+    ) {
+        if (isScanning) {
+            Log.w(TAG, "Scan already running")
+            return
+        }
+
+        isScanning = true
+        isCancelled = false
+        isSkipped = false
+
+        thread {
+            val foundStations = mutableListOf<RadioStation>()
+
+            try {
+                Log.i(TAG, "════════════════════════════════════════════════════")
+                Log.i(TAG, "         NATIVE SCAN (fmsyu_jni 0x01)")
+                Log.i(TAG, "════════════════════════════════════════════════════")
+
+                val native = fmNative
+                if (native == null) {
+                    Log.e(TAG, "FmNative not available!")
+                    mainHandler.post { onComplete(emptyList()) }
+                    return@thread
+                }
+
+                // Radio initialisieren
+                try {
+                    native.openDev()
+                    native.powerUp(FM_MIN)
+                    Log.i(TAG, "Radio initialized for native scanning")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Radio init failed (may already be on): ${e.message}")
+                }
+
+                mainHandler.post { onProgress(10, FM_MIN, 30, 0, "Native Scan...") }
+
+                // Sensitivity (NavRadio-Stil: 0-3, wobei 0 = höchste Empfindlichkeit)
+                val sensitivity = if (highSensitivity) 0 else 2
+
+                // Native AutoScan aufrufen
+                val inBundle = Bundle()
+                val outBundle = Bundle()
+                inBundle.putInt("param0", (FM_MIN * 10).toInt())  // Startfrequenz * 10
+                inBundle.putInt("sensitivity", sensitivity)
+                inBundle.putInt("isuseam", 0)  // FM Mode
+
+                Log.i(TAG, "Calling fmsyu_jni(0x01) with param0=${(FM_MIN * 10).toInt()}, sensitivity=$sensitivity")
+
+                mainHandler.post { onProgress(20, FM_MIN, 25, 0, "Hardware-Scan...") }
+
+                val result = native.fmsyu_jni(FmNative.CMD_AUTOSCAN, inBundle, outBundle)
+
+                Log.i(TAG, "fmsyu_jni(0x01) returned: $result")
+
+                if (isCancelled) {
+                    Log.i(TAG, "Native scan cancelled")
+                    mainHandler.post { onComplete(emptyList()) }
+                    return@thread
+                }
+
+                mainHandler.post { onProgress(80, FM_MAX, 5, 0, "Ergebnisse...") }
+
+                if (result == 0 || result == -1) {
+                    // Ergebnisse auslesen
+                    val frequencies = outBundle.getShortArray("param0")
+                    val strengths = outBundle.getShortArray("param1")
+
+                    if (frequencies != null && frequencies.isNotEmpty()) {
+                        Log.i(TAG, "Native scan found ${frequencies.size} stations")
+
+                        frequencies.forEachIndexed { index, freqShort ->
+                            // Frequenz ist * 10 gespeichert (z.B. 875 = 87.5 MHz)
+                            val freq = freqShort.toFloat() / 10f
+                            val rssi = strengths?.getOrNull(index)?.toInt() ?: 0
+
+                            if (freq >= FM_MIN && freq <= FM_MAX) {
+                                val station = RadioStation(freq, null, rssi, false)
+                                foundStations.add(station)
+                                Log.i(TAG, "★ FOUND: %.1f MHz | RSSI: %d".format(freq, rssi))
+                                mainHandler.post { onStationFound?.invoke(station) }
+                            }
+                        }
+                    } else {
+                        Log.w(TAG, "Native scan returned no frequencies")
+                        // Versuche alternative Keys
+                        val allKeys = outBundle.keySet()
+                        Log.d(TAG, "OutBundle keys: $allKeys")
+                        allKeys.forEach { key ->
+                            Log.d(TAG, "  $key = ${outBundle.get(key)}")
+                        }
+                    }
+                } else {
+                    Log.e(TAG, "Native scan failed with result: $result")
+                }
+
+                mainHandler.post { onProgress(100, FM_MAX, 0, 0, "Fertig") }
+
+                Log.i(TAG, "Native scan complete: ${foundStations.size} stations found")
+                mainHandler.post { onComplete(foundStations.sortedBy { it.frequency }) }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Native scan failed: ${e.message}", e)
+                mainHandler.post { onComplete(foundStations.sortedBy { it.frequency }) }
+            } finally {
+                isScanning = false
+            }
         }
     }
 
