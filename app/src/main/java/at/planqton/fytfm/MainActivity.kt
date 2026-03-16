@@ -204,6 +204,9 @@ class MainActivity : AppCompatActivity() {
     private var deezerCache: DeezerCache? = null
     private var rtCombiner: RtCombiner? = null
 
+    // RDS UI Update Cache - Verhindert unnötige UI-Updates wenn sich nichts geändert hat
+    private val lastDisplayedRt = mutableMapOf<Int, String>()  // PI -> letztes angezeigtes RT
+
     // Bug Report: Aktuelle Deezer-Status-Daten
     private var currentDeezerStatus: String? = null
     private var currentDeezerOriginalRt: String? = null
@@ -686,6 +689,15 @@ class MainActivity : AppCompatActivity() {
 
                         // Update MediaService with combined RT (must be on Main thread!)
                         withContext(Dispatchers.Main) {
+                            // Skip UI update if nothing has changed
+                            val previousRt = lastDisplayedRt[pi]
+                            val currentTrackId = trackInfo?.trackId
+                            if (finalRt == previousRt && currentTrackId == lastDisplayedTrackId) {
+                                return@withContext
+                            }
+                            lastDisplayedRt[pi] = finalRt
+                            lastDisplayedTrackId = currentTrackId
+
                             val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
                             val currentFreq = frequencyScale.getFrequency()
                             val radioLogoPath = radioLogoRepository.getLogoForStation(ps, pi, currentFreq)

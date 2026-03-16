@@ -690,7 +690,7 @@
             android:id="@+id/checkDeezerInfo"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Spotify Info"
+            android:text="Deezer Info"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:buttonTint="#FFFFFF"
@@ -1023,7 +1023,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Spotify Debug Overlay -->
+    <!-- Deezer Debug Overlay -->
     <ScrollView
         android:id="@+id/debugDeezerOverlay"
         android:layout_width="wrap_content"
@@ -1226,9 +1226,9 @@
                 <TextView android:id="@+id/debugDeezerAlbumId" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="--" android:textColor="#6699FF" android:textSize="9sp" android:fontFamily="monospace" />
             </LinearLayout>
 
-            <!-- Spotify URL -->
+            <!-- Deezer URL -->
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
-                <TextView android:layout_width="85dp" android:layout_height="wrap_content" android:text="Spotify URL" android:textColor="#888888" android:textSize="10sp" />
+                <TextView android:layout_width="85dp" android:layout_height="wrap_content" android:text="Deezer URL" android:textColor="#888888" android:textSize="10sp" />
                 <TextView android:id="@+id/debugDeezerUrl" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="--" android:textColor="#6699FF" android:textSize="8sp" android:fontFamily="monospace" android:maxLines="1" android:ellipsize="middle" />
             </LinearLayout>
 
