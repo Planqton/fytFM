@@ -16,7 +16,7 @@ class FrequencyScaleView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     enum class RadioMode {
-        FM, AM
+        FM, AM, DAB
     }
 
     companion object {
@@ -37,14 +37,42 @@ class FrequencyScaleView @JvmOverloads constructor(
     private var onModeChangeListener: ((RadioMode) -> Unit)? = null
     private val density = context.resources.displayMetrics.density
 
+    // Dynamic configuration (used by plugin system)
+    private var configuredMinFrequency: Float? = null
+    private var configuredMaxFrequency: Float? = null
+    private var configuredStep: Float? = null
+
     private val minFrequency: Float
-        get() = if (radioMode == RadioMode.FM) FM_MIN_FREQUENCY else AM_MIN_FREQUENCY
+        get() = configuredMinFrequency ?: if (radioMode == RadioMode.FM) FM_MIN_FREQUENCY else AM_MIN_FREQUENCY
 
     private val maxFrequency: Float
-        get() = if (radioMode == RadioMode.FM) FM_MAX_FREQUENCY else AM_MAX_FREQUENCY
+        get() = configuredMaxFrequency ?: if (radioMode == RadioMode.FM) FM_MAX_FREQUENCY else AM_MAX_FREQUENCY
 
     private val frequencyStep: Float
-        get() = if (radioMode == RadioMode.FM) FM_FREQUENCY_STEP else AM_FREQUENCY_STEP
+        get() = configuredStep ?: if (radioMode == RadioMode.FM) FM_FREQUENCY_STEP else AM_FREQUENCY_STEP
+
+    /**
+     * Konfiguriert die Frequenzskala dynamisch (für Plugin-System).
+     * Setzt Bereich und Schrittweite unabhängig vom RadioMode.
+     */
+    fun configure(range: ClosedFloatingPointRange<Float>, step: Float) {
+        configuredMinFrequency = range.start
+        configuredMaxFrequency = range.endInclusive
+        configuredStep = step
+        // Determine mode based on range for drawing
+        radioMode = if (range.start < 200f) RadioMode.FM else RadioMode.AM
+        currentFrequency = currentFrequency.coerceIn(range.start, range.endInclusive)
+        invalidate()
+    }
+
+    /**
+     * Setzt die Konfiguration zurück auf den Standardmodus.
+     */
+    fun clearConfiguration() {
+        configuredMinFrequency = null
+        configuredMaxFrequency = null
+        configuredStep = null
+    }
 
     private val scalePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.radio_scale_line)
@@ -219,16 +247,22 @@ class FrequencyScaleView @JvmOverloads constructor(
     fun setMode(mode: RadioMode) {
         if (radioMode != mode) {
             radioMode = mode
-            // Set default frequency for new mode
-            currentFrequency = if (mode == RadioMode.FM) 98.4f else 522f
+            if (mode != RadioMode.DAB) {
+                // Set default frequency for new mode
+                currentFrequency = if (mode == RadioMode.FM) 98.4f else 522f
+                onFrequencyChangeListener?.invoke(currentFrequency)
+            }
             onModeChangeListener?.invoke(mode)
-            onFrequencyChangeListener?.invoke(currentFrequency)
             invalidate()
         }
     }
 
     fun toggleMode() {
-        setMode(if (radioMode == RadioMode.FM) RadioMode.AM else RadioMode.FM)
+        setMode(when (radioMode) {
+            RadioMode.FM -> RadioMode.AM
+            RadioMode.AM -> RadioMode.DAB
+            RadioMode.DAB -> RadioMode.FM
+        })
     }
 
     fun setOnFrequencyChangeListener(listener: (Float) -> Unit) {

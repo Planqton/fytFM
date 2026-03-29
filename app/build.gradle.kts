@@ -34,6 +34,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            isDebuggable = false
+            isJniDebuggable = false
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -46,6 +50,9 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+    packagingOptions {
+        pickFirst("lib/*/libc++_shared.so")
+    }
     kotlinOptions {
         jvmTarget = "11"
     }
@@ -53,6 +60,8 @@ android {
 
 dependencies {
 
+    implementation(project(":plugin-api"))
+    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)

@@ -5,7 +5,7 @@ import android.content.SharedPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 
-class PresetRepository(context: Context) {
+class PresetRepository(private val context: Context) {
 
     companion object {
         private const val PREFS_FM = "fm_presets"
@@ -18,6 +18,131 @@ class PresetRepository(context: Context) {
     private val fmPrefs: SharedPreferences = context.getSharedPreferences(PREFS_FM, Context.MODE_PRIVATE)
     private val amPrefs: SharedPreferences = context.getSharedPreferences(PREFS_AM, Context.MODE_PRIVATE)
     private val settingsPrefs: SharedPreferences = context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+
+    // === Per-Tuner-Instance Storage ===
+
+    fun saveStationsForTuner(tunerId: String, stations: List<RadioStation>) {
+        val prefs = context.getSharedPreferences("tuner_presets_$tunerId", Context.MODE_PRIVATE)
+        saveStations(prefs, stations)
+    }
+
+    fun loadStationsForTuner(tunerId: String, isAM: Boolean = false): List<RadioStation> {
+        val prefs = context.getSharedPreferences("tuner_presets_$tunerId", Context.MODE_PRIVATE)
+        return loadStations(prefs, isAM)
+    }
+
+    fun clearStationsForTuner(tunerId: String) {
+        val prefs = context.getSharedPreferences("tuner_presets_$tunerId", Context.MODE_PRIVATE)
+        prefs.edit().remove(KEY_STATIONS).apply()
+    }
+
+    fun toggleFavoriteForTuner(tunerId: String, frequency: Float, isAM: Boolean): Boolean {
+        val stations = loadStationsForTuner(tunerId, isAM)
+        val existingStation = stations.find { Math.abs(it.frequency - frequency) < 0.05f }
+
+        val updatedStations: List<RadioStation>
+        val isFavoriteNow: Boolean
+
+        if (existingStation != null) {
+            isFavoriteNow = !existingStation.isFavorite
+            updatedStations = stations.map {
+                if (Math.abs(it.frequency - frequency) < 0.05f) {
+                    it.copy(isFavorite = isFavoriteNow)
+                } else it
+            }
+        } else {
+            isFavoriteNow = true
+            val newStation = RadioStation(
+                frequency = frequency,
+                name = null,
+                rssi = 0,
+                isAM = isAM,
+                isFavorite = true
+            )
+            updatedStations = (stations + newStation).sortedBy { it.frequency }
+        }
+
+        saveStationsForTuner(tunerId, updatedStations)
+        return isFavoriteNow
+    }
+
+    fun isFavoriteForTuner(tunerId: String, frequency: Float, isAM: Boolean): Boolean {
+        val stations = loadStationsForTuner(tunerId, isAM)
+        return stations.find { Math.abs(it.frequency - frequency) < 0.05f }?.isFavorite ?: false
+    }
+
+    fun mergeScannedStationsForTuner(tunerId: String, scannedStations: List<RadioStation>, isAM: Boolean): List<RadioStation> {
+        val existingStations = loadStationsForTuner(tunerId, isAM)
+        val overwriteFavorites = isOverwriteFavorites()
+
+        val favoritesMap = existingStations
+            .filter { it.isFavorite }
+            .associateBy { (it.frequency * 10).toInt() }
+            .toMutableMap()
+
+        val resultMap = mutableMapOf<Int, RadioStation>()
+
+        for (scanned in scannedStations) {
+            val freqKey = (scanned.frequency * 10).toInt()
+            val existingFavorite = favoritesMap[freqKey]
+
+            if (existingFavorite != null) {
+                if (overwriteFavorites) {
+                    resultMap[freqKey] = scanned.copy(isFavorite = true)
+                } else {
+                    if (existingFavorite.name.isNullOrBlank() && !scanned.name.isNullOrBlank()) {
+                        resultMap[freqKey] = existingFavorite.copy(name = scanned.name, rssi = scanned.rssi)
+                    } else {
+                        resultMap[freqKey] = existingFavorite
+                    }
+                }
+                favoritesMap.remove(freqKey)
+            } else {
+                resultMap[freqKey] = scanned
+            }
+        }
+
+        for ((freqKey, favorite) in favoritesMap) {
+            resultMap[freqKey] = favorite
+        }
+
+        val mergedStations = resultMap.values.sortedBy { it.frequency }
+        saveStationsForTuner(tunerId, mergedStations)
+        return mergedStations
+    }
+
+    fun isShowFavoritesOnly(tunerId: String): Boolean {
+        return settingsPrefs.getBoolean("show_favorites_only_$tunerId", false)
+    }
+
+    fun setShowFavoritesOnly(tunerId: String, enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("show_favorites_only_$tunerId", enabled).apply()
+    }
+
+    fun savePluginSettings(tunerId: String, settings: Map<String, Any>) {
+        val prefs = context.getSharedPreferences("tuner_settings_$tunerId", Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        editor.clear()
+        settings.forEach { (key, value) ->
+            when (value) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is Float -> editor.putFloat(key, value)
+                is String -> editor.putString(key, value)
+                is Long -> editor.putLong(key, value)
+            }
+        }
+        editor.apply()
+    }
+
+    fun loadPluginSettings(tunerId: String): Map<String, Any> {
+        val prefs = context.getSharedPreferences("tuner_settings_$tunerId", Context.MODE_PRIVATE)
+        val result = mutableMapOf<String, Any>()
+        prefs.all.forEach { (key, value) ->
+            if (value != null) result[key] = value
+        }
+        return result
+    }
 
     fun saveFmStations(stations: List<RadioStation>) {
         saveStations(fmPrefs, stations)

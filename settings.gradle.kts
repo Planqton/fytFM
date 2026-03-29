@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "fytFM"
 include(":app")
+include(":plugin-api")

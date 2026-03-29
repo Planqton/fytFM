@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- IRT USB DAB+ Stick -->
+    <usb-device vendor-id="1240" product-id="64253" />
+    <usb-device vendor-id="1240" product-id="64254" />
+    <usb-device vendor-id="1240" product-id="64255" />
+</resources>

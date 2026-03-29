@@ -19,6 +19,11 @@ class StationAdapter(
 
     private var stations: List<RadioStation> = emptyList()
     private var selectedPosition: Int = -1
+    private var overrideClickListener: ((RadioStation) -> Unit)? = null
+
+    fun setOnStationClickListener(listener: ((RadioStation) -> Unit)?) {
+        overrideClickListener = listener
+    }
 
     fun setStations(newStations: List<RadioStation>) {
         stations = newStations
@@ -50,7 +55,7 @@ class StationAdapter(
         val logoPath = getLogoPath?.invoke(station.name, null, station.frequency)
         holder.bind(station, position == selectedPosition, logoPath)
         holder.itemView.setOnClickListener {
-            onStationClick(station)
+            (overrideClickListener ?: onStationClick)(station)
         }
     }
 

@@ -146,6 +146,15 @@
                 android:value="overlay_display" />
         </service>
 
+        <!-- DAB+ Decoder Plugin Service -->
+        <service
+            android:name="de.irt.dabmpg123decoderplugin.Mpg123Decoder"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="de.irt.dab.DECODER_PLUGIN" />
+            </intent-filter>
+        </service>
+
             </application>
 
 </manifest>
