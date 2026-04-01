@@ -16,7 +16,7 @@ class FrequencyScaleView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     enum class RadioMode {
-        FM, AM
+        FM, AM, DAB
     }
 
     companion object {
@@ -220,15 +220,26 @@ class FrequencyScaleView @JvmOverloads constructor(
         if (radioMode != mode) {
             radioMode = mode
             // Set default frequency for new mode
-            currentFrequency = if (mode == RadioMode.FM) 98.4f else 522f
+            currentFrequency = when (mode) {
+                RadioMode.FM -> 98.4f
+                RadioMode.AM -> 522f
+                RadioMode.DAB -> 0f  // DAB hat keine klassische Frequenz
+            }
             onModeChangeListener?.invoke(mode)
-            onFrequencyChangeListener?.invoke(currentFrequency)
+            if (mode != RadioMode.DAB) {
+                onFrequencyChangeListener?.invoke(currentFrequency)
+            }
             invalidate()
         }
     }
 
     fun toggleMode() {
-        setMode(if (radioMode == RadioMode.FM) RadioMode.AM else RadioMode.FM)
+        val nextMode = when (radioMode) {
+            RadioMode.FM -> RadioMode.AM
+            RadioMode.AM -> RadioMode.DAB
+            RadioMode.DAB -> RadioMode.FM
+        }
+        setMode(nextMode)
     }
 
     fun setOnFrequencyChangeListener(listener: (Float) -> Unit) {

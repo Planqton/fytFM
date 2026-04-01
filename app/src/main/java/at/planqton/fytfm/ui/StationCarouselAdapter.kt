@@ -14,14 +14,17 @@ import java.io.File
  * Adapter for the station carousel in image view mode.
  */
 class StationCarouselAdapter(
-    private val onStationClick: (Float, Boolean) -> Unit
+    private val onStationClick: (StationCarouselAdapter.StationItem) -> Unit
 ) : RecyclerView.Adapter<StationCarouselAdapter.ViewHolder>() {
 
     data class StationItem(
         val frequency: Float,
         val name: String?,
         val logoPath: String?,
-        val isAM: Boolean = false
+        val isAM: Boolean = false,
+        val isDab: Boolean = false,
+        val serviceId: Int = 0,
+        val ensembleId: Int = 0
     )
 
     private var stations: List<StationItem> = emptyList()
@@ -45,12 +48,29 @@ class StationCarouselAdapter(
         if (newPosition != selectedPosition) {
             val oldPosition = selectedPosition
             selectedPosition = newPosition
-            // Clear cover when switching stations
             currentCoverUrl = null
             currentLocalCoverPath = null
             if (oldPosition >= 0) notifyItemChanged(oldPosition)
             if (newPosition >= 0) notifyItemChanged(newPosition)
         }
+    }
+
+    fun setCurrentDabService(serviceId: Int) {
+        val newPosition = stations.indexOfFirst {
+            it.isDab && it.serviceId == serviceId
+        }
+        if (newPosition != selectedPosition) {
+            val oldPosition = selectedPosition
+            selectedPosition = newPosition
+            currentCoverUrl = null
+            currentLocalCoverPath = null
+            if (oldPosition >= 0) notifyItemChanged(oldPosition)
+            if (newPosition >= 0) notifyItemChanged(newPosition)
+        }
+    }
+
+    fun getPositionForDabService(serviceId: Int): Int {
+        return stations.indexOfFirst { it.isDab && it.serviceId == serviceId }
     }
 
     /**
@@ -79,13 +99,17 @@ class StationCarouselAdapter(
         val isSelected = position == selectedPosition
 
         // Format frequency
-        val freqText = if (station.isAM) {
-            station.frequency.toInt().toString()
-        } else {
-            "%.2f".format(station.frequency).replace(".", ",")
+        val freqText = when {
+            station.isDab -> station.name ?: "DAB+"
+            station.isAM -> station.frequency.toInt().toString()
+            else -> "%.2f".format(station.frequency).replace(".", ",")
         }
         holder.frequencyText.text = freqText
-        holder.bandLabel.text = if (station.isAM) "AM" else "FM"
+        holder.bandLabel.text = when {
+            station.isDab -> "DAB+"
+            station.isAM -> "AM"
+            else -> "FM"
+        }
 
         // Station name inline (next to FM/AM label)
         holder.stationNameInline.text = if (!station.name.isNullOrBlank()) " ${station.name}" else ""
@@ -104,9 +128,13 @@ class StationCarouselAdapter(
             holder.stationName.visibility = View.GONE
         }
 
-        // Logo immer sichtbar - mit FM/AM Platzhalter falls kein Logo
+        // Logo immer sichtbar - mit FM/AM/DAB Platzhalter falls kein Logo
         holder.stationLogo.visibility = View.VISIBLE
-        val placeholder = if (station.isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
+        val placeholder = when {
+            station.isDab -> R.drawable.placeholder_fm  // TODO: placeholder_dab
+            station.isAM -> R.drawable.placeholder_am
+            else -> R.drawable.placeholder_fm
+        }
 
         // For selected item, use Spotify cover if available
         if (isSelected) {
@@ -144,7 +172,7 @@ class StationCarouselAdapter(
 
         // Click listener
         holder.itemView.setOnClickListener {
-            onStationClick(station.frequency, station.isAM)
+            onStationClick(station)
         }
     }
 

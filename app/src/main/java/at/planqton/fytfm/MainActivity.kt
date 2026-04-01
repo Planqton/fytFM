@@ -47,6 +47,10 @@ import at.planqton.fytfm.deezer.RtCombiner
 import at.planqton.fytfm.deezer.TrackInfo
 import at.planqton.fytfm.steering.SteeringWheelKeyManager
 import at.planqton.fytfm.steering.SyuToolkitManager
+import at.planqton.fytfm.dab.DabTunerManager
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Spinner
 import coil.load
 
 class MainActivity : AppCompatActivity() {
@@ -61,8 +65,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnNextStation: ImageButton
     private lateinit var btnFavorite: ImageButton
     private lateinit var btnPlayPause: ImageButton
-    private lateinit var btnFM: ImageButton
+    private lateinit var spinnerRadioMode: Spinner
     private lateinit var btnPower: ImageButton
+    private val dabTunerManager = DabTunerManager()
+    private var isDabOn = false
+    private var currentDabServiceId = 0
+    private var currentDabEnsembleId = 0
+    private var suppressSpinnerCallback = false
     private lateinit var controlBar: LinearLayout
     private lateinit var stationRecycler: RecyclerView
     private lateinit var tvAllList: TextView
@@ -406,7 +415,7 @@ class MainActivity : AppCompatActivity() {
         rdsManager.setUiFrequency(lastFreq)  // Für AF-Vergleich
         rdsLogRepository.setInitialFrequency(lastFreq, frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM)
         updateFrequencyDisplay(lastFreq)
-        updateModeButton()
+        updateModeSpinner()
         loadFavoritesFilterState()
         loadStationsForCurrentMode()
 
@@ -440,6 +449,8 @@ class MainActivity : AppCompatActivity() {
         if (presetRepository.isPowerOnStartup() && !isRadioOn) {
             toggleRadioPower()
         }
+
+        // Debug DAB test removed
     }
 
     /**
@@ -947,7 +958,8 @@ class MainActivity : AppCompatActivity() {
         btnNextStation = findViewById(R.id.btnNextStation)
         btnFavorite = findViewById(R.id.btnFavorite)
         btnPlayPause = findViewById(R.id.btnPlayPause)
-        btnFM = findViewById(R.id.btnFM)
+        spinnerRadioMode = findViewById(R.id.spinnerRadioMode)
+        setupRadioModeSpinner()
         btnPower = findViewById(R.id.btnPower)
         controlBar = findViewById(R.id.controlBar)
         stationRecycler = findViewById(R.id.stationRecycler)
@@ -2524,19 +2536,25 @@ class MainActivity : AppCompatActivity() {
      */
     private fun setupViewModeToggle() {
         // Setup carousel adapter
-        stationCarouselAdapter = at.planqton.fytfm.ui.StationCarouselAdapter { frequency, isAM ->
+        stationCarouselAdapter = at.planqton.fytfm.ui.StationCarouselAdapter { station ->
             // When user clicks a station in carousel, tune to it
-            if (isAM) {
-                frequencyScale.setMode(FrequencyScaleView.RadioMode.AM)
+            if (station.isDab) {
+                // DAB: tune via DabTunerManager
+                currentDabServiceId = station.serviceId
+                currentDabEnsembleId = station.ensembleId
+                dabTunerManager.tuneService(station.serviceId, station.ensembleId)
+                updateCarouselSelection()
             } else {
-                frequencyScale.setMode(FrequencyScaleView.RadioMode.FM)
+                if (station.isAM) {
+                    frequencyScale.setMode(FrequencyScaleView.RadioMode.AM)
+                } else {
+                    frequencyScale.setMode(FrequencyScaleView.RadioMode.FM)
+                }
+                frequencyScale.setFrequency(station.frequency)
+                fmNative?.tune(station.frequency)
+                updateCarouselSelection()
+                startCarouselCenterTimer(station.frequency, station.isAM)
             }
-            frequencyScale.setFrequency(frequency)
-            fmNative?.tune(frequency)
-            updateCarouselSelection()
-
-            // Start 2-second timer to center the carousel on selected item
-            startCarouselCenterTimer(frequency, isAM)
         }
 
         stationCarousel?.apply {
@@ -2592,6 +2610,8 @@ class MainActivity : AppCompatActivity() {
 
         // Toggle button click handlers
         btnViewModeEqualizer?.setOnClickListener {
+            // In DAB mode, only carousel view is allowed
+            if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) return@setOnClickListener
             setViewMode(false)
         }
 
@@ -2645,15 +2665,16 @@ class MainActivity : AppCompatActivity() {
      * Populate the carousel with saved stations
      */
     private fun populateCarousel() {
-        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
-        val stations = if (isAM) {
-            presetRepository.loadAmStations()
-        } else {
-            presetRepository.loadFmStations()
+        val mode = frequencyScale.getMode()
+        val isAM = mode == FrequencyScaleView.RadioMode.AM
+        val isDab = mode == FrequencyScaleView.RadioMode.DAB
+        val stations = when (mode) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.loadFmStations()
+            FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.loadDabStations()
         }
 
-        android.util.Log.d("fytFM", "populateCarousel: ${stations.size} stations loaded, isAM=$isAM")
-        stations.forEach { android.util.Log.d("fytFM", "  Station: ${it.frequency} - ${it.name}") }
+        android.util.Log.d("fytFM", "populateCarousel: ${stations.size} stations loaded, mode=$mode")
 
         val carouselItems = stations.map { station ->
             val logoPath = radioLogoRepository.getLogoForStation(station.name, null, station.frequency)
@@ -2661,7 +2682,10 @@ class MainActivity : AppCompatActivity() {
                 frequency = station.frequency,
                 name = station.name,
                 logoPath = logoPath,
-                isAM = isAM
+                isAM = isAM,
+                isDab = isDab || station.isDab,
+                serviceId = station.serviceId,
+                ensembleId = station.ensembleId
             )
         }
 
@@ -2672,13 +2696,25 @@ class MainActivity : AppCompatActivity() {
      * Update carousel selection to match current frequency
      */
     private fun updateCarouselSelection() {
+        val mode = frequencyScale.getMode()
+
+        if (mode == FrequencyScaleView.RadioMode.DAB) {
+            // DAB: select by serviceId
+            stationCarouselAdapter?.setCurrentDabService(currentDabServiceId)
+            val dabStation = presetRepository.loadDabStations().find { it.serviceId == currentDabServiceId }
+            carouselFrequencyLabel?.text = dabStation?.name ?: "DAB+"
+            updateCarouselFavoriteIcon()
+            val position = stationCarouselAdapter?.getPositionForDabService(currentDabServiceId) ?: -1
+            android.util.Log.d("fytFM", "updateCarouselSelection DAB: serviceId=$currentDabServiceId, position=$position")
+            return
+        }
+
         val currentFreq = frequencyScale.getFrequency()
-        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val isAM = mode == FrequencyScaleView.RadioMode.AM
 
         android.util.Log.d("fytFM", "updateCarouselSelection: freq=$currentFreq, isAM=$isAM")
         stationCarouselAdapter?.setCurrentFrequency(currentFreq, isAM)
 
-        // Update the frequency label below carousel
         val freqText = if (isAM) {
             "AM ${currentFreq.toInt()}"
         } else {
@@ -2688,7 +2724,6 @@ class MainActivity : AppCompatActivity() {
 
         updateCarouselFavoriteIcon()
 
-        // Log position for debugging (no immediate scroll - let timer handle centering)
         val position = stationCarouselAdapter?.getPositionForFrequency(currentFreq, isAM) ?: -1
         android.util.Log.d("fytFM", "updateCarouselSelection: position=$position")
     }
@@ -2955,7 +2990,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         frequencyScale.setOnModeChangeListener { mode ->
-            updateModeButton()
+            updateModeSpinner()
             loadFavoritesFilterState()  // Filter-Status für neuen Modus laden
             loadStationsForCurrentMode()
             updateFavoriteButton()
@@ -3045,10 +3080,7 @@ class MainActivity : AppCompatActivity() {
             updatePlayPauseButton()
         }
 
-        // FM/AM toggle button
-        btnFM.setOnClickListener {
-            frequencyScale.toggleMode()
-        }
+        // Radio mode spinner is set up in setupRadioModeSpinner()
 
         // Power button - toggle radio on/off
         btnPower.setOnClickListener {
@@ -3085,8 +3117,8 @@ class MainActivity : AppCompatActivity() {
             hideArchiveOverlay()
         }
 
-        // Long press on FM button for debug tune
-        btnFM.setOnLongClickListener {
+        // Long press on spinner for debug tune
+        spinnerRadioMode.setOnLongClickListener {
             debugTune()
             true
         }
@@ -5154,6 +5186,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showStationScanDialog() {
+        // DAB-Modus: eigenen Scan-Dialog
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+            showDabScanDialog()
+            return
+        }
         val isFmMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM
         val highSensitivity = presetRepository.isAutoScanSensitivity()
 
@@ -5183,19 +5220,35 @@ class MainActivity : AppCompatActivity() {
         }.show()
     }
 
+    private fun showDabScanDialog() {
+        if (!isDabOn || !dabTunerManager.hasTuner()) {
+            android.widget.Toast.makeText(this, "DAB+ Tuner ist nicht aktiv. Bitte zuerst einschalten.", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+
+        at.planqton.fytfm.ui.DabScanDialog(this, dabTunerManager) { services ->
+            val stations = services.map { it.toRadioStation() }
+            presetRepository.mergeDabScannedStations(stations)
+            loadStationsForCurrentMode()
+            populateCarousel()
+            android.widget.Toast.makeText(this, "${services.size} DAB+ Sender gefunden", android.widget.Toast.LENGTH_SHORT).show()
+        }.show()
+    }
+
     private fun saveStations(stations: List<at.planqton.fytfm.data.RadioStation>) {
-        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-            presetRepository.saveFmStations(stations)
-        } else {
-            presetRepository.saveAmStations(stations)
+        when (frequencyScale.getMode()) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.saveFmStations(stations)
+            FrequencyScaleView.RadioMode.AM -> presetRepository.saveAmStations(stations)
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.saveDabStations(stations)
         }
     }
 
     private fun loadStationsForCurrentMode() {
-        val allStations = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-            presetRepository.loadFmStations()
-        } else {
-            presetRepository.loadAmStations()
+        val mode = frequencyScale.getMode()
+        val allStations = when (mode) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.loadFmStations()
+            FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.loadDabStations()
         }
 
         // Filter anwenden wenn aktiviert
@@ -5206,7 +5259,9 @@ class MainActivity : AppCompatActivity() {
         }
 
         stationAdapter.setStations(stations)
-        stationAdapter.setSelectedFrequency(frequencyScale.getFrequency())
+        if (mode != FrequencyScaleView.RadioMode.DAB) {
+            stationAdapter.setSelectedFrequency(frequencyScale.getFrequency())
+        }
     }
 
     // Scanner-Funktionen deaktiviert
@@ -5232,6 +5287,11 @@ class MainActivity : AppCompatActivity() {
         android.util.Log.d("fytFM", "skipToPreviousStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
 
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+            skipDabStation(forward = false)
+            return
+        }
+
         val currentFreq = frequencyScale.getFrequency()
         val prevStation = stations.lastOrNull { it.frequency < currentFreq - 0.05f }
             ?: stations.lastOrNull()
@@ -5249,6 +5309,11 @@ class MainActivity : AppCompatActivity() {
         android.util.Log.d("fytFM", "skipToNextStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
 
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+            skipDabStation(forward = true)
+            return
+        }
+
         val currentFreq = frequencyScale.getFrequency()
         val nextStation = stations.firstOrNull { it.frequency > currentFreq + 0.05f }
             ?: stations.firstOrNull()
@@ -5259,6 +5324,26 @@ class MainActivity : AppCompatActivity() {
             frequencyScale.setFrequency(it.frequency)
             showStationChangeOverlay(it.frequency, oldFreq)
         }
+    }
+
+    private fun skipDabStation(forward: Boolean) {
+        val dabStations = presetRepository.loadDabStations()
+        if (dabStations.isEmpty()) return
+
+        val currentIndex = dabStations.indexOfFirst { it.serviceId == currentDabServiceId }
+        val newIndex = if (forward) {
+            if (currentIndex < 0 || currentIndex >= dabStations.size - 1) 0 else currentIndex + 1
+        } else {
+            if (currentIndex <= 0) dabStations.size - 1 else currentIndex - 1
+        }
+
+        val newStation = dabStations[newIndex]
+        currentDabServiceId = newStation.serviceId
+        currentDabEnsembleId = newStation.ensembleId
+        dabTunerManager.tuneService(newStation.serviceId, newStation.ensembleId)
+        updateCarouselSelection()
+        updateFavoriteButton()
+        android.util.Log.i("fytFM", "skipDabStation: -> ${newStation.name} (SID=${newStation.serviceId})")
     }
 
     private fun showStationChangeOverlay(frequency: Float, oldFrequency: Float = 0f) {
@@ -5368,14 +5453,76 @@ class MainActivity : AppCompatActivity() {
         updateDebugInfo(freq = frequency)
     }
 
-    private fun updateModeButton() {
-        val mode = frequencyScale.getMode()
-        val iconRes = if (mode == FrequencyScaleView.RadioMode.FM) {
-            R.drawable.ic_fm
-        } else {
-            R.drawable.ic_am
+    private fun setupRadioModeSpinner() {
+        val adapter = ArrayAdapter.createFromResource(
+            this, R.array.radio_modes, R.layout.item_radio_mode_spinner
+        )
+        adapter.setDropDownViewResource(R.layout.item_radio_mode_dropdown)
+        spinnerRadioMode.adapter = adapter
+
+        spinnerRadioMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (suppressSpinnerCallback) {
+                    suppressSpinnerCallback = false
+                    return
+                }
+                val newMode = when (position) {
+                    0 -> FrequencyScaleView.RadioMode.FM
+                    1 -> FrequencyScaleView.RadioMode.AM
+                    2 -> FrequencyScaleView.RadioMode.DAB
+                    else -> FrequencyScaleView.RadioMode.FM
+                }
+                setRadioMode(newMode)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
-        btnFM.setImageResource(iconRes)
+    }
+
+    private fun setRadioMode(mode: FrequencyScaleView.RadioMode) {
+        val oldMode = frequencyScale.getMode()
+        if (oldMode == mode) return
+
+        // Alten Modus aufräumen
+        if (oldMode == FrequencyScaleView.RadioMode.DAB && mode != FrequencyScaleView.RadioMode.DAB) {
+            // Von DAB weg: DAB-Tuner stoppen wenn aktiv
+            if (isDabOn) {
+                dabTunerManager.stopService()
+            }
+        }
+
+        // DAB-Modus: nur Carousel-View erlaubt
+        if (mode == FrequencyScaleView.RadioMode.DAB) {
+            // Auto-Switch zu Carousel wenn in Seekbar-Ansicht
+            if (!isCarouselMode) {
+                setViewMode(true)
+            }
+            // View-Mode-Toggle ausblenden
+            findViewById<View>(R.id.viewModeToggle)?.visibility = View.GONE
+        } else {
+            // View-Mode-Toggle wieder einblenden
+            findViewById<View>(R.id.viewModeToggle)?.visibility = View.VISIBLE
+        }
+
+        // Mode setzen (für FM/AM wird FrequencyScaleView aktualisiert)
+        frequencyScale.setMode(mode)
+
+        // Spinner aktualisieren ohne Callback
+        updateModeSpinner()
+
+        // Stationen laden
+        loadFavoritesFilterState()
+        loadStationsForCurrentMode()
+        updateFavoriteButton()
+    }
+
+    private fun updateModeSpinner() {
+        val position = when (frequencyScale.getMode()) {
+            FrequencyScaleView.RadioMode.FM -> 0
+            FrequencyScaleView.RadioMode.AM -> 1
+            FrequencyScaleView.RadioMode.DAB -> 2
+        }
+        suppressSpinnerCallback = true
+        spinnerRadioMode.setSelection(position, false)
     }
 
     private fun updatePlayPauseButton() {
@@ -5395,6 +5542,12 @@ class MainActivity : AppCompatActivity() {
      * 5. RdsManager.startPolling() - RDS-Daten abrufen
      */
     private fun toggleRadioPower() {
+        // DAB-Modus: eigene Power-Steuerung
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+            toggleDabPower()
+            return
+        }
+
         android.util.Log.i("fytFM", "======= toggleRadioPower() =======")
         android.util.Log.i("fytFM", "FmNative.isLibraryLoaded: ${FmNative.isLibraryLoaded()}")
         android.util.Log.i("fytFM", "TWUtil available: ${twUtil?.isAvailable}")
@@ -5621,17 +5774,88 @@ class MainActivity : AppCompatActivity() {
 
     private fun updatePowerButton() {
         // Update power button appearance based on radio state
-        btnPower.alpha = if (isRadioOn) 1.0f else 0.5f
+        val isOn = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) isDabOn else isRadioOn
+        btnPower.alpha = if (isOn) 1.0f else 0.5f
+    }
+
+    /**
+     * DAB+ Tuner Ein/Aus schalten.
+     */
+    private fun toggleDabPower() {
+        android.util.Log.i("fytFM", "======= toggleDabPower() =======")
+
+        try {
+            if (isDabOn) {
+                // DAB ausschalten
+                android.util.Log.i("fytFM", "--- DAB Powering OFF ---")
+                dabTunerManager.stopService()
+                dabTunerManager.deinitialize()
+                isDabOn = false
+                currentDabServiceId = 0
+                currentDabEnsembleId = 0
+            } else {
+                // DAB einschalten
+                android.util.Log.i("fytFM", "--- DAB Powering ON ---")
+
+                // DAB Tuner Manager Callbacks setzen
+                dabTunerManager.onTunerReady = {
+                    android.util.Log.i("fytFM", "DAB Tuner ready!")
+                    android.widget.Toast.makeText(this, "DAB+ Tuner bereit", android.widget.Toast.LENGTH_SHORT).show()
+
+                    // Falls gespeicherte Sender vorhanden, lade sie
+                    val dabStations = presetRepository.loadDabStations()
+                    if (dabStations.isNotEmpty()) {
+                        populateCarousel()
+                        // Ersten Sender tunen
+                        val firstStation = dabStations.first()
+                        currentDabServiceId = firstStation.serviceId
+                        currentDabEnsembleId = firstStation.ensembleId
+                        dabTunerManager.tuneService(firstStation.serviceId, firstStation.ensembleId)
+                        updateCarouselSelection()
+                    }
+                }
+
+                dabTunerManager.onServiceStarted = { dabStation ->
+                    android.util.Log.i("fytFM", "DAB Service gestartet: ${dabStation.serviceLabel}")
+                    currentDabServiceId = dabStation.serviceId
+                    currentDabEnsembleId = dabStation.ensembleId
+                    updateCarouselSelection()
+                    updateFavoriteButton()
+                }
+
+                dabTunerManager.onServiceStopped = {
+                    android.util.Log.i("fytFM", "DAB Service gestoppt")
+                }
+
+                dabTunerManager.onTunerError = { error ->
+                    android.util.Log.e("fytFM", "DAB Tuner Error: $error")
+                    android.widget.Toast.makeText(this, error, android.widget.Toast.LENGTH_LONG).show()
+                }
+
+                val success = dabTunerManager.initialize(this)
+                isDabOn = success
+
+                if (!success) {
+                    android.widget.Toast.makeText(this, "DAB+ Initialisierung fehlgeschlagen", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "DAB power toggle failed: ${e.message}", e)
+            isDabOn = false
+        }
+
+        android.util.Log.i("fytFM", "======= toggleDabPower() done, isDabOn=$isDabOn =======")
+        updatePowerButton()
     }
 
     /**
      * Lädt den Favoriten-Filter-Status für den aktuellen Modus (FM/AM)
      */
     private fun loadFavoritesFilterState() {
-        showFavoritesOnly = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-            presetRepository.isShowFavoritesOnlyFm()
-        } else {
-            presetRepository.isShowFavoritesOnlyAm()
+        showFavoritesOnly = when (frequencyScale.getMode()) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.isShowFavoritesOnlyFm()
+            FrequencyScaleView.RadioMode.AM -> presetRepository.isShowFavoritesOnlyAm()
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.isShowFavoritesOnlyDab()
         }
         updateFolderButton()
     }
@@ -5640,9 +5864,14 @@ class MainActivity : AppCompatActivity() {
      * Aktualisiert das Herz-Icon basierend auf dem aktuellen Sender
      */
     private fun updateFavoriteButton() {
-        val frequency = frequencyScale.getFrequency()
-        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
-        val isFavorite = presetRepository.isFavorite(frequency, isAM)
+        val mode = frequencyScale.getMode()
+        val isFavorite = if (mode == FrequencyScaleView.RadioMode.DAB) {
+            if (currentDabServiceId > 0) presetRepository.isDabFavorite(currentDabServiceId) else false
+        } else {
+            val frequency = frequencyScale.getFrequency()
+            val isAM = mode == FrequencyScaleView.RadioMode.AM
+            presetRepository.isFavorite(frequency, isAM)
+        }
 
         val iconRes = if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
         btnFavorite.setImageResource(iconRes)
@@ -5662,10 +5891,14 @@ class MainActivity : AppCompatActivity() {
      * Favorisiert/Unfavorisiert den aktuellen Sender
      */
     private fun toggleCurrentStationFavorite() {
-        val frequency = frequencyScale.getFrequency()
-        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
-
-        val isFavoriteNow = presetRepository.toggleFavorite(frequency, isAM)
+        val mode = frequencyScale.getMode()
+        val isFavoriteNow = if (mode == FrequencyScaleView.RadioMode.DAB) {
+            if (currentDabServiceId > 0) presetRepository.toggleDabFavorite(currentDabServiceId) else return
+        } else {
+            val frequency = frequencyScale.getFrequency()
+            val isAM = mode == FrequencyScaleView.RadioMode.AM
+            presetRepository.toggleFavorite(frequency, isAM)
+        }
 
         // UI aktualisieren
         updateFavoriteButton()
@@ -5686,11 +5919,11 @@ class MainActivity : AppCompatActivity() {
     private fun toggleFavoritesFilter() {
         showFavoritesOnly = !showFavoritesOnly
 
-        // Filter-Status speichern (FM und AM getrennt)
-        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-            presetRepository.setShowFavoritesOnlyFm(showFavoritesOnly)
-        } else {
-            presetRepository.setShowFavoritesOnlyAm(showFavoritesOnly)
+        // Filter-Status speichern (FM, AM und DAB getrennt)
+        when (frequencyScale.getMode()) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.setShowFavoritesOnlyFm(showFavoritesOnly)
+            FrequencyScaleView.RadioMode.AM -> presetRepository.setShowFavoritesOnlyAm(showFavoritesOnly)
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.setShowFavoritesOnlyDab(showFavoritesOnly)
         }
 
         // UI aktualisieren

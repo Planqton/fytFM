@@ -7,6 +7,11 @@
     <string name="next_station">Next station</string>
     <string name="favorite">Favorite</string>
     <string name="fm_mode">FM Mode</string>
+    <string-array name="radio_modes">
+        <item>FM</item>
+        <item>AM</item>
+        <item>DAB+</item>
+    </string-array>
     <string name="search">Search</string>
     <string name="skip_previous">Skip previous</string>
     <string name="skip_next">Skip next</string>
