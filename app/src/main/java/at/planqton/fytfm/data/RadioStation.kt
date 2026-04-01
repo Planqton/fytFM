@@ -5,14 +5,18 @@ data class RadioStation(
     val name: String? = null,
     val rssi: Int = 0,
     val isAM: Boolean = false,
+    val isDab: Boolean = false,
     val isFavorite: Boolean = false,
-    val syncName: Boolean = true  // Auto-Sync mit RDS PS
+    val syncName: Boolean = true,  // Auto-Sync mit RDS PS
+    val serviceId: Int = 0,        // DAB Service ID
+    val ensembleId: Int = 0,       // DAB Ensemble ID
+    val ensembleLabel: String? = null // DAB Ensemble Label
 ) {
     fun getDisplayFrequency(): String {
-        return if (isAM) {
-            "AM ${frequency.toInt()}"
-        } else {
-            "FM %.2f".format(frequency)
+        return when {
+            isDab -> name ?: ensembleLabel ?: "DAB+"
+            isAM -> "AM ${frequency.toInt()}"
+            else -> "FM %.2f".format(frequency)
         }
     }
 

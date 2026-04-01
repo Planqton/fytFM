@@ -496,12 +496,13 @@
             android:visibility="invisible" />
 
         <Spinner
-            android:id="@+id/tunerDropdown"
-            android:layout_width="120dp"
+            android:id="@+id/spinnerRadioMode"
+            android:layout_width="72dp"
             android:layout_height="72dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
             android:spinnerMode="dropdown"
             android:gravity="center"
-            android:background="@drawable/spinner_background" />
+            android:dropDownWidth="120dp" />
 
         <ImageButton
             android:id="@+id/btnSearch"

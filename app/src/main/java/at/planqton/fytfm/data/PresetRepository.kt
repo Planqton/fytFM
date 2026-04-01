@@ -10,6 +10,7 @@ class PresetRepository(private val context: Context) {
     companion object {
         private const val PREFS_FM = "fm_presets"
         private const val PREFS_AM = "am_presets"
+        private const val PREFS_DAB = "dab_presets"
         private const val PREFS_SETTINGS = "settings"
         private const val KEY_STATIONS = "stations"
         private const val KEY_POWER_ON_STARTUP = "power_on_startup"
@@ -17,6 +18,7 @@ class PresetRepository(private val context: Context) {
 
     private val fmPrefs: SharedPreferences = context.getSharedPreferences(PREFS_FM, Context.MODE_PRIVATE)
     private val amPrefs: SharedPreferences = context.getSharedPreferences(PREFS_AM, Context.MODE_PRIVATE)
+    private val dabPrefs: SharedPreferences = context.getSharedPreferences(PREFS_DAB, Context.MODE_PRIVATE)
     private val settingsPrefs: SharedPreferences = context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
 
     // === Per-Tuner-Instance Storage ===
@@ -160,6 +162,18 @@ class PresetRepository(private val context: Context) {
         return loadStations(amPrefs, isAM = true)
     }
 
+    fun saveDabStations(stations: List<RadioStation>) {
+        saveStations(dabPrefs, stations)
+    }
+
+    fun loadDabStations(): List<RadioStation> {
+        return loadStations(dabPrefs, isAM = false, isDab = true)
+    }
+
+    fun clearDabStations() {
+        dabPrefs.edit().remove(KEY_STATIONS).apply()
+    }
+
     private fun saveStations(prefs: SharedPreferences, stations: List<RadioStation>) {
         val jsonArray = JSONArray()
         stations.forEach { station ->
@@ -169,13 +183,17 @@ class PresetRepository(private val context: Context) {
                 put("rssi", station.rssi)
                 put("isFavorite", station.isFavorite)
                 put("syncName", station.syncName)
+                put("isDab", station.isDab)
+                put("serviceId", station.serviceId)
+                put("ensembleId", station.ensembleId)
+                put("ensembleLabel", station.ensembleLabel ?: "")
             }
             jsonArray.put(obj)
         }
         prefs.edit().putString(KEY_STATIONS, jsonArray.toString()).apply()
     }
 
-    private fun loadStations(prefs: SharedPreferences, isAM: Boolean): List<RadioStation> {
+    private fun loadStations(prefs: SharedPreferences, isAM: Boolean, isDab: Boolean = false): List<RadioStation> {
         val json = prefs.getString(KEY_STATIONS, null) ?: return emptyList()
         val stations = mutableListOf<RadioStation>()
 
@@ -189,8 +207,12 @@ class PresetRepository(private val context: Context) {
                         name = obj.optString("name").takeIf { it.isNotBlank() },
                         rssi = obj.optInt("rssi", 0),
                         isAM = isAM,
+                        isDab = isDab || obj.optBoolean("isDab", false),
                         isFavorite = obj.optBoolean("isFavorite", false),
-                        syncName = obj.optBoolean("syncName", true)  // Default true für alte Einträge
+                        syncName = obj.optBoolean("syncName", true),
+                        serviceId = obj.optInt("serviceId", 0),
+                        ensembleId = obj.optInt("ensembleId", 0),
+                        ensembleLabel = obj.optString("ensembleLabel").takeIf { it.isNotBlank() }
                     )
                 )
             }
@@ -198,7 +220,7 @@ class PresetRepository(private val context: Context) {
             e.printStackTrace()
         }
 
-        return stations.sortedBy { it.frequency }
+        return if (isDab) stations.sortedBy { it.name ?: it.ensembleLabel ?: "" } else stations.sortedBy { it.frequency }
     }
 
     fun clearFmStations() {
@@ -221,7 +243,6 @@ class PresetRepository(private val context: Context) {
         val isFavoriteNow: Boolean
 
         if (existingStation != null) {
-            // Sender existiert - Favorit togglen
             isFavoriteNow = !existingStation.isFavorite
             updatedStations = stations.map {
                 if (Math.abs(it.frequency - frequency) < 0.05f) {
@@ -229,7 +250,6 @@ class PresetRepository(private val context: Context) {
                 } else it
             }
         } else {
-            // Sender existiert nicht - hinzufügen und favorisieren
             isFavoriteNow = true
             val newStation = RadioStation(
                 frequency = frequency,
@@ -251,11 +271,38 @@ class PresetRepository(private val context: Context) {
     }
 
     /**
+     * Toggle Favorit für DAB-Sender (identifiziert per serviceId)
+     */
+    fun toggleDabFavorite(serviceId: Int): Boolean {
+        val stations = loadDabStations()
+        val existingStation = stations.find { it.serviceId == serviceId }
+
+        val updatedStations: List<RadioStation>
+        val isFavoriteNow: Boolean
+
+        if (existingStation != null) {
+            isFavoriteNow = !existingStation.isFavorite
+            updatedStations = stations.map {
+                if (it.serviceId == serviceId) it.copy(isFavorite = isFavoriteNow) else it
+            }
+        } else {
+            return false
+        }
+
+        saveDabStations(updatedStations)
+        return isFavoriteNow
+    }
+
+    /**
      * Prüft ob ein Sender favorisiert ist
      */
     fun isFavorite(frequency: Float, isAM: Boolean): Boolean {
         val stations = if (isAM) loadAmStations() else loadFmStations()
         return stations.find { Math.abs(it.frequency - frequency) < 0.05f }?.isFavorite ?: false
+    }
+
+    fun isDabFavorite(serviceId: Int): Boolean {
+        return loadDabStations().find { it.serviceId == serviceId }?.isFavorite ?: false
     }
 
     fun isPowerOnStartup(): Boolean {
@@ -314,6 +361,14 @@ class PresetRepository(private val context: Context) {
 
     fun setShowFavoritesOnlyAm(enabled: Boolean) {
         settingsPrefs.edit().putBoolean("show_favorites_only_am", enabled).apply()
+    }
+
+    fun isShowFavoritesOnlyDab(): Boolean {
+        return settingsPrefs.getBoolean("show_favorites_only_dab", false)
+    }
+
+    fun setShowFavoritesOnlyDab(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("show_favorites_only_dab", enabled).apply()
     }
 
     // Überschreibe favorisierte Sender beim Scan
@@ -423,6 +478,45 @@ class PresetRepository(private val context: Context) {
             saveFmStations(mergedStations)
         }
 
+        return mergedStations
+    }
+
+    /**
+     * Fügt gescannte DAB-Sender zur Liste hinzu.
+     * Merge key ist serviceId statt Frequenz.
+     */
+    fun mergeDabScannedStations(scannedStations: List<RadioStation>): List<RadioStation> {
+        val existingStations = loadDabStations()
+        val overwriteFavorites = isOverwriteFavorites()
+
+        val favoritesMap = existingStations
+            .filter { it.isFavorite }
+            .associateBy { it.serviceId }
+            .toMutableMap()
+
+        val resultMap = mutableMapOf<Int, RadioStation>()
+
+        for (scanned in scannedStations) {
+            val existingFavorite = favoritesMap[scanned.serviceId]
+
+            if (existingFavorite != null) {
+                if (overwriteFavorites) {
+                    resultMap[scanned.serviceId] = scanned.copy(isFavorite = true)
+                } else {
+                    resultMap[scanned.serviceId] = existingFavorite
+                }
+                favoritesMap.remove(scanned.serviceId)
+            } else {
+                resultMap[scanned.serviceId] = scanned
+            }
+        }
+
+        for ((serviceId, favorite) in favoritesMap) {
+            resultMap[serviceId] = favorite
+        }
+
+        val mergedStations = resultMap.values.sortedBy { it.name ?: it.ensembleLabel ?: "" }
+        saveDabStations(mergedStations)
         return mergedStations
     }
 

@@ -47,15 +47,13 @@ import at.planqton.fytfm.deezer.RtCombiner
 import at.planqton.fytfm.deezer.TrackInfo
 import at.planqton.fytfm.steering.SteeringWheelKeyManager
 import at.planqton.fytfm.steering.SyuToolkitManager
-import at.planqton.fytfm.tuner.*
-import at.planqton.fytfm.ui.PluginManagerDialog
-import at.planqton.fytfm.ui.TunerDropdownAdapter
-import at.planqton.fytfm.ui.TunerManagerDialog
+import at.planqton.fytfm.dab.DabTunerManager
 import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Spinner
 import coil.load
 
-class MainActivity : AppCompatActivity(), TunerPluginCallback {
+class MainActivity : AppCompatActivity() {
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleHelper.onAttach(newBase))
@@ -67,42 +65,13 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
     private lateinit var btnNextStation: ImageButton
     private lateinit var btnFavorite: ImageButton
     private lateinit var btnPlayPause: ImageButton
+    private lateinit var spinnerRadioMode: Spinner
     private lateinit var btnPower: ImageButton
-
-    // Tuner Plugin System
-    private lateinit var tunerManager: TunerManager
-    private lateinit var pluginLoader: PluginLoader
-    private lateinit var hostApi: TunerHostApiImpl
-    private var activePlugin: TunerPlugin? = null
-    private var activeTunerId: String? = null
-    private lateinit var tunerDropdown: Spinner
-    private lateinit var tunerDropdownAdapter: TunerDropdownAdapter
-    private var pluginManagerDialog: PluginManagerDialog? = null
-
-    // Plugin Import
-    private val pluginImportLauncher = registerForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == RESULT_OK) {
-            result.data?.data?.let { uri ->
-                val info = pluginLoader.installPlugin(uri)
-                if (info != null) {
-                    val plugin = pluginLoader.loadPlugin(info, hostApi)
-                    if (plugin != null) {
-                        TunerPluginRegistry.register(plugin, builtIn = false)
-                        pluginManagerDialog?.adapter?.refresh()
-                        android.widget.Toast.makeText(this, "Plugin '${info.displayName}' importiert", android.widget.Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    android.widget.Toast.makeText(this, "Ungültiges Plugin", android.widget.Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-    }
-
-    // DAB+
-    private lateinit var dabManager: DabManager
-    private var dabStations: List<org.omri.radioservice.RadioService> = emptyList()
+    private val dabTunerManager = DabTunerManager()
+    private var isDabOn = false
+    private var currentDabServiceId = 0
+    private var currentDabEnsembleId = 0
+    private var suppressSpinnerCallback = false
     private lateinit var controlBar: LinearLayout
     private lateinit var stationRecycler: RecyclerView
     private lateinit var tvAllList: TextView
@@ -148,6 +117,11 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
     private var steeringWheelKeyManager: SteeringWheelKeyManager? = null
     private var syuToolkitManager: SyuToolkitManager? = null
 
+    // Preset Import via SYU Service Callbacks
+    private var isCollectingPresets = false
+    private val collectedPresets = mutableMapOf<Int, Pair<Float, String?>>()  // index -> (freq, name)
+    private val presetImportHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var presetImportTimeoutRunnable: Runnable? = null
 
     // Now Playing Bar
     private var nowPlayingBar: View? = null
@@ -429,60 +403,31 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         setupStationList()
         setupListeners()
 
-        // Initialize DAB+ Manager
-        dabManager = DabManager(this)
-        dabManager.callback = dabCallback
-
-        // Host API erstellen (wraps alle Hardware-Klassen)
-        hostApi = TunerHostApiImpl(this, fmNative, rdsManager, twUtil, dabManager)
-
-        // Built-in Plugins registrieren
-        TunerPluginRegistry.register(FmTunerPlugin().apply { initialize(hostApi) }, builtIn = true)
-        TunerPluginRegistry.register(AmTunerPlugin().apply { initialize(hostApi) }, builtIn = true)
-        TunerPluginRegistry.register(DabTunerPlugin().apply { initialize(hostApi) }, builtIn = true)
-
-        // Externe Plugins laden
-        pluginLoader = PluginLoader(this)
-        pluginLoader.loadAllPlugins(hostApi).forEach { plugin ->
-            TunerPluginRegistry.register(plugin, builtIn = false)
-        }
-
-        // Initialize Tuner Manager (kennt keine konkreten Plugins)
-        tunerManager = TunerManager(this)
-
-        // Alte Caches löschen (fm_presets, am_presets, fytfm_prefs)
-        tunerManager.clearLegacyCache()
-
-        setupTunerDropdown()
-
         // Start MediaService for Car Launcher integration
         startMediaService()
 
         // Initialize Steering Wheel Key Handler for FYT devices
         initSteeringWheelKeys()
 
-        // Restore last active tuner oder Tuner Manager öffnen wenn keine vorhanden
-        val lastTunerId = tunerManager.getActiveTunerId()
-            ?: tunerManager.getInstances().firstOrNull()?.id
-        if (lastTunerId != null) {
-            switchToTuner(lastTunerId)
-        } else {
-            // Kein Tuner aktiv - Bedienelemente deaktivieren
-            setControlsEnabled(false)
-            if (tunerManager.getInstances().isEmpty()) {
-                showTunerManagerDialog()
-            }
-        }
+        // Load last frequency from SharedPreferences
+        val lastFreq = loadLastFrequency()
+        frequencyScale.setFrequency(lastFreq)
+        rdsManager.setUiFrequency(lastFreq)  // Für AF-Vergleich
+        rdsLogRepository.setInitialFrequency(lastFreq, frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM)
+        updateFrequencyDisplay(lastFreq)
+        updateModeSpinner()
+        loadFavoritesFilterState()
+        loadStationsForCurrentMode()
 
+        // Check if user wants to import stations from original app (via SYU callbacks)
+        checkAndOfferStationImport()
 
         updatePowerButton()
         updateFavoriteButton()
 
         // Initialize MediaSession with current station immediately after service is ready
-        val activeInstance = tunerManager.getActiveInstance()
-        val lastFreq = activeInstance?.lastFrequency ?: 90.4f
-        val isAM = activePlugin?.type == TunerType.AM
-        val stations = presetRepository.loadStationsForTuner(activeInstance?.id ?: "", isAM)
+        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
         val savedStation = stations.find { Math.abs(it.frequency - lastFreq) < 0.05f }
         val savedStationName = savedStation?.name
         val radioLogoPath = radioLogoRepository.getLogoForStation(savedStationName, null, lastFreq)
@@ -504,6 +449,8 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         if (presetRepository.isPowerOnStartup() && !isRadioOn) {
             toggleRadioPower()
         }
+
+        // Debug DAB test removed
     }
 
     /**
@@ -567,9 +514,25 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
                 }
 
                 override fun onPresetReceived(index: Int, frequencyMhz: Float, isAM: Boolean) {
+                    if (!isAM && isCollectingPresets && frequencyMhz in 87.5f..108.0f) {
+                        android.util.Log.i("fytFM", "Import: Preset empfangen - index=$index, freq=$frequencyMhz MHz")
+                        runOnUiThread {
+                            val existing = collectedPresets[index]
+                            collectedPresets[index] = Pair(frequencyMhz, existing?.second)
+                        }
+                    }
                 }
 
                 override fun onPresetNameReceived(index: Int, name: String, isAM: Boolean) {
+                    if (!isAM && isCollectingPresets) {
+                        android.util.Log.i("fytFM", "Import: Preset-Name empfangen - index=$index, name='$name'")
+                        runOnUiThread {
+                            val existing = collectedPresets[index]
+                            if (existing != null) {
+                                collectedPresets[index] = Pair(existing.first, name)
+                            }
+                        }
+                    }
                 }
             }
         )
@@ -995,8 +958,9 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         btnNextStation = findViewById(R.id.btnNextStation)
         btnFavorite = findViewById(R.id.btnFavorite)
         btnPlayPause = findViewById(R.id.btnPlayPause)
+        spinnerRadioMode = findViewById(R.id.spinnerRadioMode)
+        setupRadioModeSpinner()
         btnPower = findViewById(R.id.btnPower)
-        tunerDropdown = findViewById(R.id.tunerDropdown)
         controlBar = findViewById(R.id.controlBar)
         stationRecycler = findViewById(R.id.stationRecycler)
         tvAllList = findViewById(R.id.tvAllList)
@@ -2572,19 +2536,25 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      */
     private fun setupViewModeToggle() {
         // Setup carousel adapter
-        stationCarouselAdapter = at.planqton.fytfm.ui.StationCarouselAdapter { frequency, isAM ->
+        stationCarouselAdapter = at.planqton.fytfm.ui.StationCarouselAdapter { station ->
             // When user clicks a station in carousel, tune to it
-            if (isAM) {
-                frequencyScale.setMode(FrequencyScaleView.RadioMode.AM)
+            if (station.isDab) {
+                // DAB: tune via DabTunerManager
+                currentDabServiceId = station.serviceId
+                currentDabEnsembleId = station.ensembleId
+                dabTunerManager.tuneService(station.serviceId, station.ensembleId)
+                updateCarouselSelection()
             } else {
-                frequencyScale.setMode(FrequencyScaleView.RadioMode.FM)
+                if (station.isAM) {
+                    frequencyScale.setMode(FrequencyScaleView.RadioMode.AM)
+                } else {
+                    frequencyScale.setMode(FrequencyScaleView.RadioMode.FM)
+                }
+                frequencyScale.setFrequency(station.frequency)
+                fmNative?.tune(station.frequency)
+                updateCarouselSelection()
+                startCarouselCenterTimer(station.frequency, station.isAM)
             }
-            frequencyScale.setFrequency(frequency)
-            fmNative?.tune(frequency)
-            updateCarouselSelection()
-
-            // Start 2-second timer to center the carousel on selected item
-            startCarouselCenterTimer(frequency, isAM)
         }
 
         stationCarousel?.apply {
@@ -2640,6 +2610,8 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
 
         // Toggle button click handlers
         btnViewModeEqualizer?.setOnClickListener {
+            // In DAB mode, only carousel view is allowed
+            if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) return@setOnClickListener
             setViewMode(false)
         }
 
@@ -2693,15 +2665,16 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      * Populate the carousel with saved stations
      */
     private fun populateCarousel() {
-        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
-        val stations = if (isAM) {
-            presetRepository.loadAmStations()
-        } else {
-            presetRepository.loadFmStations()
+        val mode = frequencyScale.getMode()
+        val isAM = mode == FrequencyScaleView.RadioMode.AM
+        val isDab = mode == FrequencyScaleView.RadioMode.DAB
+        val stations = when (mode) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.loadFmStations()
+            FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.loadDabStations()
         }
 
-        android.util.Log.d("fytFM", "populateCarousel: ${stations.size} stations loaded, isAM=$isAM")
-        stations.forEach { android.util.Log.d("fytFM", "  Station: ${it.frequency} - ${it.name}") }
+        android.util.Log.d("fytFM", "populateCarousel: ${stations.size} stations loaded, mode=$mode")
 
         val carouselItems = stations.map { station ->
             val logoPath = radioLogoRepository.getLogoForStation(station.name, null, station.frequency)
@@ -2709,7 +2682,10 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
                 frequency = station.frequency,
                 name = station.name,
                 logoPath = logoPath,
-                isAM = isAM
+                isAM = isAM,
+                isDab = isDab || station.isDab,
+                serviceId = station.serviceId,
+                ensembleId = station.ensembleId
             )
         }
 
@@ -2720,13 +2696,25 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      * Update carousel selection to match current frequency
      */
     private fun updateCarouselSelection() {
+        val mode = frequencyScale.getMode()
+
+        if (mode == FrequencyScaleView.RadioMode.DAB) {
+            // DAB: select by serviceId
+            stationCarouselAdapter?.setCurrentDabService(currentDabServiceId)
+            val dabStation = presetRepository.loadDabStations().find { it.serviceId == currentDabServiceId }
+            carouselFrequencyLabel?.text = dabStation?.name ?: "DAB+"
+            updateCarouselFavoriteIcon()
+            val position = stationCarouselAdapter?.getPositionForDabService(currentDabServiceId) ?: -1
+            android.util.Log.d("fytFM", "updateCarouselSelection DAB: serviceId=$currentDabServiceId, position=$position")
+            return
+        }
+
         val currentFreq = frequencyScale.getFrequency()
-        val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+        val isAM = mode == FrequencyScaleView.RadioMode.AM
 
         android.util.Log.d("fytFM", "updateCarouselSelection: freq=$currentFreq, isAM=$isAM")
         stationCarouselAdapter?.setCurrentFrequency(currentFreq, isAM)
 
-        // Update the frequency label below carousel
         val freqText = if (isAM) {
             "AM ${currentFreq.toInt()}"
         } else {
@@ -2736,7 +2724,6 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
 
         updateCarouselFavoriteIcon()
 
-        // Log position for debugging (no immediate scroll - let timer handle centering)
         val position = stationCarouselAdapter?.getPositionForFrequency(currentFreq, isAM) ?: -1
         android.util.Log.d("fytFM", "updateCarouselSelection: position=$position")
     }
@@ -2954,7 +2941,6 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
             updateFrequencyDisplay(frequency)
             stationAdapter.setSelectedFrequency(frequency)
             // Clear RDS data on frequency change for fresh data
-            activePlugin?.clearRds()
             rdsManager.clearRds()
             rtCombiner?.clearAll()
             // Reset Spotify debug overlay
@@ -2962,14 +2948,11 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
             // Reset displayed track
             lastDisplayedTrackId = null
             // Log station change
-            val isAM = activePlugin?.type == TunerType.AM
-            rdsLogRepository.onStationChange(frequency, isAM ?: false)
+            val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+            rdsLogRepository.onStationChange(frequency, isAM)
 
             // Get saved station for this frequency
-            val tid = activeTunerId
-            val stations = if (tid != null) {
-                presetRepository.loadStationsForTuner(tid, isAM ?: false)
-            } else if (isAM == true) presetRepository.loadAmStations() else presetRepository.loadFmStations()
+            val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
             val savedStation = stations.find { Math.abs(it.frequency - frequency) < 0.05f }
             val savedStationName = savedStation?.name
 
@@ -2977,15 +2960,15 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
             val radioLogoPath = radioLogoRepository.getLogoForStation(savedStationName, null, frequency)
 
             // Update Now Playing bar with station info (logo + name)
-            resetNowPlayingBarForStation(savedStationName, radioLogoPath, frequency, isAM ?: false)
+            resetNowPlayingBarForStation(savedStationName, radioLogoPath, frequency, isAM)
 
             // Update MediaService with new frequency, saved station name and radio logo immediately
             android.util.Log.d("fytFM", "Station change: freq=$frequency, stationName=$savedStationName, radioLogoPath=$radioLogoPath")
             FytFMMediaService.instance?.updateMetadata(
                 frequency = frequency,
-                ps = savedStationName,
+                ps = savedStationName,  // Use saved station name instead of null
                 rt = null,
-                isAM = isAM ?: false,
+                isAM = isAM,
                 coverUrl = null,
                 localCoverPath = null,
                 radioLogoPath = radioLogoPath
@@ -3007,9 +2990,10 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         }
 
         frequencyScale.setOnModeChangeListener { mode ->
-            saveLastMode(mode)
-            // Mode changes are now handled by switchToTuner()
-            // This listener is kept for backward compatibility
+            updateModeSpinner()
+            loadFavoritesFilterState()  // Filter-Status für neuen Modus laden
+            loadStationsForCurrentMode()
+            updateFavoriteButton()
         }
 
         // Explizit longClickable aktivieren
@@ -3017,7 +3001,7 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         btnNextStation.isLongClickable = true
 
         btnPrevStation.setOnClickListener {
-            val step = activePlugin?.frequencyStep ?: if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+            val step = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
                 FrequencyScaleView.FM_FREQUENCY_STEP
             } else {
                 FrequencyScaleView.AM_FREQUENCY_STEP
@@ -3030,14 +3014,14 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         btnPrevStation.setOnLongClickListener {
             android.util.Log.i("fytFM", "Long-Press PREV detected!")
             android.widget.Toast.makeText(this, "Seek ◀ gestartet...", android.widget.Toast.LENGTH_SHORT).show()
-            if (isRadioOn && activePlugin?.type == TunerType.FM) {
+            if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
                 seekToStation(false)
             }
             true
         }
 
         btnNextStation.setOnClickListener {
-            val step = activePlugin?.frequencyStep ?: if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
+            val step = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
                 FrequencyScaleView.FM_FREQUENCY_STEP
             } else {
                 FrequencyScaleView.AM_FREQUENCY_STEP
@@ -3050,7 +3034,7 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         btnNextStation.setOnLongClickListener {
             android.util.Log.i("fytFM", "Long-Press NEXT detected!")
             android.widget.Toast.makeText(this, "Seek ▶ gestartet...", android.widget.Toast.LENGTH_SHORT).show()
-            if (isRadioOn && activePlugin?.type == TunerType.FM) {
+            if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
                 seekToStation(true)
             }
             true
@@ -3064,27 +3048,39 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         btnPlayPause.setOnClickListener {
             android.util.Log.i("fytFM", "PlayPause button clicked! isPlaying=$isPlaying isRadioOn=$isRadioOn")
             isPlaying = !isPlaying
+            // Mute/Unmute the radio
             if (isRadioOn) {
-                val plugin = activePlugin
-                if (plugin != null) {
-                    if (isPlaying) plugin.unmute() else plugin.mute()
-                } else {
-                    // Fallback: direct mute
-                    val shouldMute = !isPlaying
-                    try {
-                        val systemPropertiesClass = Class.forName("android.os.SystemProperties")
-                        val setMethod = systemPropertiesClass.getMethod("set", String::class.java, String::class.java)
-                        setMethod.invoke(null, "sys.radio.mute", if (shouldMute) "1" else "0")
-                    } catch (_: Exception) {}
-                    if (SyuJniNative.isLibraryLoaded()) {
-                        SyuJniNative.getInstance().muteAmp(shouldMute)
-                    }
-                    fmNative.setMute(shouldMute)
+                val shouldMute = !isPlaying
+
+                // Method 1: sys.radio.mute system property (works as system app)
+                try {
+                    val systemPropertiesClass = Class.forName("android.os.SystemProperties")
+                    val setMethod = systemPropertiesClass.getMethod("set", String::class.java, String::class.java)
+                    setMethod.invoke(null, "sys.radio.mute", if (shouldMute) "1" else "0")
+                    android.util.Log.i("fytFM", "sys.radio.mute = ${if (shouldMute) "1" else "0"}")
+                } catch (e: Exception) {
+                    android.util.Log.e("fytFM", "Failed to set sys.radio.mute: ${e.message}")
                 }
+
+                // Method 2: Direct SyuJniNative (libsyu_jni.so)
+                if (SyuJniNative.isLibraryLoaded()) {
+                    val result = SyuJniNative.getInstance().muteAmp(shouldMute)
+                    android.util.Log.i("fytFM", "SyuJniNative.muteAmp($shouldMute) = $result")
+                } else {
+                    android.util.Log.w("fytFM", "libsyu_jni.so not loaded")
+                }
+
+                // Method 3: FmNative setMute
+                val fmResult = fmNative.setMute(shouldMute)
+                android.util.Log.i("fytFM", "FmNative.setMute($shouldMute) = $fmResult")
+
+                // Update MediaService playback state
                 FytFMMediaService.instance?.updatePlaybackState(isPlaying)
             }
             updatePlayPauseButton()
         }
+
+        // Radio mode spinner is set up in setupRadioModeSpinner()
 
         // Power button - toggle radio on/off
         btnPower.setOnClickListener {
@@ -3093,11 +3089,7 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
 
         // Search button - öffnet Sendersuche Dialog
         findViewById<ImageButton>(R.id.btnSearch).setOnClickListener {
-            if (activePlugin?.type == TunerType.DAB) {
-                startDabScan()
-            } else {
-                showStationScanDialog()
-            }
+            showStationScanDialog()
         }
 
         // All list button
@@ -3125,8 +3117,8 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
             hideArchiveOverlay()
         }
 
-        // Long press on tuner dropdown for debug tune
-        tunerDropdown.setOnLongClickListener {
+        // Long press on spinner for debug tune
+        spinnerRadioMode.setOnLongClickListener {
             debugTune()
             true
         }
@@ -3341,18 +3333,6 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         val dialog = AlertDialog.Builder(this, R.style.TransparentDialog)
             .setView(dialogView)
             .create()
-
-        // Tuner Manager click
-        dialogView.findViewById<View>(R.id.itemTunerManager).setOnClickListener {
-            dialog.dismiss()
-            showTunerManagerDialog()
-        }
-
-        // Plugin Manager click
-        dialogView.findViewById<View>(R.id.itemPluginManager).setOnClickListener {
-            dialog.dismiss()
-            showPluginManagerDialog()
-        }
 
         // Radio Editor click
         dialogView.findViewById<View>(R.id.itemRadioEditor).setOnClickListener {
@@ -5206,6 +5186,11 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
     }
 
     private fun showStationScanDialog() {
+        // DAB-Modus: eigenen Scan-Dialog
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+            showDabScanDialog()
+            return
+        }
         val isFmMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM
         val highSensitivity = presetRepository.isAutoScanSensitivity()
 
@@ -5235,41 +5220,38 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         }.show()
     }
 
+    private fun showDabScanDialog() {
+        if (!isDabOn || !dabTunerManager.hasTuner()) {
+            android.widget.Toast.makeText(this, "DAB+ Tuner ist nicht aktiv. Bitte zuerst einschalten.", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+
+        at.planqton.fytfm.ui.DabScanDialog(this, dabTunerManager) { services ->
+            val stations = services.map { it.toRadioStation() }
+            presetRepository.mergeDabScannedStations(stations)
+            loadStationsForCurrentMode()
+            populateCarousel()
+            android.widget.Toast.makeText(this, "${services.size} DAB+ Sender gefunden", android.widget.Toast.LENGTH_SHORT).show()
+        }.show()
+    }
+
     private fun saveStations(stations: List<at.planqton.fytfm.data.RadioStation>) {
-        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-            presetRepository.saveFmStations(stations)
-        } else {
-            presetRepository.saveAmStations(stations)
+        when (frequencyScale.getMode()) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.saveFmStations(stations)
+            FrequencyScaleView.RadioMode.AM -> presetRepository.saveAmStations(stations)
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.saveDabStations(stations)
         }
     }
 
     private fun loadStationsForCurrentMode() {
-        val tid = activeTunerId
-        if (tid != null) {
-            loadStationsForTuner(tid)
-        } else {
-            // Fallback: legacy Modus
-            val allStations = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-                presetRepository.loadFmStations()
-            } else {
-                presetRepository.loadAmStations()
-            }
-            val stations = if (showFavoritesOnly) {
-                allStations.filter { it.isFavorite }
-            } else {
-                allStations
-            }
-            stationAdapter.setStations(stations)
-            stationAdapter.setSelectedFrequency(frequencyScale.getFrequency())
+        val mode = frequencyScale.getMode()
+        val allStations = when (mode) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.loadFmStations()
+            FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.loadDabStations()
         }
-    }
 
-    private fun loadStationsForTuner(tunerId: String) {
-        val instance = tunerManager.getInstances().find { it.id == tunerId } ?: return
-        val plugin = tunerManager.getPluginForInstance(instance)
-        val isAM = plugin?.type == TunerType.AM
-        val allStations = presetRepository.loadStationsForTuner(tunerId, isAM)
-
+        // Filter anwenden wenn aktiviert
         val stations = if (showFavoritesOnly) {
             allStations.filter { it.isFavorite }
         } else {
@@ -5277,315 +5259,8 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         }
 
         stationAdapter.setStations(stations)
-        stationAdapter.setSelectedFrequency(frequencyScale.getFrequency())
-        // Reset station click listener to default (non-DAB)
-        stationAdapter.setOnStationClickListener(null)
-    }
-
-    // === Tuner Plugin System ===
-
-    private fun setupTunerDropdown() {
-        tunerDropdown = findViewById(R.id.tunerDropdown)
-        tunerDropdownAdapter = TunerDropdownAdapter(this)
-        tunerDropdownAdapter.updateInstances(tunerManager.getInstances())
-        tunerDropdown.adapter = tunerDropdownAdapter
-
-        tunerDropdown.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val instance = tunerDropdownAdapter.getItem(position) ?: return
-                if (instance.id != activeTunerId) {
-                    switchToTuner(instance.id)
-                }
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        // Set initial selection
-        val activeId = tunerManager.getActiveTunerId()
-        if (activeId != null) {
-            val pos = tunerDropdownAdapter.getPositionForId(activeId)
-            if (pos >= 0) tunerDropdown.setSelection(pos)
-        }
-    }
-
-    private fun refreshTunerDropdown() {
-        tunerDropdownAdapter.updateInstances(tunerManager.getInstances())
-        val activeId = tunerManager.getActiveTunerId()
-        if (activeId != null) {
-            val pos = tunerDropdownAdapter.getPositionForId(activeId)
-            if (pos >= 0) tunerDropdown.setSelection(pos)
-        } else {
-            val firstId = tunerManager.getInstances().firstOrNull()?.id
-            if (firstId != null) {
-                switchToTuner(firstId)
-            } else {
-                // Keine Tuner mehr - deaktivieren
-                activePlugin = null
-                activeTunerId = null
-                setControlsEnabled(false)
-            }
-        }
-    }
-
-    private fun showTunerManagerDialog() {
-        val dialog = TunerManagerDialog(this, tunerManager) {
-            refreshTunerDropdown()
-        }
-        dialog.show()
-    }
-
-    private fun showPluginManagerDialog() {
-        pluginManagerDialog = PluginManagerDialog(
-            context = this,
-            onImport = {
-                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "*/*"
-                }
-                pluginImportLauncher.launch(intent)
-            },
-            onExport = { pluginId ->
-                val file = pluginLoader.getPluginFile(pluginId)
-                if (file != null) {
-                    val uri = androidx.core.content.FileProvider.getUriForFile(
-                        this, "$packageName.fileprovider", file
-                    )
-                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/zip"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    startActivity(Intent.createChooser(shareIntent, "Plugin exportieren"))
-                }
-            },
-            onDelete = { pluginId ->
-                // Warnung wenn Tuner-Instanzen dieses Plugin nutzen
-                val affected = tunerManager.getInstances().filter { it.pluginId == pluginId }
-                if (affected.isNotEmpty()) {
-                    AlertDialog.Builder(this)
-                        .setTitle("Plugin löschen")
-                        .setMessage("${affected.size} Tuner nutzen dieses Plugin und werden deaktiviert. Fortfahren?")
-                        .setPositiveButton("Löschen") { _, _ ->
-                            doDeletePlugin(pluginId)
-                        }
-                        .setNegativeButton("Abbrechen", null)
-                        .show()
-                } else {
-                    doDeletePlugin(pluginId)
-                }
-            }
-        )
-        pluginManagerDialog?.show()
-    }
-
-    private fun doDeletePlugin(pluginId: String) {
-        pluginLoader.deletePlugin(pluginId)
-        TunerPluginRegistry.unregister(pluginId)
-        pluginManagerDialog?.adapter?.refresh()
-        refreshTunerDropdown()
-        android.widget.Toast.makeText(this, "Plugin gelöscht", android.widget.Toast.LENGTH_SHORT).show()
-    }
-
-    /**
-     * Aktiviert/deaktiviert alle Bedienelemente außer Settings.
-     */
-    private fun setControlsEnabled(enabled: Boolean) {
-        val alpha = if (enabled) 1.0f else 0.3f
-        btnPower.isEnabled = enabled
-        btnPower.alpha = alpha
-        btnPlayPause.isEnabled = enabled
-        btnPlayPause.alpha = alpha
-        btnPrevStation.isEnabled = enabled
-        btnPrevStation.alpha = alpha
-        btnNextStation.isEnabled = enabled
-        btnNextStation.alpha = alpha
-        btnFavorite.isEnabled = enabled
-        btnFavorite.alpha = alpha
-        frequencyScale.isEnabled = enabled
-        frequencyScale.alpha = alpha
-        tunerDropdown.isEnabled = enabled
-        tunerDropdown.alpha = alpha
-        stationRecycler.alpha = alpha
-        tvFrequency.alpha = alpha
-        findViewById<View>(R.id.btnSearch)?.let { it.isEnabled = enabled; it.alpha = alpha }
-        findViewById<View>(R.id.btnSkipPrev)?.let { it.isEnabled = enabled; it.alpha = alpha }
-        findViewById<View>(R.id.btnSkipNext)?.let { it.isEnabled = enabled; it.alpha = alpha }
-        findViewById<View>(R.id.btnFolder)?.let { it.isEnabled = enabled; it.alpha = alpha }
-        findViewById<View>(R.id.btnArchive)?.let { it.isEnabled = enabled; it.alpha = alpha }
-    }
-
-    private fun switchToTuner(tunerId: String) {
-        setControlsEnabled(true)
-        // Save current state
-        activePlugin?.let { plugin ->
-            activeTunerId?.let { id ->
-                tunerManager.saveLastFrequency(id, plugin.getCurrentFrequency())
-            }
-        }
-
-        val plugin = tunerManager.switchToTuner(tunerId, this)
-        activePlugin = plugin
-        activeTunerId = tunerId
-
-        val instance = tunerManager.getActiveInstance() ?: return
-
-        // Adapt UI based on plugin type
-        when (plugin.type) {
-            TunerType.FM, TunerType.AM -> {
-                // Show FM/AM UI
-                frequencyScale.visibility = View.VISIBLE
-                btnPrevStation.visibility = View.VISIBLE
-                btnNextStation.visibility = View.VISIBLE
-                btnFavorite.visibility = View.VISIBLE
-
-                // Configure frequency scale
-                val range = plugin.frequencyRange
-                val step = plugin.frequencyStep
-                if (range != null && step != null) {
-                    frequencyScale.configure(range, step)
-                }
-
-                // Restore last frequency
-                val lastFreq = tunerManager.getLastFrequency(tunerId)
-                if (lastFreq > 0f) {
-                    frequencyScale.setFrequencyVisualOnly(lastFreq)
-                    plugin.tune(lastFreq)
-                    updateFrequencyDisplay(lastFreq)
-                }
-
-                // Load stations for this tuner instance
-                loadFavoritesFilterState()
-                loadStationsForTuner(tunerId)
-                updateFavoriteButton()
-
-                // Stop DAB if it was active
-                dabManager.stopPlayback()
-            }
-            TunerType.DAB -> {
-                // Show DAB UI
-                frequencyScale.visibility = View.GONE
-                btnPrevStation.visibility = View.GONE
-                btnNextStation.visibility = View.GONE
-                btnFavorite.visibility = View.GONE
-
-                tvFrequency.text = "DAB+"
-                // Direkt verbinden wenn Tuner verfügbar
-                isRadioOn = plugin.powerOn()
-                updatePowerButton()
-            }
-        }
-
-        // Update dropdown selection
-        val pos = tunerDropdownAdapter.getPositionForId(tunerId)
-        if (pos >= 0 && tunerDropdown.selectedItemPosition != pos) {
-            tunerDropdown.setSelection(pos)
-        }
-    }
-
-    // === TunerPluginCallback Implementation ===
-
-    override fun onMetadataUpdate(metadata: TunerMetadata) {
-        runOnUiThread {
-            // Existing RDS polling callback logic handles this,
-            // but for DAB we update directly
-            if (activePlugin?.type == TunerType.DAB) {
-                if (metadata.stationName != null) {
-                    tvFrequency.text = metadata.stationName
-                    nowPlayingPs?.text = metadata.stationName
-                    carouselNowPlayingPs?.text = metadata.stationName
-                }
-                if (metadata.radioText != null) {
-                    val titleView = nowPlayingTitle
-                    titleView?.text = metadata.radioText
-                    carouselNowPlayingTitle?.text = metadata.radioText
-                }
-                if (metadata.artist != null || metadata.title != null) {
-                    nowPlayingTitle?.text = metadata.title ?: ""
-                    nowPlayingArtist?.text = metadata.artist ?: ""
-                    carouselNowPlayingTitle?.text = metadata.title ?: ""
-                    carouselNowPlayingArtist?.text = metadata.artist ?: ""
-                }
-                if (metadata.coverBitmap != null) {
-                    nowPlayingCover?.setImageBitmap(metadata.coverBitmap)
-                    carouselNowPlayingCover?.setImageBitmap(metadata.coverBitmap)
-                }
-            }
-        }
-    }
-
-    override fun onFrequencyChanged(frequency: Float) {
-        runOnUiThread {
-            updateFrequencyDisplay(frequency)
-            frequencyScale.setFrequencyVisualOnly(frequency)
-            activeTunerId?.let { tunerManager.saveLastFrequency(it, frequency) }
-            updateFavoriteButton()
-        }
-    }
-
-    override fun onStationsChanged(stations: List<at.planqton.fytfm.plugin.api.RadioStation>) {
-        runOnUiThread {
-            if (activePlugin?.type == TunerType.DAB) {
-                // Convert plugin API stations to app data stations and show
-                val appStations = stations.map { at.planqton.fytfm.data.RadioStation(
-                    frequency = it.frequency, name = it.name, rssi = it.rssi,
-                    isAM = it.isAM, isFavorite = it.isFavorite, syncName = it.syncName
-                ) }
-                stationAdapter.setStations(appStations)
-                // Override click to play DAB service
-                stationAdapter.setOnStationClickListener { station ->
-                    val index = appStations.indexOf(station)
-                    if (index >= 0) activePlugin?.startDabService(index)
-                }
-            } else {
-                val appStations = stations.map { at.planqton.fytfm.data.RadioStation(
-                    frequency = it.frequency, name = it.name, rssi = it.rssi,
-                    isAM = it.isAM, isFavorite = it.isFavorite, syncName = it.syncName
-                ) }
-                stationAdapter.setStations(appStations)
-            }
-        }
-    }
-
-    override fun onPlaybackStateChanged(isPlaying: Boolean) {
-        runOnUiThread {
-            this.isPlaying = isPlaying
-            updatePlayPauseButton()
-            FytFMMediaService.instance?.updatePlaybackState(isPlaying)
-        }
-    }
-
-    override fun onScanStarted() {
-        runOnUiThread {
-            // Scan UI is handled by scan dialogs
-        }
-    }
-
-    override fun onScanProgress(percent: Int) {
-        runOnUiThread {
-            if (activePlugin?.type == TunerType.DAB) {
-                tvFrequency.text = "DAB+ Scan $percent%"
-            }
-        }
-    }
-
-    override fun onScanFinished(count: Int) {
-        runOnUiThread {
-            if (activePlugin?.type == TunerType.DAB) {
-                dabManager.loadStations()
-                android.widget.Toast.makeText(this, "$count DAB+ Sender gefunden", android.widget.Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    override fun onScanServiceFound(station: at.planqton.fytfm.plugin.api.RadioStation) {
-        runOnUiThread {
-            // DAB scan services are handled via onStationsChanged
-        }
-    }
-
-    override fun onError(message: String) {
-        runOnUiThread {
-            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show()
+        if (mode != FrequencyScaleView.RadioMode.DAB) {
+            stationAdapter.setSelectedFrequency(frequencyScale.getFrequency())
         }
     }
 
@@ -5612,6 +5287,11 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         android.util.Log.d("fytFM", "skipToPreviousStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
 
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+            skipDabStation(forward = false)
+            return
+        }
+
         val currentFreq = frequencyScale.getFrequency()
         val prevStation = stations.lastOrNull { it.frequency < currentFreq - 0.05f }
             ?: stations.lastOrNull()
@@ -5629,6 +5309,11 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
         android.util.Log.d("fytFM", "skipToNextStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
 
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+            skipDabStation(forward = true)
+            return
+        }
+
         val currentFreq = frequencyScale.getFrequency()
         val nextStation = stations.firstOrNull { it.frequency > currentFreq + 0.05f }
             ?: stations.firstOrNull()
@@ -5639,6 +5324,26 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
             frequencyScale.setFrequency(it.frequency)
             showStationChangeOverlay(it.frequency, oldFreq)
         }
+    }
+
+    private fun skipDabStation(forward: Boolean) {
+        val dabStations = presetRepository.loadDabStations()
+        if (dabStations.isEmpty()) return
+
+        val currentIndex = dabStations.indexOfFirst { it.serviceId == currentDabServiceId }
+        val newIndex = if (forward) {
+            if (currentIndex < 0 || currentIndex >= dabStations.size - 1) 0 else currentIndex + 1
+        } else {
+            if (currentIndex <= 0) dabStations.size - 1 else currentIndex - 1
+        }
+
+        val newStation = dabStations[newIndex]
+        currentDabServiceId = newStation.serviceId
+        currentDabEnsembleId = newStation.ensembleId
+        dabTunerManager.tuneService(newStation.serviceId, newStation.ensembleId)
+        updateCarouselSelection()
+        updateFavoriteButton()
+        android.util.Log.i("fytFM", "skipDabStation: -> ${newStation.name} (SID=${newStation.serviceId})")
     }
 
     private fun showStationChangeOverlay(frequency: Float, oldFrequency: Float = 0f) {
@@ -5738,23 +5443,86 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
     }
 
     private fun updateFrequencyDisplay(frequency: Float) {
-        val plugin = activePlugin
-        tvFrequency.text = when (plugin?.type) {
-            TunerType.FM -> String.format("FM %.2f", frequency)
-            TunerType.AM -> String.format("AM %d", frequency.toInt())
-            TunerType.DAB -> "DAB+"
-            null -> {
-                // Fallback for legacy mode
-                val mode = frequencyScale.getMode()
-                if (mode == FrequencyScaleView.RadioMode.FM) {
-                    String.format("FM %.2f", frequency)
-                } else {
-                    String.format("AM %d", frequency.toInt())
-                }
-            }
+        val mode = frequencyScale.getMode()
+        tvFrequency.text = if (mode == FrequencyScaleView.RadioMode.FM) {
+            String.format("FM %.2f", frequency)
+        } else {
+            String.format("AM %d", frequency.toInt())
         }
         // Update debug overlay frequency
         updateDebugInfo(freq = frequency)
+    }
+
+    private fun setupRadioModeSpinner() {
+        val adapter = ArrayAdapter.createFromResource(
+            this, R.array.radio_modes, R.layout.item_radio_mode_spinner
+        )
+        adapter.setDropDownViewResource(R.layout.item_radio_mode_dropdown)
+        spinnerRadioMode.adapter = adapter
+
+        spinnerRadioMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                if (suppressSpinnerCallback) {
+                    suppressSpinnerCallback = false
+                    return
+                }
+                val newMode = when (position) {
+                    0 -> FrequencyScaleView.RadioMode.FM
+                    1 -> FrequencyScaleView.RadioMode.AM
+                    2 -> FrequencyScaleView.RadioMode.DAB
+                    else -> FrequencyScaleView.RadioMode.FM
+                }
+                setRadioMode(newMode)
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+
+    private fun setRadioMode(mode: FrequencyScaleView.RadioMode) {
+        val oldMode = frequencyScale.getMode()
+        if (oldMode == mode) return
+
+        // Alten Modus aufräumen
+        if (oldMode == FrequencyScaleView.RadioMode.DAB && mode != FrequencyScaleView.RadioMode.DAB) {
+            // Von DAB weg: DAB-Tuner stoppen wenn aktiv
+            if (isDabOn) {
+                dabTunerManager.stopService()
+            }
+        }
+
+        // DAB-Modus: nur Carousel-View erlaubt
+        if (mode == FrequencyScaleView.RadioMode.DAB) {
+            // Auto-Switch zu Carousel wenn in Seekbar-Ansicht
+            if (!isCarouselMode) {
+                setViewMode(true)
+            }
+            // View-Mode-Toggle ausblenden
+            findViewById<View>(R.id.viewModeToggle)?.visibility = View.GONE
+        } else {
+            // View-Mode-Toggle wieder einblenden
+            findViewById<View>(R.id.viewModeToggle)?.visibility = View.VISIBLE
+        }
+
+        // Mode setzen (für FM/AM wird FrequencyScaleView aktualisiert)
+        frequencyScale.setMode(mode)
+
+        // Spinner aktualisieren ohne Callback
+        updateModeSpinner()
+
+        // Stationen laden
+        loadFavoritesFilterState()
+        loadStationsForCurrentMode()
+        updateFavoriteButton()
+    }
+
+    private fun updateModeSpinner() {
+        val position = when (frequencyScale.getMode()) {
+            FrequencyScaleView.RadioMode.FM -> 0
+            FrequencyScaleView.RadioMode.AM -> 1
+            FrequencyScaleView.RadioMode.DAB -> 2
+        }
+        suppressSpinnerCallback = true
+        spinnerRadioMode.setSelection(position, false)
     }
 
     private fun updatePlayPauseButton() {
@@ -5774,27 +5542,108 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      * 5. RdsManager.startPolling() - RDS-Daten abrufen
      */
     private fun toggleRadioPower() {
-        android.util.Log.i("fytFM", "======= toggleRadioPower() =======")
-
-        val plugin = activePlugin
-        if (plugin == null) {
-            android.util.Log.w("fytFM", "No active plugin")
+        // DAB-Modus: eigene Power-Steuerung
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+            toggleDabPower()
             return
         }
 
+        android.util.Log.i("fytFM", "======= toggleRadioPower() =======")
+        android.util.Log.i("fytFM", "FmNative.isLibraryLoaded: ${FmNative.isLibraryLoaded()}")
+        android.util.Log.i("fytFM", "TWUtil available: ${twUtil?.isAvailable}")
+
         try {
             if (isRadioOn) {
-                plugin.powerOff()
+                // Radio ausschalten
+                android.util.Log.i("fytFM", "--- Powering OFF ---")
+                stopRdsPolling()
+                fmNative.powerOff()
+                twUtil?.radioOff()
                 isRadioOn = false
-                isPlaying = true
+                isPlaying = true  // Reset to "playing" state for next power on
                 updatePlayPauseButton()
                 FytFMMediaService.instance?.updatePlaybackState(false)
             } else {
-                isRadioOn = plugin.powerOn()
+                // Radio einschalten - REIHENFOLGE KRITISCH!
+                val frequency = frequencyScale.getFrequency()
+                android.util.Log.i("fytFM", "--- Powering ON at $frequency MHz ---")
+
+                // Schritt 0: FmService starten für Audio-Routing
+                android.util.Log.i("fytFM", "Step 0: Starting FmService for audio routing")
+                try {
+                    val serviceIntent = android.content.Intent()
+                    serviceIntent.setClassName("com.syu.music", "com.android.fmradio.FmService")
+                    startService(serviceIntent)
+                    android.util.Log.i("fytFM", "FmService start requested")
+                } catch (e: Exception) {
+                    android.util.Log.w("fytFM", "Could not start FmService: ${e.message}")
+                }
+
+                // Auch ACTION_OPEN_RADIO Broadcast senden
+                android.util.Log.i("fytFM", "Step 0b: Sending ACTION_OPEN_RADIO broadcast")
+                val radioIntent = android.content.Intent("com.action.ACTION_OPEN_RADIO")
+                sendBroadcast(radioIntent)
+
+                // Schritt 1+2: TWUtil (MCU + Audio)
+                if (twUtil?.isAvailable == true) {
+                    android.util.Log.i("fytFM", "Step 1: TWUtil.initRadioSequence()")
+                    twUtil?.initRadioSequence()
+
+                    android.util.Log.i("fytFM", "Step 2: TWUtil.radioOn()")
+                    twUtil?.radioOn()
+
+                    // Schritt 2b: MCU Unmute
+                    android.util.Log.i("fytFM", "Step 2b: TWUtil.unmute()")
+                    twUtil?.unmute()
+
+                    // Kurze Pause damit MCU die Befehle verarbeiten kann
+                    Thread.sleep(100)
+                } else {
+                    android.util.Log.w("fytFM", "TWUtil NOT available - skipping MCU init!")
+                }
+
+                // Schritt 3: FM-Chip einschalten
+                android.util.Log.i("fytFM", "Step 3: FmNative.openDev()")
+                val openResult = fmNative.openDev()
+                android.util.Log.i("fytFM", "openDev result: $openResult")
+
+                android.util.Log.i("fytFM", "Step 4: FmNative.powerUp($frequency)")
+                val powerResult = fmNative.powerUp(frequency)
+                android.util.Log.i("fytFM", "powerUp result: $powerResult")
+
+                android.util.Log.i("fytFM", "Step 5: FmNative.tune($frequency)")
+                val tuneResult = fmNative.tune(frequency)
+                android.util.Log.i("fytFM", "tune result: $tuneResult")
+
+                // Schritt 5b: Unmute - WICHTIG für Audio!
+                android.util.Log.i("fytFM", "Step 5b: FmNative.setMute(false)")
+                val muteResult = fmNative.setMute(false)
+                android.util.Log.i("fytFM", "setMute(false) result: $muteResult")
+
+                // Schritt 5c: Audio-Source nochmal setzen nach FM-Chip Init
+                if (twUtil?.isAvailable == true) {
+                    android.util.Log.i("fytFM", "Step 5c: TWUtil.setAudioSourceFm() (repeat)")
+                    twUtil?.setAudioSourceFm()
+                }
+
+                isRadioOn = openResult && powerResult
+                android.util.Log.i("fytFM", "isRadioOn = $isRadioOn")
+
                 if (isRadioOn) {
+                    // Reset play state to playing (unmuted) when radio turns on
                     isPlaying = true
                     updatePlayPauseButton()
                     FytFMMediaService.instance?.updatePlaybackState(true)
+                    // Schritt 6: RDS aktivieren
+                    android.util.Log.i("fytFM", "Step 6: RdsManager.enableRds()")
+                    rdsManager.enableRds()
+
+                    // Schritt 6b: Tuner Settings anwenden
+                    android.util.Log.i("fytFM", "Step 6b: Apply tuner settings")
+                    applyTunerSettings()
+
+                    // Schritt 7: RDS-Polling starten
+                    android.util.Log.i("fytFM", "Step 7: startRdsPolling()")
                     startRdsPolling()
                 } else {
                     android.util.Log.e("fytFM", "RADIO FAILED TO START!")
@@ -5812,7 +5661,24 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      * Wendet die gespeicherten Tuner-Settings an (LOC, Mono, Area)
      */
     private fun applyTunerSettings() {
-        activePlugin?.applySettings(emptyMap())
+        try {
+            // LOC Local Mode
+            val localMode = presetRepository.isLocalMode()
+            fmNative?.setLocalMode(localMode)
+            android.util.Log.d("fytFM", "Applied LOC mode: $localMode")
+
+            // Mono Mode
+            val monoMode = presetRepository.isMonoMode()
+            fmNative?.setMonoMode(monoMode)
+            android.util.Log.d("fytFM", "Applied Mono mode: $monoMode")
+
+            // Radio Area
+            val radioArea = presetRepository.getRadioArea()
+            fmNative?.setRadioArea(radioArea)
+            android.util.Log.d("fytFM", "Applied Radio Area: $radioArea")
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Error applying tuner settings: ${e.message}")
+        }
     }
 
     /**
@@ -5820,58 +5686,176 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      */
     private fun tuneToFrequency(frequency: Float) {
         android.util.Log.d("fytFM", "Tuning to $frequency MHz")
-        activePlugin?.tune(frequency)
+
+        try {
+            // UI-Frequenz setzen für AF-Vergleich
+            rdsManager.setUiFrequency(frequency)
+            rdsManager.tune(frequency)
+        } catch (e: Throwable) {
+            android.util.Log.w("fytFM", "tune failed: ${e.message}")
+        }
     }
 
     /**
      * Seek zum nächsten/vorherigen Sender mit Signal.
+     * Manueller Seek da native seek() JNI-Bugs hat.
      */
     private fun seekToStation(seekUp: Boolean) {
-        val plugin = activePlugin ?: return
         val currentFreq = frequencyScale.getFrequency()
         android.util.Log.i("fytFM", "Seek ${if (seekUp) "UP" else "DOWN"} from $currentFreq MHz")
 
-        plugin.seekToStation(
-            seekUp = seekUp,
-            onProgress = { freq ->
-                runOnUiThread {
-                    tvFrequency.text = "%.1f".format(freq)
-                    frequencyScale.setFrequencyVisualOnly(freq)
+        // Seek in Background-Thread um UI nicht zu blockieren
+        Thread {
+            try {
+                val step = 0.1f
+                val minFreq = 87.5f
+                val maxFreq = 108.0f
+                val rssiMin = 25    // Minimum RSSI für gültigen Sender
+                val rssiMax = 245   // 246-255 = ungültig (Rauschen/nicht eingerastet)
+
+                var freq = if (seekUp) currentFreq + step else currentFreq - step
+                var foundFreq: Float? = null
+                var attempts = 0
+                val maxAttempts = 205  // Ganzes Band durchsuchen
+
+                while (attempts < maxAttempts && foundFreq == null) {
+                    // Wrap around
+                    if (freq > maxFreq) freq = minFreq
+                    if (freq < minFreq) freq = maxFreq
+
+                    // UI aktualisieren um Fortschritt zu zeigen (nur Anzeige, kein Tune)
+                    val displayFreq = freq
+                    runOnUiThread {
+                        tvFrequency.text = "%.1f".format(displayFreq)
+                        frequencyScale.setFrequencyVisualOnly(displayFreq)
+                    }
+
+                    // Tune und RSSI messen (2x für Stabilität)
+                    fmNative.tune(freq)
+                    Thread.sleep(100)
+                    val rssi1 = fmNative.getrssi()
+                    Thread.sleep(50)
+                    val rssi2 = fmNative.getrssi()
+
+                    android.util.Log.d("fytFM", "Seek: %.1f MHz -> RSSI %d/%d".format(freq, rssi1, rssi2))
+
+                    // Beide Messungen müssen im gültigen Bereich sein
+                    if (rssi1 in rssiMin..rssiMax && rssi2 in rssiMin..rssiMax) {
+                        foundFreq = freq
+                        android.util.Log.i("fytFM", "Seek found: %.1f MHz (RSSI: %d/%d)".format(freq, rssi1, rssi2))
+                    } else {
+                        freq = if (seekUp) freq + step else freq - step
+                        attempts++
+                    }
                 }
-            },
-            onResult = { foundFreq ->
+
+                // Zurück zum UI-Thread
                 runOnUiThread {
                     if (foundFreq != null) {
                         rdsManager.clearRds()
                         rtCombiner?.clearAll()
-                        lastDisplayedTrackId = null
+                        lastDisplayedTrackId = null  // Reset but keep bar visible
                         frequencyScale.setFrequency(foundFreq)
                         saveLastFrequency(foundFreq)
                     } else {
                         android.util.Log.w("fytFM", "Seek: No station found")
+                        // Zurück zur ursprünglichen Frequenz
                         frequencyScale.setFrequency(currentFreq)
                     }
                 }
+            } catch (e: Throwable) {
+                android.util.Log.e("fytFM", "Seek failed: ${e.message}")
+                runOnUiThread {
+                    frequencyScale.setFrequency(currentFreq)
+                }
             }
-        )
+        }.start()
     }
 
     private fun updatePowerButton() {
         // Update power button appearance based on radio state
-        btnPower.alpha = if (isRadioOn) 1.0f else 0.5f
+        val isOn = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) isDabOn else isRadioOn
+        btnPower.alpha = if (isOn) 1.0f else 0.5f
     }
 
     /**
-     * Lädt den Favoriten-Filter-Status für den aktuellen Tuner
+     * DAB+ Tuner Ein/Aus schalten.
+     */
+    private fun toggleDabPower() {
+        android.util.Log.i("fytFM", "======= toggleDabPower() =======")
+
+        try {
+            if (isDabOn) {
+                // DAB ausschalten
+                android.util.Log.i("fytFM", "--- DAB Powering OFF ---")
+                dabTunerManager.stopService()
+                dabTunerManager.deinitialize()
+                isDabOn = false
+                currentDabServiceId = 0
+                currentDabEnsembleId = 0
+            } else {
+                // DAB einschalten
+                android.util.Log.i("fytFM", "--- DAB Powering ON ---")
+
+                // DAB Tuner Manager Callbacks setzen
+                dabTunerManager.onTunerReady = {
+                    android.util.Log.i("fytFM", "DAB Tuner ready!")
+                    android.widget.Toast.makeText(this, "DAB+ Tuner bereit", android.widget.Toast.LENGTH_SHORT).show()
+
+                    // Falls gespeicherte Sender vorhanden, lade sie
+                    val dabStations = presetRepository.loadDabStations()
+                    if (dabStations.isNotEmpty()) {
+                        populateCarousel()
+                        // Ersten Sender tunen
+                        val firstStation = dabStations.first()
+                        currentDabServiceId = firstStation.serviceId
+                        currentDabEnsembleId = firstStation.ensembleId
+                        dabTunerManager.tuneService(firstStation.serviceId, firstStation.ensembleId)
+                        updateCarouselSelection()
+                    }
+                }
+
+                dabTunerManager.onServiceStarted = { dabStation ->
+                    android.util.Log.i("fytFM", "DAB Service gestartet: ${dabStation.serviceLabel}")
+                    currentDabServiceId = dabStation.serviceId
+                    currentDabEnsembleId = dabStation.ensembleId
+                    updateCarouselSelection()
+                    updateFavoriteButton()
+                }
+
+                dabTunerManager.onServiceStopped = {
+                    android.util.Log.i("fytFM", "DAB Service gestoppt")
+                }
+
+                dabTunerManager.onTunerError = { error ->
+                    android.util.Log.e("fytFM", "DAB Tuner Error: $error")
+                    android.widget.Toast.makeText(this, error, android.widget.Toast.LENGTH_LONG).show()
+                }
+
+                val success = dabTunerManager.initialize(this)
+                isDabOn = success
+
+                if (!success) {
+                    android.widget.Toast.makeText(this, "DAB+ Initialisierung fehlgeschlagen", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "DAB power toggle failed: ${e.message}", e)
+            isDabOn = false
+        }
+
+        android.util.Log.i("fytFM", "======= toggleDabPower() done, isDabOn=$isDabOn =======")
+        updatePowerButton()
+    }
+
+    /**
+     * Lädt den Favoriten-Filter-Status für den aktuellen Modus (FM/AM)
      */
     private fun loadFavoritesFilterState() {
-        val tid = activeTunerId
-        showFavoritesOnly = if (tid != null) {
-            presetRepository.isShowFavoritesOnly(tid)
-        } else if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-            presetRepository.isShowFavoritesOnlyFm()
-        } else {
-            presetRepository.isShowFavoritesOnlyAm()
+        showFavoritesOnly = when (frequencyScale.getMode()) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.isShowFavoritesOnlyFm()
+            FrequencyScaleView.RadioMode.AM -> presetRepository.isShowFavoritesOnlyAm()
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.isShowFavoritesOnlyDab()
         }
         updateFolderButton()
     }
@@ -5880,13 +5864,13 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      * Aktualisiert das Herz-Icon basierend auf dem aktuellen Sender
      */
     private fun updateFavoriteButton() {
-        val frequency = frequencyScale.getFrequency()
-        val tid = activeTunerId
-        val isAM = activePlugin?.type == TunerType.AM
-        val isFavorite = if (tid != null) {
-            presetRepository.isFavoriteForTuner(tid, frequency, isAM ?: false)
+        val mode = frequencyScale.getMode()
+        val isFavorite = if (mode == FrequencyScaleView.RadioMode.DAB) {
+            if (currentDabServiceId > 0) presetRepository.isDabFavorite(currentDabServiceId) else false
         } else {
-            presetRepository.isFavorite(frequency, isAM ?: false)
+            val frequency = frequencyScale.getFrequency()
+            val isAM = mode == FrequencyScaleView.RadioMode.AM
+            presetRepository.isFavorite(frequency, isAM)
         }
 
         val iconRes = if (isFavorite) R.drawable.ic_favorite_filled else R.drawable.ic_favorite_border
@@ -5907,14 +5891,13 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      * Favorisiert/Unfavorisiert den aktuellen Sender
      */
     private fun toggleCurrentStationFavorite() {
-        val frequency = frequencyScale.getFrequency()
-        val isAM = activePlugin?.type == TunerType.AM
-        val tid = activeTunerId
-
-        val isFavoriteNow = if (tid != null) {
-            presetRepository.toggleFavoriteForTuner(tid, frequency, isAM ?: false)
+        val mode = frequencyScale.getMode()
+        val isFavoriteNow = if (mode == FrequencyScaleView.RadioMode.DAB) {
+            if (currentDabServiceId > 0) presetRepository.toggleDabFavorite(currentDabServiceId) else return
         } else {
-            presetRepository.toggleFavorite(frequency, isAM ?: false)
+            val frequency = frequencyScale.getFrequency()
+            val isAM = mode == FrequencyScaleView.RadioMode.AM
+            presetRepository.toggleFavorite(frequency, isAM)
         }
 
         // UI aktualisieren
@@ -5936,14 +5919,11 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
     private fun toggleFavoritesFilter() {
         showFavoritesOnly = !showFavoritesOnly
 
-        // Filter-Status speichern
-        val tid = activeTunerId
-        if (tid != null) {
-            presetRepository.setShowFavoritesOnly(tid, showFavoritesOnly)
-        } else if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
-            presetRepository.setShowFavoritesOnlyFm(showFavoritesOnly)
-        } else {
-            presetRepository.setShowFavoritesOnlyAm(showFavoritesOnly)
+        // Filter-Status speichern (FM, AM und DAB getrennt)
+        when (frequencyScale.getMode()) {
+            FrequencyScaleView.RadioMode.FM -> presetRepository.setShowFavoritesOnlyFm(showFavoritesOnly)
+            FrequencyScaleView.RadioMode.AM -> presetRepository.setShowFavoritesOnlyAm(showFavoritesOnly)
+            FrequencyScaleView.RadioMode.DAB -> presetRepository.setShowFavoritesOnlyDab(showFavoritesOnly)
         }
 
         // UI aktualisieren
@@ -6005,28 +5985,11 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
     private fun saveLastFrequency(frequency: Float) {
         val prefs = getSharedPreferences("fytfm_prefs", Context.MODE_PRIVATE)
         prefs.edit().putFloat("last_frequency", frequency).apply()
-        // Also save to tuner instance
-        activeTunerId?.let { tunerManager.saveLastFrequency(it, frequency) }
     }
 
     private fun loadLastFrequency(): Float {
         val prefs = getSharedPreferences("fytfm_prefs", Context.MODE_PRIVATE)
         return prefs.getFloat("last_frequency", 90.4f) // Default: 90.4 MHz
-    }
-
-    private fun saveLastMode(mode: FrequencyScaleView.RadioMode) {
-        val prefs = getSharedPreferences("fytfm_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("last_mode", mode.name).apply()
-    }
-
-    private fun loadLastMode(): FrequencyScaleView.RadioMode {
-        val prefs = getSharedPreferences("fytfm_prefs", Context.MODE_PRIVATE)
-        val name = prefs.getString("last_mode", "FM") ?: "FM"
-        return try {
-            FrequencyScaleView.RadioMode.valueOf(name)
-        } catch (_: Exception) {
-            FrequencyScaleView.RadioMode.FM
-        }
     }
 
     // === Station Import from Original Radio App ===
@@ -6035,169 +5998,114 @@ class MainActivity : AppCompatActivity(), TunerPluginCallback {
      * Checks if station list is empty and if we haven't asked yet.
      * Shows dialog to offer importing from original radio app.
      */
+    private fun checkAndOfferStationImport() {
+        // Only check FM stations for now
+        val fmStations = presetRepository.loadFmStations()
+        val hasAsked = presetRepository.hasAskedAboutImport()
 
-    // ==================== DAB+ Integration ====================
+        android.util.Log.i("fytFM", "checkAndOfferStationImport: fmStations.size=${fmStations.size}, hasAsked=$hasAsked")
 
-    private val dabCallback = object : DabManager.DabCallback {
-        override fun onTunerReady() {
-            runOnUiThread {
-                android.widget.Toast.makeText(this@MainActivity, "DAB+ Tuner bereit", android.widget.Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        override fun onTunerError() {
-            runOnUiThread {
-                android.widget.Toast.makeText(this@MainActivity, "DAB+ Tuner Fehler", android.widget.Toast.LENGTH_LONG).show()
-            }
-        }
-
-        override fun onStationsLoaded(stations: List<org.omri.radioservice.RadioService>) {
-            runOnUiThread {
-                dabStations = stations
-                if (activePlugin?.type == TunerType.DAB) {
-                    showDabStations()
-                }
-            }
-        }
-
-        override fun onScanStarted() {
-            runOnUiThread { /* scan progress could be shown */ }
-        }
-
-        override fun onScanProgress(percent: Int) {
-            runOnUiThread {
-                tvFrequency.text = "DAB+ Scan $percent%"
-            }
-        }
-
-        override fun onScanServiceFound(service: org.omri.radioservice.RadioService) {
-            runOnUiThread {
-                dabStations = dabStations + service
-                if (activePlugin?.type == TunerType.DAB) {
-                    showDabStations()
-                }
-            }
-        }
-
-        override fun onScanFinished(count: Int) {
-            runOnUiThread {
-                dabManager.loadStations()
-                android.widget.Toast.makeText(this@MainActivity, "$count DAB+ Sender gefunden", android.widget.Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        override fun onServiceStarted(service: org.omri.radioservice.RadioService) {
-            runOnUiThread {
-                val label = service.serviceLabel?.trim() ?: "DAB+"
-                tvFrequency.text = label
-                // Update now playing
-                val ps = findViewById<TextView>(R.id.nowPlayingPs)
-                ps?.text = label
-                val titleView = findViewById<TextView>(R.id.nowPlayingTitle)
-                titleView?.text = ""
-                val artistView = findViewById<TextView>(R.id.nowPlayingArtist)
-                artistView?.text = ""
-            }
-        }
-
-        override fun onServiceStopped() {
-            runOnUiThread {
-                tvFrequency.text = "DAB+"
-            }
-        }
-
-        override fun onDynamicLabel(text: String) {
-            runOnUiThread {
-                val titleView = findViewById<TextView>(R.id.nowPlayingTitle)
-                titleView?.text = text
-            }
-        }
-
-        override fun onDlPlus(artist: String?, title: String?) {
-            runOnUiThread {
-                val titleView = findViewById<TextView>(R.id.nowPlayingTitle)
-                val artistView = findViewById<TextView>(R.id.nowPlayingArtist)
-                titleView?.text = title ?: ""
-                artistView?.text = artist ?: ""
-            }
-        }
-
-        override fun onSlideshow(bitmap: android.graphics.Bitmap) {
-            runOnUiThread {
-                val cover = findViewById<android.widget.ImageView>(R.id.nowPlayingCover)
-                cover?.setImageBitmap(bitmap)
-            }
-        }
-
-        override fun onLogo(bitmap: android.graphics.Bitmap) {
-            runOnUiThread {
-                val cover = findViewById<android.widget.ImageView>(R.id.nowPlayingCover)
-                cover?.setImageBitmap(bitmap)
-            }
+        if (fmStations.isEmpty() && !hasAsked) {
+            android.util.Log.i("fytFM", "checkAndOfferStationImport: Zeige Import-Dialog")
+            showImportStationsDialog()
+        } else {
+            android.util.Log.d("fytFM", "checkAndOfferStationImport: Dialog nicht nötig")
         }
     }
 
-    private fun startDabScan() {
-        val dialog = at.planqton.fytfm.ui.DabScanDialog(this, dabManager) { service ->
-            dabManager.startPlayback(service)
-        }
-        dialog.setOnDismissListener {
-            // Restore main callback and reload stations
-            dabManager.callback = dabCallback
-            dabManager.loadStations()
-        }
-        dialog.show()
-    }
-
-    private fun enterDabMode() {
-        // Hide FM/AM specific UI
-        frequencyScale.visibility = View.GONE
-        btnPrevStation.visibility = View.GONE
-        btnNextStation.visibility = View.GONE
-        btnFavorite.visibility = View.GONE
-
-        tvFrequency.text = "DAB+"
-
-        // Initialize DAB if needed
-        dabManager.initialize()
-
-        // Show DAB stations in existing station list
-        showDabStations()
-    }
-
-    private fun exitDabMode() {
-        // Stop DAB playback
-        dabManager.stopPlayback()
-
-        // Restore FM/AM UI
-        frequencyScale.visibility = View.VISIBLE
-        btnPrevStation.visibility = View.VISIBLE
-        btnNextStation.visibility = View.VISIBLE
-        btnFavorite.visibility = View.VISIBLE
-    }
-
-    private fun showDabStations() {
-        val dabRadioStations = dabStations.map { service ->
-            val label = service.serviceLabel?.trim() ?: "???"
-            val ensemble = if (service is org.omri.radioservice.RadioServiceDab) {
-                service.ensembleLabel?.trim() ?: ""
-            } else ""
-            at.planqton.fytfm.data.RadioStation(
-                frequency = 0f,
-                name = if (ensemble.isNotEmpty()) "$label ($ensemble)" else label,
-                rssi = 0,
-                isAM = false,
-                isFavorite = false
-            )
-        }
-        stationAdapter.setStations(dabRadioStations)
-
-        // Override click to play DAB service
-        stationAdapter.setOnStationClickListener { station ->
-            val index = dabRadioStations.indexOf(station)
-            if (index >= 0 && index < dabStations.size) {
-                dabManager.startPlayback(dabStations[index])
+    private fun showImportStationsDialog() {
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Sender importieren?")
+            .setMessage("Die Senderliste ist leer.\n\nMöchtest du die Sender von der Original-Radio-App importieren?")
+            .setPositiveButton("Ja") { _, _ ->
+                presetRepository.setAskedAboutImport(true)
+                importStationsFromOriginalApp()
             }
+            .setNegativeButton("Nein") { _, _ ->
+                presetRepository.setAskedAboutImport(true)
+                android.widget.Toast.makeText(this, "Du kannst später Sender scannen oder manuell hinzufügen", android.widget.Toast.LENGTH_LONG).show()
+            }
+            .setCancelable(false)
+            .show()
+    }
+
+    /**
+     * Import stations from the original FYT radio app via SYU Service Callbacks.
+     * Uses Type 4 (preset frequencies) and Type 14 (preset names) callbacks.
+     */
+    private fun importStationsFromOriginalApp() {
+        android.util.Log.i("fytFM", "Import: Starte Preset-Sammlung via SYU Callbacks...")
+        android.widget.Toast.makeText(this, "Sammle Sender vom SYU Service...", android.widget.Toast.LENGTH_SHORT).show()
+
+        // Clear previous data and start collecting
+        collectedPresets.clear()
+        isCollectingPresets = true
+
+        // Cancel any existing timeout
+        presetImportTimeoutRunnable?.let { presetImportHandler.removeCallbacks(it) }
+
+        // Set timeout to finish collecting after 3 seconds
+        presetImportTimeoutRunnable = Runnable {
+            finishPresetCollection()
+        }
+        presetImportHandler.postDelayed(presetImportTimeoutRunnable!!, 3000)
+
+        // Request presets from SYU service (may trigger callbacks)
+        try {
+            // Query each preset slot 0-11 for FM
+            for (i in 0..11) {
+                syuToolkitManager?.getModuleData(1, 4, intArrayOf(i), null, null)
+                syuToolkitManager?.getModuleData(1, 14, intArrayOf(i), null, null)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Import: Error querying presets", e)
+        }
+    }
+
+    /**
+     * Called after timeout to finish collecting presets and save them.
+     */
+    private fun finishPresetCollection() {
+        isCollectingPresets = false
+        presetImportTimeoutRunnable = null
+
+        android.util.Log.i("fytFM", "Import: Sammlung beendet, ${collectedPresets.size} Presets empfangen")
+
+        if (collectedPresets.isEmpty()) {
+            android.widget.Toast.makeText(this, "Keine Sender von der Original-App empfangen", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // Convert collected presets to RadioStation list
+        val stations = collectedPresets.values
+            .filter { (freq, _) -> freq in 87.5f..108.0f }
+            .map { (freq, name) ->
+                at.planqton.fytfm.data.RadioStation(
+                    frequency = freq,
+                    name = name,
+                    rssi = 0,
+                    isAM = false,
+                    isFavorite = true  // Imported presets are favorites
+                )
+            }
+            .sortedBy { it.frequency }
+            .distinctBy { (it.frequency * 10).toInt() }
+
+        if (stations.isEmpty()) {
+            android.widget.Toast.makeText(this, "Keine gültigen Sender gefunden", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
+
+        // Save and reload
+        presetRepository.saveFmStations(stations)
+        loadStationsForCurrentMode()
+
+        android.widget.Toast.makeText(this, "${stations.size} Sender importiert!", android.widget.Toast.LENGTH_SHORT).show()
+        android.util.Log.i("fytFM", "Import: ${stations.size} Sender gespeichert")
+
+        // Log imported stations
+        stations.forEach { station ->
+            android.util.Log.d("fytFM", "Import: ${station.frequency} MHz - ${station.name ?: "(kein Name)"}")
         }
     }
 }

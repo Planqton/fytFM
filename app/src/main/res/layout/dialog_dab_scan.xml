@@ -1,97 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/radio_background"
     android:orientation="vertical"
     android:padding="16dp">
 
-    <!-- Header -->
     <TextView
+        android:id="@+id/tvScanStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="DAB+ Sendersuche"
-        android:textColor="@color/radio_text_primary"
-        android:textSize="18sp"
+        android:text="DAB+ Sendersuche..."
+        android:textSize="16sp"
         android:textStyle="bold"
-        android:gravity="center"
-        android:layout_marginBottom="12dp" />
+        android:layout_marginBottom="8dp" />
 
-    <!-- Scan progress -->
-    <LinearLayout
-        android:id="@+id/dabScanProgressContainer"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-        <ProgressBar
-            android:id="@+id/dabScanProgress"
-            style="@android:style/Widget.ProgressBar.Horizontal"
-            android:layout_width="match_parent"
-            android:layout_height="16dp"
-            android:max="100"
-            android:progressDrawable="@drawable/scan_progress_bar" />
-
-        <TextView
-            android:id="@+id/tvDabScanStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Suche..."
-            android:textColor="@color/radio_text_secondary" />
-
-    </LinearLayout>
-
-    <!-- Station list -->
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/dabStationRecycler"
-        android:layout_width="match_parent"
-        android:layout_height="200dp"
-        android:layout_marginTop="12dp"
-        android:background="#11000000" />
-
-    <!-- Empty state -->
     <TextView
-        android:id="@+id/tvDabEmptyState"
-        android:layout_width="match_parent"
-        android:layout_height="200dp"
-        android:gravity="center"
-        android:text="Keine DAB+ Sender gefunden.\nTippe Scan um zu suchen."
-        android:textColor="@color/radio_text_secondary"
-        android:visibility="visible" />
-
-    <!-- Buttons -->
-    <LinearLayout
+        android:id="@+id/tvScanBlock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:gravity="center"
-        android:orientation="horizontal">
+        android:text=""
+        android:textSize="13sp"
+        android:layout_marginBottom="8dp" />
 
-        <Button
-            android:id="@+id/btnDabScan"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:layout_marginEnd="8dp"
-            android:background="@drawable/button_background"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:text="Scan starten"
-            android:textColor="@color/radio_text_primary" />
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="100"
+        android:progress="0"
+        android:layout_marginBottom="8dp" />
 
-        <Button
-            android:id="@+id/btnDabClose"
-            android:layout_width="wrap_content"
-            android:layout_height="48dp"
-            android:background="@drawable/button_background"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
-            android:text="Schließen"
-            android:textColor="@color/radio_text_primary" />
+    <TextView
+        android:id="@+id/tvFoundCount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Gefundene Sender: 0"
+        android:textSize="13sp"
+        android:layout_marginBottom="8dp" />
 
-    </LinearLayout>
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvFoundServices"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginBottom="8dp" />
 
 </LinearLayout>

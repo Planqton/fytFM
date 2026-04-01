@@ -53,6 +53,13 @@
             <intent-filter android:priority="1000">
                 <action android:name="com.syu.radio" />
             </intent-filter>
+            <!-- USB DAB+ Dongle -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_dab_device_filter" />
         </activity>
 
         <activity
