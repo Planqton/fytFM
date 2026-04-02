@@ -47,16 +47,16 @@ class StationEditorAdapter(
         private val btnDelete: ImageButton = itemView.findViewById(R.id.btnDelete)
 
         fun bind(station: RadioStation) {
-            // Frequency display
-            tvFrequency.text = if (station.isAM) {
-                "AM ${station.frequency.toInt()}"
-            } else {
-                "FM %.2f".format(station.frequency)
+            // Frequency/Ensemble display
+            tvFrequency.text = when {
+                station.isDab -> station.ensembleLabel ?: "DAB"
+                station.isAM -> "AM ${station.frequency.toInt()}"
+                else -> "FM %.2f".format(station.frequency)
             }
 
             // Name display
             tvName.text = if (station.name.isNullOrEmpty()) {
-                "Uncustomised Name"
+                if (station.isDab) station.ensembleLabel ?: "Unbekannt" else "Uncustomised Name"
             } else {
                 station.name
             }

@@ -6,5 +6,6 @@
     android:gravity="center_vertical"
     android:textSize="16sp"
     android:textColor="@color/radio_text_primary"
+    android:background="@color/radio_background"
     android:padding="12dp"
     android:minHeight="48dp" />

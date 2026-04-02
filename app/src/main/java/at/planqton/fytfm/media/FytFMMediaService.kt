@@ -226,6 +226,66 @@ class FytFMMediaService : MediaLibraryService() {
     }
 
     /**
+     * Aktualisiert MediaSession Metadaten für DAB+ Modus
+     * @param serviceLabel Service Label (Sendername, z.B. "Ö1")
+     * @param ensembleLabel Ensemble Label (z.B. "ORF DAB Wien")
+     * @param dls Dynamic Label Segment (Radiotext, z.B. "Nachrichten um 12:00")
+     * @param slideshowBitmap MOT Slideshow Bild (falls gesendet)
+     * @param radioLogoPath Lokaler Pfad zum Radio-Logo (Fallback wenn kein Slideshow)
+     */
+    fun updateDabMetadata(
+        serviceLabel: String?,
+        ensembleLabel: String? = null,
+        dls: String? = null,
+        slideshowBitmap: android.graphics.Bitmap? = null,
+        radioLogoPath: String? = null
+    ) {
+        val stationName = serviceLabel ?: "DAB+"
+
+        // Title: DLS wenn vorhanden, sonst Stationsname
+        val displayTitle = dls?.takeIf { it.isNotBlank() } ?: stationName
+
+        // Artwork: Slideshow → Radio-Logo → DAB Fallback
+        val artworkData: ByteArray? = when {
+            slideshowBitmap != null -> bitmapToByteArray(slideshowBitmap)
+            !radioLogoPath.isNullOrBlank() && File(radioLogoPath).exists() -> loadImageAsBytes(radioLogoPath)
+            else -> loadDrawableAsBytes(R.drawable.placeholder_fm)  // DAB nutzt FM-Placeholder als Fallback
+        }
+
+        val metadata = MediaMetadata.Builder()
+            .setTitle(displayTitle)                                    // DLS oder Stationsname
+            .setSubtitle(stationName)                                  // Sendername als Untertitel
+            .setArtist(stationName)                                    // Sendername (für Player die Artist zeigen)
+            .setAlbumTitle(ensembleLabel ?: "DAB+")                    // Ensemble Label
+            .setDisplayTitle(displayTitle)                             // DLS oder Stationsname
+            .setMediaType(MediaMetadata.MEDIA_TYPE_RADIO_STATION)
+            .setIsPlayable(true)
+            .setIsBrowsable(false)
+            .apply {
+                if (artworkData != null) {
+                    setArtworkData(artworkData, MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    Log.d(TAG, "Setting DAB artworkData: ${artworkData.size} bytes")
+                }
+            }
+            .build()
+
+        player.updateMetadata(metadata)
+
+        // Legacy MediaButtonSession auch aktualisieren
+        val displayForLegacy = dls?.takeIf { it.isNotBlank() } ?: stationName
+        val coverForLegacy = radioLogoPath
+        mediaButtonSession?.updateMetadata(displayForLegacy, 0f, coverForLegacy)
+
+        Log.d(TAG, "DAB Metadata updated: $stationName | $dls | data=${artworkData?.size ?: 0}b")
+    }
+
+    private fun bitmapToByteArray(bitmap: android.graphics.Bitmap): ByteArray {
+        val stream = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, stream)
+        return stream.toByteArray()
+    }
+
+    /**
      * Startet den Cover-Server wenn nötig (nur wenn Cache aktiviert)
      */
     private fun ensureCoverServerRunning() {

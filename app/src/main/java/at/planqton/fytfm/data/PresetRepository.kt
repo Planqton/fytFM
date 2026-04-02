@@ -14,6 +14,11 @@ class PresetRepository(private val context: Context) {
         private const val PREFS_SETTINGS = "settings"
         private const val KEY_STATIONS = "stations"
         private const val KEY_POWER_ON_STARTUP = "power_on_startup"
+        private const val KEY_POWER_ON_STARTUP_FM = "power_on_startup_fm"
+        private const val KEY_POWER_ON_STARTUP_AM = "power_on_startup_am"
+        private const val KEY_POWER_ON_STARTUP_DAB = "power_on_startup_dab"
+        private const val KEY_DEEZER_ENABLED_FM = "deezer_enabled_fm"
+        private const val KEY_DEEZER_ENABLED_DAB = "deezer_enabled_dab"
     }
 
     private val fmPrefs: SharedPreferences = context.getSharedPreferences(PREFS_FM, Context.MODE_PRIVATE)
@@ -311,6 +316,48 @@ class PresetRepository(private val context: Context) {
 
     fun setPowerOnStartup(enabled: Boolean) {
         settingsPrefs.edit().putBoolean(KEY_POWER_ON_STARTUP, enabled).apply()
+    }
+
+    // Separate Power-On Settings für jeden Tuner
+    fun isPowerOnStartupFm(): Boolean {
+        return settingsPrefs.getBoolean(KEY_POWER_ON_STARTUP_FM, false)
+    }
+
+    fun setPowerOnStartupFm(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean(KEY_POWER_ON_STARTUP_FM, enabled).apply()
+    }
+
+    fun isPowerOnStartupAm(): Boolean {
+        return settingsPrefs.getBoolean(KEY_POWER_ON_STARTUP_AM, false)
+    }
+
+    fun setPowerOnStartupAm(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean(KEY_POWER_ON_STARTUP_AM, enabled).apply()
+    }
+
+    fun isPowerOnStartupDab(): Boolean {
+        return settingsPrefs.getBoolean(KEY_POWER_ON_STARTUP_DAB, false)
+    }
+
+    fun setPowerOnStartupDab(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean(KEY_POWER_ON_STARTUP_DAB, enabled).apply()
+    }
+
+    // Deezer Settings pro Modus
+    fun isDeezerEnabledFm(): Boolean {
+        return settingsPrefs.getBoolean(KEY_DEEZER_ENABLED_FM, true)  // Default: aktiviert
+    }
+
+    fun setDeezerEnabledFm(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean(KEY_DEEZER_ENABLED_FM, enabled).apply()
+    }
+
+    fun isDeezerEnabledDab(): Boolean {
+        return settingsPrefs.getBoolean(KEY_DEEZER_ENABLED_DAB, false)  // Default: deaktiviert (DAB hat eigene Bilder)
+    }
+
+    fun setDeezerEnabledDab(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean(KEY_DEEZER_ENABLED_DAB, enabled).apply()
     }
 
     fun isShowDebugInfos(): Boolean {

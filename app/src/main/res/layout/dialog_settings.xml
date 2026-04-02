@@ -31,132 +31,33 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Tuner Manager Item -->
-            <LinearLayout
-                android:id="@+id/itemTunerManager"
+            <!-- ==================== FM SETTINGS ==================== -->
+            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:minHeight="72dp"
-                android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
-                android:gravity="center_vertical">
+                android:paddingTop="8dp"
+                android:paddingBottom="8dp"
+                android:text="FM"
+                android:textColor="#FEAA2D"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
 
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Tuner Manager"
-                    android:textColor="#333333"
-                    android:textSize="16sp" />
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_chevron_right"
-                    android:alpha="0.5" />
-
-            </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
-            <!-- Plugin Manager Item -->
-            <LinearLayout
-                android:id="@+id/itemPluginManager"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:minHeight="72dp"
-                android:orientation="horizontal"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Plugin Manager"
-                    android:textColor="#333333"
-                    android:textSize="16sp" />
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_chevron_right"
-                    android:alpha="0.5" />
-
-            </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
-            <!-- Radio Editor Item -->
-            <LinearLayout
-                android:id="@+id/itemRadioEditor"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:minHeight="72dp"
-                android:orientation="horizontal"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/radio_editor"
-                    android:textColor="#333333"
-                    android:textSize="16sp" />
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_chevron_right"
-                    android:alpha="0.5" />
-
-            </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
-            <!-- Power on at Startup Toggle -->
+            <!-- FM Power on at Startup -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
                 <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/switchPowerOnStartup"
+                    android:id="@+id/switchPowerOnStartupFm"
                     android:layout_width="52dp"
                     android:layout_height="32dp" />
 
@@ -165,18 +66,230 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
-                    android:text="@string/power_on_startup"
+                    android:text="Beim Start einschalten"
                     android:textColor="#333333"
                     android:textSize="16sp" />
 
-                <ImageButton
-                    android:id="@+id/btnPowerOnStartupInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/info"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
+            </LinearLayout>
+
+            <!-- FM Radio Editor Item -->
+            <LinearLayout
+                android:id="@+id/itemRadioEditorFm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Sender bearbeiten"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:alpha="0.5" />
+
+            </LinearLayout>
+
+            <!-- LOC Local Only Toggle (FM specific) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchLocalMode"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/loc_local_only"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/loc_description"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Mono/Noise Reduction Toggle (FM specific) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchMonoMode"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/mono_noise_reduction"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/mono_description"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Radio Area Item (FM specific) -->
+            <LinearLayout
+                android:id="@+id/itemRadioArea"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/radio_area"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/textRadioAreaValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/area_europe"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:alpha="0.5" />
+
+            </LinearLayout>
+
+            <!-- Auto Scan Sensitivity Toggle (FM specific) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchAutoScanSensitivity"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:text="@string/auto_scan_sensitivity"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+            </LinearLayout>
+
+            <!-- Deezer für FM Toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchDeezerFm"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Deezer Cover"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Album-Cover via Deezer laden"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
@@ -184,15 +297,224 @@
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
+                android:layout_marginTop="8dp"
                 android:background="#E0E0E0" />
+
+            <!-- ==================== AM SETTINGS ==================== -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="8dp"
+                android:text="AM"
+                android:textColor="#FEAA2D"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
+
+            <!-- AM Power on at Startup -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchPowerOnStartupAm"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:text="Beim Start einschalten"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+            </LinearLayout>
+
+            <!-- AM Radio Editor Item -->
+            <LinearLayout
+                android:id="@+id/itemRadioEditorAm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Sender bearbeiten"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:alpha="0.5" />
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="8dp"
+                android:background="#E0E0E0" />
+
+            <!-- ==================== DAB SETTINGS ==================== -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="8dp"
+                android:text="DAB+"
+                android:textColor="#FEAA2D"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
+
+            <!-- DAB Power on at Startup -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchPowerOnStartupDab"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:text="Beim Start einschalten"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+            </LinearLayout>
+
+            <!-- DAB Radio Editor Item -->
+            <LinearLayout
+                android:id="@+id/itemRadioEditorDab"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Sender bearbeiten"
+                    android:textColor="#333333"
+                    android:textSize="16sp" />
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:alpha="0.5" />
+
+            </LinearLayout>
+
+            <!-- Deezer für DAB Toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchDeezerDab"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Deezer Cover"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Album-Cover via Deezer (statt Slideshow)"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Divider -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="8dp"
+                android:background="#E0E0E0" />
+
+            <!-- ==================== UNIVERSAL SETTINGS ==================== -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingTop="16dp"
+                android:paddingBottom="8dp"
+                android:text="ALLGEMEIN"
+                android:textColor="#666666"
+                android:textSize="12sp"
+                android:textAllCaps="true"
+                android:letterSpacing="0.1" />
 
             <!-- Show Debug Infos Toggle -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -212,30 +534,13 @@
                     android:textColor="#333333"
                     android:textSize="16sp" />
 
-                <ImageButton
-                    android:id="@+id/btnShowDebugInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/info"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
-
             </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
 
             <!-- Station Change Toast Toggle -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -263,7 +568,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Popup bei Lenkradtasten (auch im Hintergrund)"
+                        android:text="Popup bei Lenkradtasten"
                         android:textColor="#888888"
                         android:textSize="12sp" />
 
@@ -271,19 +576,11 @@
 
             </LinearLayout>
 
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
             <!-- Revert Prev/Next Toggle -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -327,179 +624,6 @@
                 android:layout_marginEnd="24dp"
                 android:background="#E0E0E0" />
 
-            <!-- Section Header: Tuner Settings -->
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
-                android:text="@string/section_tuner"
-                android:textColor="#666666"
-                android:textSize="12sp"
-                android:textAllCaps="true"
-                android:letterSpacing="0.1" />
-
-            <!-- LOC Local Only Toggle -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="72dp"
-                android:orientation="horizontal"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:gravity="center_vertical">
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/switchLocalMode"
-                    android:layout_width="52dp"
-                    android:layout_height="32dp" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="16dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/loc_local_only"
-                        android:textColor="#333333"
-                        android:textSize="16sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/loc_description"
-                        android:textColor="#888888"
-                        android:textSize="12sp" />
-
-                </LinearLayout>
-
-                <ImageButton
-                    android:id="@+id/btnLocalModeInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/info"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
-
-            </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
-            <!-- Mono/Noise Reduction Toggle -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="72dp"
-                android:orientation="horizontal"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:gravity="center_vertical">
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/switchMonoMode"
-                    android:layout_width="52dp"
-                    android:layout_height="32dp" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="16dp"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/mono_noise_reduction"
-                        android:textColor="#333333"
-                        android:textSize="16sp" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/mono_description"
-                        android:textColor="#888888"
-                        android:textSize="12sp" />
-
-                </LinearLayout>
-
-                <ImageButton
-                    android:id="@+id/btnMonoModeInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/info"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
-
-            </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
-            <!-- Radio Area Item (opens dialog) -->
-            <LinearLayout
-                android:id="@+id/itemRadioArea"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
-                android:clickable="true"
-                android:focusable="true"
-                android:minHeight="72dp"
-                android:orientation="horizontal"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:gravity="center_vertical">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/radio_area"
-                        android:textColor="#333333"
-                        android:textSize="16sp" />
-
-                    <TextView
-                        android:id="@+id/textRadioAreaValue"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/area_europe"
-                        android:textColor="#888888"
-                        android:textSize="12sp" />
-
-                </LinearLayout>
-
-                <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@drawable/ic_chevron_right"
-                    android:alpha="0.5" />
-
-            </LinearLayout>
-
             <!-- Section Header: Radio Logos -->
             <TextView
                 android:layout_width="match_parent"
@@ -508,7 +632,7 @@
                 android:paddingEnd="24dp"
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
-                android:text="Radio Logos"
+                android:text="RADIO LOGOS"
                 android:textColor="#666666"
                 android:textSize="12sp"
                 android:textAllCaps="true"
@@ -585,54 +709,13 @@
 
             </LinearLayout>
 
-            <!-- Section Header: Scan Settings -->
-            <TextView
+            <!-- Divider -->
+            <View
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
-                android:text="@string/section_scan"
-                android:textColor="#666666"
-                android:textSize="12sp"
-                android:textAllCaps="true"
-                android:letterSpacing="0.1" />
-
-            <!-- Auto Scan Sensitivity Toggle -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="72dp"
-                android:orientation="horizontal"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:gravity="center_vertical">
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/switchAutoScanSensitivity"
-                    android:layout_width="52dp"
-                    android:layout_height="32dp" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="16dp"
-                    android:text="@string/auto_scan_sensitivity"
-                    android:textColor="#333333"
-                    android:textSize="16sp" />
-
-                <ImageButton
-                    android:id="@+id/btnAutoScanSensitivityInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/info"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
-
-            </LinearLayout>
+                android:layout_height="1dp"
+                android:layout_marginStart="24dp"
+                android:layout_marginEnd="24dp"
+                android:background="#E0E0E0" />
 
             <!-- Section Header: App -->
             <TextView
@@ -656,7 +739,7 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -701,15 +784,7 @@
 
             </LinearLayout>
 
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
-            <!-- Language Item (opens dialog) -->
+            <!-- Language Item -->
             <LinearLayout
                 android:id="@+id/itemLanguage"
                 android:layout_width="match_parent"
@@ -717,7 +792,7 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -754,14 +829,6 @@
 
             </LinearLayout>
 
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
             <!-- Now Playing Animation Item -->
             <LinearLayout
                 android:id="@+id/itemNowPlayingAnimation"
@@ -770,7 +837,7 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -807,19 +874,11 @@
 
             </LinearLayout>
 
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
             <!-- Correction Helpers Toggle -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -847,30 +906,13 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Trash/Refresh Buttons in Now Playing"
+                        android:text="Trash/Refresh in Now Playing"
                         android:textColor="#888888"
                         android:textSize="12sp" />
 
                 </LinearLayout>
 
-                <ImageButton
-                    android:id="@+id/btnCorrectionHelpersInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/info"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
-
             </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
 
             <!-- View Corrections Button -->
             <LinearLayout
@@ -880,7 +922,7 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -943,7 +985,7 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -977,26 +1019,9 @@
 
                 </LinearLayout>
 
-                <ImageButton
-                    android:id="@+id/btnRdsLoggingInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/info"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
-
             </LinearLayout>
 
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
-
-            <!-- RDS Retention Item (opens dialog) -->
+            <!-- RDS Retention Item -->
             <LinearLayout
                 android:id="@+id/itemRdsRetention"
                 android:layout_width="match_parent"
@@ -1004,7 +1029,7 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -1033,15 +1058,6 @@
 
                 </LinearLayout>
 
-                <ImageButton
-                    android:id="@+id/btnArchiveRetentionInfo"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/info"
-                    android:scaleType="centerInside"
-                    android:padding="8dp" />
-
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
@@ -1049,14 +1065,6 @@
                     android:alpha="0.5" />
 
             </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
 
             <!-- Clear Archive Button -->
             <LinearLayout
@@ -1066,7 +1074,7 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -1145,7 +1153,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Tracks lokal speichern für Offline-Nutzung"
+                        android:text="Tracks lokal speichern"
                         android:textColor="#666666"
                         android:textSize="12sp" />
 
@@ -1166,53 +1174,12 @@
                 android:layout_height="wrap_content"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="8dp"
+                android:paddingTop="4dp"
                 android:text="Cache: 0 Tracks"
                 android:textColor="#666666"
                 android:textSize="12sp" />
 
-            <!-- Deezer Cache Buttons Row 1: Export/Import -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingStart="24dp"
-                android:paddingEnd="24dp"
-                android:paddingTop="12dp">
-
-                <TextView
-                    android:id="@+id/btnExportDeezerCache"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="8dp"
-                    android:background="@drawable/button_outline"
-                    android:gravity="center"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:foreground="?attr/selectableItemBackground"
-                    android:text="Export Cache"
-                    android:textColor="#FEAA2D"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:id="@+id/btnImportDeezerCache"
-                    android:layout_width="0dp"
-                    android:layout_height="40dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="8dp"
-                    android:background="@drawable/button_outline"
-                    android:gravity="center"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:foreground="?attr/selectableItemBackground"
-                    android:text="Import Cache"
-                    android:textColor="#FEAA2D"
-                    android:textSize="14sp" />
-
-            </LinearLayout>
-
-            <!-- Deezer Cache Buttons Row 2: View/Clear -->
+            <!-- Deezer Cache Buttons -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -1220,37 +1187,65 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:paddingTop="8dp"
-                android:paddingBottom="16dp">
+                android:paddingBottom="8dp">
 
                 <TextView
                     android:id="@+id/btnViewDeezerCache"
                     android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:layout_height="36dp"
                     android:layout_weight="1"
-                    android:layout_marginEnd="8dp"
+                    android:layout_marginEnd="4dp"
                     android:background="@drawable/button_outline"
                     android:gravity="center"
                     android:clickable="true"
                     android:focusable="true"
-                    android:foreground="?attr/selectableItemBackground"
-                    android:text="Cache anzeigen"
+                    android:text="Anzeigen"
                     android:textColor="#FEAA2D"
-                    android:textSize="14sp" />
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btnExportDeezerCache"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/button_outline"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:text="Export"
+                    android:textColor="#FEAA2D"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btnImportDeezerCache"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/button_outline"
+                    android:gravity="center"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:text="Import"
+                    android:textColor="#FEAA2D"
+                    android:textSize="12sp" />
 
                 <TextView
                     android:id="@+id/btnClearDeezerCache"
                     android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:layout_height="36dp"
                     android:layout_weight="1"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="4dp"
                     android:background="@drawable/button_outline"
                     android:gravity="center"
                     android:clickable="true"
                     android:focusable="true"
-                    android:foreground="?attr/selectableItemBackground"
-                    android:text="Cache löschen"
+                    android:text="Löschen"
                     android:textColor="#D32F2F"
-                    android:textSize="14sp" />
+                    android:textSize="12sp" />
 
             </LinearLayout>
 
@@ -1270,7 +1265,7 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true"
-                android:minHeight="72dp"
+                android:minHeight="56dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
@@ -1292,7 +1287,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Logs sammeln und in Downloads speichern"
+                        android:text="Logs in Downloads speichern"
                         android:textColor="#888888"
                         android:textSize="12sp" />
 
@@ -1305,14 +1300,6 @@
                     android:alpha="0.5" />
 
             </LinearLayout>
-
-            <!-- Divider -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="24dp"
-                android:layout_marginEnd="24dp"
-                android:background="#E0E0E0" />
 
             <!-- Close App Button -->
             <TextView

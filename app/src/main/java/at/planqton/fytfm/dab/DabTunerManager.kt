@@ -13,6 +13,14 @@ import org.omri.radio.RadioStatusListener
 import org.omri.radioservice.RadioService
 import org.omri.radioservice.RadioServiceAudiodataListener
 import org.omri.radioservice.RadioServiceDab
+import org.omri.radioservice.metadata.Textual
+import org.omri.radioservice.metadata.TextualDabDynamicLabel
+import org.omri.radioservice.metadata.TextualDabDynamicLabelPlusContentType
+import org.omri.radioservice.metadata.TextualMetadataListener
+import org.omri.radioservice.metadata.Visual
+import org.omri.radioservice.metadata.VisualMetadataListener
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import org.omri.tuner.ReceptionQuality
 import org.omri.tuner.Tuner
 import org.omri.tuner.TunerListener
@@ -24,7 +32,7 @@ import java.util.Date
  * Verwaltet den USB DAB+ Tuner.
  * Nutzt die OMRI Radio API (libirtdab.so) aus dem DAB-Z Projekt.
  */
-class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodataListener {
+class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodataListener, TextualMetadataListener, VisualMetadataListener {
 
     companion object {
         private const val TAG = "DabTunerManager"
@@ -49,6 +57,9 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
     var onServiceStopped: (() -> Unit)? = null
     var onTunerReady: (() -> Unit)? = null
     var onTunerError: ((String) -> Unit)? = null
+    var onDynamicLabel: ((String) -> Unit)? = null  // DLS - DAB Äquivalent zu RDS RT
+    var onDlPlus: ((artist: String?, title: String?) -> Unit)? = null  // DL+ Tags für Artist/Title
+    var onSlideshow: ((Bitmap) -> Unit)? = null  // MOT Slideshow - Bilder vom DAB-Sender
 
     val isDabOn: Boolean get() = isInitialized && currentTuner != null
 
@@ -284,6 +295,41 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
 
     fun getTunerStatus(): TunerStatus? = currentTuner?.tunerStatus
 
+    /**
+     * Prüft ob ein DAB-Tuner verfügbar ist (USB-Gerät angeschlossen).
+     * Kann auch ohne Initialisierung aufgerufen werden.
+     */
+    fun isDabAvailable(context: Context): Boolean {
+        try {
+            // Prüfe ob OMRI-Library verfügbar ist
+            val radio = Radio.getInstance()
+
+            // Falls schon initialisiert, prüfe direkt
+            if (isInitialized) {
+                val tuners = radio.getAvailableTuners(TunerType.TUNER_TYPE_DAB)
+                return tuners != null && tuners.isNotEmpty()
+            }
+
+            // Falls nicht initialisiert, kurz initialisieren um zu prüfen
+            val opts = Bundle()
+            opts.putBoolean("verbose_native_logs", false)
+            radio.initialize(context, opts)
+            val tuners = radio.getAvailableTuners(TunerType.TUNER_TYPE_DAB)
+            val available = tuners != null && tuners.isNotEmpty()
+
+            // Wieder deinitialisieren wenn wir nicht aktiv sind
+            if (!isInitialized) {
+                radio.deInitialize()
+            }
+
+            Log.d(TAG, "isDabAvailable: $available (tuners: ${tuners?.size ?: 0})")
+            return available
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking DAB availability: ${e.message}")
+            return false
+        }
+    }
+
     // === TunerListener callbacks ===
 
     override fun tunerStatusChanged(tuner: Tuner, status: TunerStatus) {
@@ -445,5 +491,52 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
         audioTrack = null
         currentSampleRate = 0
         currentChannels = 0
+    }
+
+    // === TextualMetadataListener (DLS - Dynamic Label Segment) ===
+
+    override fun newTextualMetadata(textual: Textual?) {
+        textual ?: return
+        val text = textual.text
+        if (text != null) {
+            Log.d(TAG, "DLS received: $text")
+            mainHandler.post { onDynamicLabel?.invoke(text.trim()) }
+        }
+
+        // DL+ (Dynamic Label Plus) für Artist/Title Tags
+        if (textual is TextualDabDynamicLabel && textual.hasTags()) {
+            var artist: String? = null
+            var title: String? = null
+            for (item in textual.dlPlusItems) {
+                val content = item.dlPlusContentText ?: continue
+                when (item.dynamicLabelPlusContentType) {
+                    TextualDabDynamicLabelPlusContentType.ITEM_ARTIST -> artist = content.trim()
+                    TextualDabDynamicLabelPlusContentType.ITEM_TITLE -> title = content.trim()
+                    else -> {}
+                }
+            }
+            if (artist != null || title != null) {
+                Log.d(TAG, "DL+ received: artist=$artist, title=$title")
+                mainHandler.post { onDlPlus?.invoke(artist, title) }
+            }
+        }
+    }
+
+    // === VisualMetadataListener (MOT Slideshow - Bilder) ===
+
+    override fun newVisualMetadata(visual: Visual?) {
+        visual ?: return
+        val data = visual.visualData
+        if (data != null && data.isNotEmpty()) {
+            try {
+                val bitmap = BitmapFactory.decodeByteArray(data, 0, data.size)
+                if (bitmap != null) {
+                    Log.d(TAG, "Slideshow received: ${bitmap.width}x${bitmap.height}")
+                    mainHandler.post { onSlideshow?.invoke(bitmap) }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to decode slideshow image: ${e.message}")
+            }
+        }
     }
 }

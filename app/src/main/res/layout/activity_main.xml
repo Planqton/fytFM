@@ -735,6 +735,16 @@
             android:buttonTint="#FFFFFF"
             android:checked="false" />
 
+        <CheckBox
+            android:id="@+id/checkTunerInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tuner Info"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:buttonTint="#FFFFFF"
+            android:checked="false" />
+
         <!-- Global Alpha Slider for all Debug Overlays -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -1752,6 +1762,124 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="0"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Tuner Info Debug Overlay -->
+    <LinearLayout
+        android:id="@+id/debugTunerOverlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|center_vertical"
+        android:layout_margin="16dp"
+        android:background="@drawable/debug_overlay_background"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:minWidth="180dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Tuner Info"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <!-- Current Active Tuner -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:text="Aktiv:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugTunerActive"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#00FFFF"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="6dp"
+            android:background="#444444" />
+
+        <!-- FM Availability -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:text="FM:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugTunerFm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <!-- AM Availability -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:text="AM:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugTunerAm"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+        </LinearLayout>
+
+        <!-- DAB Availability -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="2dp">
+            <TextView
+                android:layout_width="70dp"
+                android:layout_height="wrap_content"
+                android:text="DAB+:"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp" />
+            <TextView
+                android:id="@+id/debugTunerDab"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="--"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp"
                 android:fontFamily="monospace" />
