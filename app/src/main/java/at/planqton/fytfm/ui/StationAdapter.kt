@@ -44,6 +44,18 @@ class StationAdapter(
         }
     }
 
+    fun setSelectedDabService(serviceId: Int) {
+        val newPosition = stations.indexOfFirst {
+            it.isDab && it.serviceId == serviceId
+        }
+        if (newPosition != selectedPosition) {
+            val oldPosition = selectedPosition
+            selectedPosition = newPosition
+            if (oldPosition >= 0) notifyItemChanged(oldPosition)
+            if (newPosition >= 0) notifyItemChanged(newPosition)
+        }
+    }
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): StationViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_station, parent, false)

@@ -1,6 +1,9 @@
 package at.planqton.fytfm.dab
 
 import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFormat
+import android.media.AudioTrack
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -8,6 +11,7 @@ import android.util.Log
 import org.omri.radio.Radio
 import org.omri.radio.RadioStatusListener
 import org.omri.radioservice.RadioService
+import org.omri.radioservice.RadioServiceAudiodataListener
 import org.omri.radioservice.RadioServiceDab
 import org.omri.tuner.ReceptionQuality
 import org.omri.tuner.Tuner
@@ -20,7 +24,7 @@ import java.util.Date
  * Verwaltet den USB DAB+ Tuner.
  * Nutzt die OMRI Radio API (libirtdab.so) aus dem DAB-Z Projekt.
  */
-class DabTunerManager : TunerListener, RadioStatusListener {
+class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodataListener {
 
     companion object {
         private const val TAG = "DabTunerManager"
@@ -36,6 +40,11 @@ class DabTunerManager : TunerListener, RadioStatusListener {
     private val scannedServices = mutableListOf<DabStation>()
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    // Audio playback
+    private var audioTrack: AudioTrack? = null
+    private var currentSampleRate = 0
+    private var currentChannels = 0
+
     var onServiceStarted: ((DabStation) -> Unit)? = null
     var onServiceStopped: (() -> Unit)? = null
     var onTunerReady: (() -> Unit)? = null
@@ -47,10 +56,26 @@ class DabTunerManager : TunerListener, RadioStatusListener {
      * Initialisiert die OMRI Radio API und sucht nach USB DAB-Dongles.
      */
     fun initialize(context: Context): Boolean {
-        if (isInitialized) return true
-
         try {
-            Log.i(TAG, "Initializing DAB+ tuner...")
+            Log.i(TAG, "Initializing DAB+ tuner... (isInitialized=$isInitialized)")
+
+            // Falls schon initialisiert, erst aufräumen
+            if (isInitialized) {
+                Log.i(TAG, "Already initialized, cleaning up first...")
+                try {
+                    val radio = Radio.getInstance()
+                    radio.unregisterRadioStatusListener(this)
+                    currentTuner?.let {
+                        it.stopRadioService()
+                        it.unsubscribe(this)
+                    }
+                    currentTuner = null
+                    currentService = null
+                } catch (e: Exception) {
+                    Log.w(TAG, "Cleanup error (ignored): ${e.message}")
+                }
+                isInitialized = false
+            }
 
             // OMRI Radio API initialisieren
             val radio = Radio.getInstance()
@@ -63,6 +88,24 @@ class DabTunerManager : TunerListener, RadioStatusListener {
             Log.i(TAG, "Radio.initialize result: $result")
 
             isInitialized = true
+
+            // Aktiv nach vorhandenen Tunern suchen
+            val tuners = radio.getAvailableTuners(TunerType.TUNER_TYPE_DAB)
+            Log.i(TAG, "Found ${tuners?.size ?: 0} DAB tuners")
+            if (tuners != null && tuners.isNotEmpty()) {
+                val tuner = tuners[0]
+                currentTuner = tuner
+                tuner.subscribe(this)
+                Log.i(TAG, "Tuner status: ${tuner.tunerStatus}")
+                if (tuner.tunerStatus == TunerStatus.TUNER_STATUS_NOT_INITIALIZED) {
+                    Log.i(TAG, "Initializing tuner...")
+                    tuner.initializeTuner()
+                } else if (tuner.tunerStatus == TunerStatus.TUNER_STATUS_INITIALIZED) {
+                    Log.i(TAG, "Tuner already initialized, triggering callback")
+                    mainHandler.post { onTunerReady?.invoke() }
+                }
+            }
+
             Log.i(TAG, "hasTuner after init: ${hasTuner()}, currentTuner=$currentTuner")
             return true
         } catch (e: Exception) {
@@ -117,64 +160,94 @@ class DabTunerManager : TunerListener, RadioStatusListener {
      * Startet den DAB+ Ensemble-Scan.
      */
     fun startScan(listener: DabScanListener) {
-        val tuner = currentTuner
-        if (tuner == null) {
-            listener.onScanError("Kein DAB+ Tuner verfügbar")
-            return
+        try {
+            val tuner = currentTuner
+            if (tuner == null) {
+                listener.onScanError("Kein DAB+ Tuner verfügbar")
+                return
+            }
+
+            if (tuner.tunerStatus == TunerStatus.TUNER_STATUS_SCANNING) {
+                listener.onScanError("Scan läuft bereits")
+                return
+            }
+
+            scanListener = listener
+            scannedServices.clear()
+
+            // Laufenden Service stoppen vor dem Scan
+            if (currentService != null) {
+                stopService()
+                Thread.sleep(300)
+            }
+
+            Log.i(TAG, "Starting DAB+ ensemble scan...")
+            tuner.startRadioServiceScan()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting scan: ${e.message}", e)
+            listener.onScanError("Tuner Error: ${e.message}")
         }
-
-        if (tuner.tunerStatus == TunerStatus.TUNER_STATUS_SCANNING) {
-            listener.onScanError("Scan läuft bereits")
-            return
-        }
-
-        scanListener = listener
-        scannedServices.clear()
-
-        // Laufenden Service stoppen vor dem Scan
-        if (currentService != null) {
-            stopService()
-            Thread.sleep(300)
-        }
-
-        Log.i(TAG, "Starting DAB+ ensemble scan...")
-        tuner.startRadioServiceScan()
     }
 
     /**
      * Stoppt den laufenden Scan.
      */
     fun stopScan() {
-        currentTuner?.stopRadioServiceScan()
+        try {
+            currentTuner?.stopRadioServiceScan()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping scan: ${e.message}", e)
+        }
     }
 
     /**
      * Spielt einen DAB+ Service ab.
      */
     fun tuneService(serviceId: Int, ensembleId: Int): Boolean {
-        val tuner = currentTuner ?: return false
-        val services = tuner.radioServices
+        try {
+            val tuner = currentTuner ?: return false
+            val services = tuner.radioServices
 
-        val service = services.filterIsInstance<RadioServiceDab>().find {
-            it.serviceId == serviceId && it.ensembleId == ensembleId
+            val service = services.filterIsInstance<RadioServiceDab>().find {
+                it.serviceId == serviceId && it.ensembleId == ensembleId
+            }
+
+            if (service != null) {
+                Log.i(TAG, "Tuning to service: ${service.serviceLabel} (SID: $serviceId, EID: $ensembleId)")
+
+                // Unsubscribe from old service
+                currentService?.unsubscribe(this)
+
+                // Subscribe to new service for audio data
+                service.subscribe(this)
+
+                tuner.startRadioService(service)
+                return true
+            }
+
+            Log.w(TAG, "Service not found: SID=$serviceId, EID=$ensembleId")
+            return false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error tuning to service: ${e.message}", e)
+            mainHandler.post { onTunerError?.invoke("Tuner Error: ${e.message}") }
+            return false
         }
-
-        if (service != null) {
-            Log.i(TAG, "Tuning to service: ${service.serviceLabel} (SID: $serviceId, EID: $ensembleId)")
-            tuner.startRadioService(service)
-            return true
-        }
-
-        Log.w(TAG, "Service not found: SID=$serviceId, EID=$ensembleId")
-        return false
     }
 
     /**
      * Stoppt den laufenden Service.
      */
     fun stopService() {
-        currentTuner?.stopRadioService()
-        currentService = null
+        try {
+            currentService?.unsubscribe(this)
+            currentTuner?.stopRadioService()
+            releaseAudioTrack()
+            currentService = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping service: ${e.message}", e)
+            releaseAudioTrack()
+            currentService = null
+        }
     }
 
     /**
@@ -305,9 +378,72 @@ class DabTunerManager : TunerListener, RadioStatusListener {
     override fun tunerDetached(tuner: Tuner) {
         Log.i(TAG, "Tuner detached")
         if (currentTuner == tuner) {
+            releaseAudioTrack()
             currentTuner = null
             currentService = null
             mainHandler.post { onTunerError?.invoke("DAB+ Gerät getrennt") }
         }
+    }
+
+    // === RadioServiceAudiodataListener ===
+
+    override fun pcmAudioData(data: ByteArray, channels: Int, sampleRate: Int) {
+        if (sampleRate <= 0 || channels <= 0) return
+        if (audioTrack == null || sampleRate != currentSampleRate || channels != currentChannels) {
+            createAudioTrack(sampleRate, channels)
+        }
+        try {
+            audioTrack?.write(data, 0, data.size)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error writing audio data: ${e.message}")
+        }
+    }
+
+    private fun createAudioTrack(sampleRate: Int, channels: Int) {
+        releaseAudioTrack()
+        currentSampleRate = sampleRate
+        currentChannels = channels
+
+        val channelMask = if (channels == 1) AudioFormat.CHANNEL_OUT_MONO else AudioFormat.CHANNEL_OUT_STEREO
+        val bufferSize = AudioTrack.getMinBufferSize(sampleRate, channelMask, AudioFormat.ENCODING_PCM_16BIT)
+        if (bufferSize < 1) {
+            Log.e(TAG, "Invalid buffer size: $bufferSize")
+            return
+        }
+
+        try {
+            audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                        .setSampleRate(sampleRate)
+                        .setChannelMask(channelMask)
+                        .build()
+                )
+                .setBufferSizeInBytes(bufferSize * 4)  // Larger buffer for smoother playback
+                .build()
+            audioTrack?.play()
+            Log.i(TAG, "AudioTrack created: sampleRate=$sampleRate, channels=$channels, bufferSize=$bufferSize")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating AudioTrack: ${e.message}", e)
+        }
+    }
+
+    private fun releaseAudioTrack() {
+        try {
+            audioTrack?.stop()
+            audioTrack?.release()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error releasing AudioTrack: ${e.message}")
+        }
+        audioTrack = null
+        currentSampleRate = 0
+        currentChannels = 0
     }
 }

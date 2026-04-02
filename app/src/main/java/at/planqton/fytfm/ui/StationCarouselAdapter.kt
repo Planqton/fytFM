@@ -37,6 +37,7 @@ class StationCarouselAdapter(
 
     fun setStations(newStations: List<StationItem>) {
         stations = newStations
+        selectedPosition = -1  // Reset selection when stations change
         notifyDataSetChanged()
     }
 

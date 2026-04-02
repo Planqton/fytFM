@@ -110,29 +110,13 @@ class DabManager(private val context: Context) :
     fun startPlayback(service: RadioService) {
         stopPlayback()
         currentService = service
-        service.subscribe(this)
-        Radio.getInstance().startRadioService(service)
+        activeTuner?.startRadioService(service)
         callback?.onServiceStarted(service)
-
-        // Load logo async
-        Thread {
-            try {
-                val logos = service.logos
-                if (logos != null && logos.isNotEmpty()) {
-                    val data = logos[0].visualData
-                    if (data != null && data.isNotEmpty()) {
-                        val bmp = BitmapFactory.decodeByteArray(data, 0, data.size)
-                        if (bmp != null) callback?.onLogo(bmp)
-                    }
-                }
-            } catch (_: Exception) {}
-        }.start()
     }
 
     fun stopPlayback() {
-        currentService?.let {
-            it.unsubscribe(this)
-            Radio.getInstance().stopRadioService(it)
+        if (currentService != null) {
+            activeTuner?.stopRadioService()
         }
         currentService = null
         releaseAudioTrack()
