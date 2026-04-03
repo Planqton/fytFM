@@ -212,12 +212,13 @@ class MediaButtonSession(
 
     /**
      * Metadata aktualisieren (synchron mit FytFMMediaService)
+     * @param subtitle - For FM/AM: frequency string like "98.3 MHz", for DAB: "DAB+" or ensemble label
      */
-    fun updateMetadata(stationName: String?, frequency: Float?, coverPath: String?) {
+    fun updateMetadata(stationName: String?, subtitle: String?, coverPath: String?) {
         try {
             val metadataBuilder = MediaMetadata.Builder()
                 .putString(MediaMetadata.METADATA_KEY_TITLE, stationName ?: "FM Radio")
-                .putString(MediaMetadata.METADATA_KEY_ARTIST, frequency?.let { String.format("%.1f MHz", it) } ?: "")
+                .putString(MediaMetadata.METADATA_KEY_ARTIST, subtitle ?: "")
                 .putString(MediaMetadata.METADATA_KEY_ALBUM, "fytFM")
 
             // Cover laden wenn vorhanden
@@ -238,7 +239,7 @@ class MediaButtonSession(
             }
 
             mediaSession?.setMetadata(metadataBuilder.build())
-            Log.d(TAG, "Metadata updated: station=$stationName, freq=$frequency")
+            Log.d(TAG, "Metadata updated: station=$stationName, subtitle=$subtitle")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update metadata", e)
         }

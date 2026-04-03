@@ -220,7 +220,12 @@ class FytFMMediaService : MediaLibraryService() {
         // Wenn RT vorhanden (Track gefunden), zeige "Artist - Title", sonst Sendername
         val displayForLegacy = rt?.takeIf { it.isNotBlank() } ?: stationName
         val coverForLegacy = localCoverPath ?: radioLogoPath
-        mediaButtonSession?.updateMetadata(displayForLegacy, frequency, coverForLegacy)
+        val subtitleForLegacy = if (isAM) {
+            "${frequency.toInt()} kHz"
+        } else {
+            String.format("%.1f MHz", frequency)
+        }
+        mediaButtonSession?.updateMetadata(displayForLegacy, subtitleForLegacy, coverForLegacy)
 
         Log.d(TAG, "Metadata updated: $freqDisplay | $stationName | $rt | data=${artworkData?.size ?: 0}b")
     }
@@ -274,7 +279,8 @@ class FytFMMediaService : MediaLibraryService() {
         // Legacy MediaButtonSession auch aktualisieren
         val displayForLegacy = dls?.takeIf { it.isNotBlank() } ?: stationName
         val coverForLegacy = radioLogoPath
-        mediaButtonSession?.updateMetadata(displayForLegacy, 0f, coverForLegacy)
+        val subtitleForLegacy = ensembleLabel ?: "DAB+"
+        mediaButtonSession?.updateMetadata(displayForLegacy, subtitleForLegacy, coverForLegacy)
 
         Log.d(TAG, "DAB Metadata updated: $stationName | $dls | data=${artworkData?.size ?: 0}b")
     }

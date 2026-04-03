@@ -87,6 +87,13 @@ class MainActivity : AppCompatActivity() {
     private var debugRt: TextView? = null
     private var debugRssi: TextView? = null
     private var debugFreq: TextView? = null
+    // Debug labels (for changing FM/DAB terminology)
+    private var debugPsLabel: TextView? = null
+    private var debugPiLabel: TextView? = null
+    private var debugPtyLabel: TextView? = null
+    private var debugRtLabel: TextView? = null
+    private var debugRssiLabel: TextView? = null
+    private var debugAfLabel: TextView? = null
     private var debugAf: TextView? = null
     private var debugAfUsing: TextView? = null
     private var debugTpTa: TextView? = null
@@ -1037,6 +1044,13 @@ class MainActivity : AppCompatActivity() {
         debugRssi = findViewById(R.id.debugRssi)
         debugFreq = findViewById(R.id.debugFreq)
         debugAf = findViewById(R.id.debugAf)
+        // Debug labels
+        debugPsLabel = findViewById(R.id.labelPs)
+        debugPiLabel = findViewById(R.id.labelPi)
+        debugPtyLabel = findViewById(R.id.labelPty)
+        debugRtLabel = findViewById(R.id.labelRt)
+        debugRssiLabel = findViewById(R.id.labelRssi)
+        debugAfLabel = findViewById(R.id.labelAf)
         debugAfUsing = findViewById(R.id.debugAfUsing)
         debugTpTa = findViewById(R.id.debugTpTa)
         checkRdsInfo = findViewById(R.id.checkRdsInfo)
@@ -2911,9 +2925,10 @@ class MainActivity : AppCompatActivity() {
                     android.util.Log.d("fytFM", "Carousel post-padding scroll: freq=$currentFreq, position=$position")
                     if (position >= 0) {
                         carouselNeedsInitialScroll = false
-                        // Use smoothScrollToPosition - the padding already handles centering
-                        smoothScrollToPosition(position)
-                        android.util.Log.d("fytFM", "Carousel smoothScrollToPosition $position")
+                        // Use scrollToPositionWithOffset to center the item
+                        val lm = layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+                        lm?.scrollToPositionWithOffset(position, padding)
+                        android.util.Log.d("fytFM", "Carousel scrollToPositionWithOffset $position, offset=$padding")
                     }
                 }
             }
@@ -3027,6 +3042,9 @@ class MainActivity : AppCompatActivity() {
             updateCarouselFavoriteIcon()
             val position = stationCarouselAdapter?.getPositionForDabService(currentDabServiceId) ?: -1
             android.util.Log.d("fytFM", "updateCarouselSelection DAB: serviceId=$currentDabServiceId, position=$position")
+            if (position >= 0) {
+                smoothScrollCarouselToCenter(position)
+            }
             return
         }
 
@@ -3128,11 +3146,37 @@ class MainActivity : AppCompatActivity() {
      * Smoothly scroll carousel to center the item at the given position
      */
     private fun smoothScrollCarouselToCenter(position: Int) {
-        android.util.Log.d("fytFM", "smoothScrollCarouselToCenter called with position=$position")
+        android.util.Log.d("fytFM", "smoothScrollCarouselToCenter called with position=$position, carousel=${stationCarousel != null}")
         if (position < 0) return
 
-        stationCarousel?.smoothScrollToPosition(position)
-        android.util.Log.d("fytFM", "Carousel smoothScrollToPosition $position")
+        stationCarousel?.let { recyclerView ->
+            val layoutManager = recyclerView.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+            if (layoutManager == null) {
+                android.util.Log.e("fytFM", "LayoutManager is null!")
+                return@let
+            }
+
+            // Calculate offset to center the item
+            val cardWidth = (216 * resources.displayMetrics.density).toInt()
+            val recyclerWidth = recyclerView.width
+
+            // If RecyclerView not yet laid out, post the scroll
+            if (recyclerWidth <= 0) {
+                android.util.Log.d("fytFM", "Carousel not yet laid out, posting scroll")
+                recyclerView.post {
+                    smoothScrollCarouselToCenter(position)
+                }
+                return@let
+            }
+
+            // The RecyclerView already has padding for centering, so offset should be 0
+            // This places the item at the start of the content area (after the left padding)
+            android.util.Log.d("fytFM", "Carousel scroll: pos=$position, recyclerWidth=$recyclerWidth, padding=${recyclerView.paddingLeft}")
+
+            // Use scrollToPositionWithOffset with offset 0 - padding handles centering
+            layoutManager.scrollToPositionWithOffset(position, 0)
+            android.util.Log.d("fytFM", "Carousel scrollToPositionWithOffset pos=$position, offset=0 DONE")
+        }
     }
 
     /**
@@ -3232,37 +3276,69 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Aktualisiert das Debug-Overlay für DAB-Modus mit DAB-spezifischen Infos
-     * DAB-Äquivalente zu RDS:
-     * - PS -> Service Label
-     * - PI -> Service ID (hex)
-     * - RT -> DLS (Dynamic Label Segment)
-     * - Freq -> Ensemble Frequenz
-     * - AF/TP/TA -> N/A
      */
     fun updateDabDebugInfo(dabStation: at.planqton.fytfm.dab.DabStation? = null, dls: String? = null) {
         if (debugOverlay?.visibility != View.VISIBLE) return
 
         // Header auf DAB Debug ändern
-        findViewById<android.widget.TextView>(R.id.debugHeader)?.text = "DAB Debug"
+        findViewById<android.widget.TextView>(R.id.debugHeader)?.text = "DAB+ Debug"
+
+        // Labels für DAB ändern
+        debugPsLabel?.text = "Label:"
+        debugPiLabel?.text = "SID:"
+        debugPtyLabel?.text = "Block:"
+        debugRtLabel?.text = "DLS:"
+        debugRssiLabel?.text = "SNR:"
+        debugAfLabel?.text = "EID:"
 
         dabStation?.let { station ->
-            // Service Label als PS-Äquivalent
+            // Service Label
             debugPs?.text = station.serviceLabel.ifEmpty { "--------" }
-            // Service ID als PI-Äquivalent (hex format)
+            // Service ID (hex format)
             debugPi?.text = String.format("0x%04X", station.serviceId)
-            // PTY - falls verfügbar (nicht in aktuellem DabStation)
-            debugPty?.text = "--"
-            // Ensemble Frequenz
-            debugFreq?.text = String.format("%.3f MHz", station.ensembleFrequencyKHz / 1000.0f)
-            // AF: Zeige Ensemble Label statt AF-Liste
-            debugAf?.text = station.ensembleLabel.ifEmpty { "----" }
-            // TP/TA nicht relevant für DAB
-            debugTpTa?.text = "N/A"
+            // Channel Block (5A, 5C, 6A, etc.)
+            val block = frequencyToChannelBlock(station.ensembleFrequencyKHz)
+            debugPty?.text = block
+            // Ensemble Frequenz mit Block (ensembleFrequencyKHz is actually in Hz)
+            debugFreq?.text = "$block (${String.format("%.3f", station.ensembleFrequencyKHz / 1000000.0f)} MHz)"
+            // Ensemble ID und Label
+            debugAf?.text = String.format("0x%04X %s", station.ensembleId, station.ensembleLabel)
+            // TP/TA wird für Quality genutzt
+            debugTpTa?.text = ""
             debugAfUsing?.text = ""
         }
 
-        // DLS (Dynamic Label) als RT-Äquivalent
+        // DLS (Dynamic Label)
         dls?.let { debugRt?.text = it.ifEmpty { "--------------------------------" } }
+    }
+
+    /**
+     * Aktualisiert die DAB Empfangsstatistiken im Debug-Overlay
+     */
+    private fun updateDabReceptionStats(sync: Boolean, quality: String, snr: Int) {
+        if (debugOverlay?.visibility != View.VISIBLE) return
+        // SNR im RSSI-Feld anzeigen
+        val syncStatus = if (sync) "✓" else "✗"
+        debugRssi?.text = "$snr dB $syncStatus"
+        // Quality im TP/TA-Feld
+        debugTpTa?.text = quality
+    }
+
+    /**
+     * Convert DAB frequency (kHz) to channel block name (e.g., 5A, 5B, 5C, 6A, etc.)
+     * Band III: 5A starts at 174.928 MHz, channel spacing is 1.712 MHz
+     */
+    private fun frequencyToChannelBlock(frequencyHz: Int): String {
+        // Note: Despite the old name "kHz", the value from OMRI is actually in Hz
+        val freqMhz = frequencyHz / 1000000.0
+        val index = kotlin.math.round((freqMhz - 174.928) / 1.712).toInt()
+
+        if (index < 0 || index > 40) return "?"
+
+        val channelNumber = 5 + (index / 4)
+        val subChannel = "ABCD"[index % 4]
+
+        return "$channelNumber$subChannel"
     }
 
     /**
@@ -3270,10 +3346,19 @@ class MainActivity : AppCompatActivity() {
      */
     fun resetDebugToRds() {
         findViewById<android.widget.TextView>(R.id.debugHeader)?.text = "RDS Debug"
+        // Labels zurück auf RDS
+        debugPsLabel?.text = "PS:"
+        debugPiLabel?.text = "PI:"
+        debugPtyLabel?.text = "PTY:"
+        debugRtLabel?.text = "RT:"
+        debugRssiLabel?.text = "RSSI:"
+        debugAfLabel?.text = "AF:"
+        // Werte zurücksetzen
         debugPs?.text = "--------"
         debugPi?.text = "----"
         debugPty?.text = "--"
         debugRt?.text = "--------------------------------"
+        debugRssi?.text = "-- dBm"
         debugFreq?.text = "-- MHz"
         debugAf?.text = "----"
         debugTpTa?.text = "--/--"
@@ -3314,6 +3399,15 @@ class MainActivity : AppCompatActivity() {
                     android.util.Log.e("fytFM", "Station tune error: ${e.message}")
                     android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
                 }
+            },
+            onStationLongClick = { station ->
+                // Long press opens radio editor for the station's mode
+                val mode = when {
+                    station.isDab -> FrequencyScaleView.RadioMode.DAB
+                    station.isAM -> FrequencyScaleView.RadioMode.AM
+                    else -> FrequencyScaleView.RadioMode.FM
+                }
+                showRadioEditorDialog(mode)
             },
             getLogoPath = { ps, pi, frequency ->
                 if (presetRepository.isShowLogosInFavorites()) {
@@ -5466,6 +5560,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val adapter = at.planqton.fytfm.ui.StationEditorAdapter(
+            getLogoPath = { ps, pi, freq -> radioLogoRepository.getLogoForStation(ps, pi, freq) },
             onEdit = { station ->
                 if (targetMode == FrequencyScaleView.RadioMode.DAB) {
                     showEditDabStationDialog(station) { newName ->
@@ -5542,9 +5637,304 @@ class MainActivity : AppCompatActivity() {
         adapter.setStations(stations)
         rvStations.adapter = adapter
 
+        // EXPERIMENTAL_LOGO_SEARCH: Logo Search Button
+        val btnLogoSearch = dialogView.findViewById<android.widget.Button>(R.id.btnLogoSearch)
+        btnLogoSearch.setOnClickListener {
+            dialog.dismiss()
+            showLogoSearchDialog(stations, targetMode)
+        }
+
         dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
         dialog.show()
     }
+
+    // EXPERIMENTAL_LOGO_SEARCH: Logo Search Dialog
+    private fun showLogoSearchDialog(stations: List<at.planqton.fytfm.data.RadioStation>, mode: FrequencyScaleView.RadioMode) {
+        val progressDialog = AlertDialog.Builder(this)
+            .setTitle("Logo Suche")
+            .setMessage("Suche Logos für ${stations.size} Sender...")
+            .setCancelable(false)
+            .create()
+        progressDialog.show()
+
+        val logoSearchService = at.planqton.fytfm.data.logo.LogoSearchService()
+
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                val results = logoSearchService.searchLogos(stations) { current, total, stationName ->
+                    runOnUiThread {
+                        progressDialog.setMessage("$current/$total: $stationName")
+                    }
+                }
+
+                progressDialog.dismiss()
+
+                // Filter results with found logos
+                val foundLogos = results.filter { it.logoUrl != null }
+
+                if (foundLogos.isEmpty()) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Keine Logos gefunden")
+                        .setMessage("Für keinen der ${stations.size} Sender konnte ein Logo gefunden werden.")
+                        .setPositiveButton("OK") { _, _ ->
+                            showRadioEditorDialog(mode)
+                        }
+                        .show()
+                    return@launch
+                }
+
+                // Show results dialog
+                showLogoSearchResultsDialog(foundLogos, results.size, mode)
+
+            } catch (e: Exception) {
+                progressDialog.dismiss()
+                android.util.Log.e("fytFM", "Logo search failed: ${e.message}", e)
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("Fehler")
+                    .setMessage("Logo-Suche fehlgeschlagen: ${e.message}")
+                    .setPositiveButton("OK") { _, _ ->
+                        showRadioEditorDialog(mode)
+                    }
+                    .show()
+            }
+        }
+    }
+
+    // EXPERIMENTAL_LOGO_SEARCH: Results Dialog - Tap to accept, item disappears
+    private fun showLogoSearchResultsDialog(
+        foundLogos: List<at.planqton.fytfm.data.logo.LogoSearchService.LogoSearchResult>,
+        totalSearched: Int,
+        mode: FrequencyScaleView.RadioMode
+    ) {
+        // Mutable list to track remaining logos
+        val remainingLogos = foundLogos.toMutableList()
+        var savedCount = 0
+
+        fun updateAndShowDialog() {
+            if (remainingLogos.isEmpty()) {
+                // All done
+                if (savedCount > 0) {
+                    android.widget.Toast.makeText(
+                        this,
+                        "$savedCount Logo(s) gespeichert",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+                showRadioEditorDialog(mode)
+                return
+            }
+
+            val container = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(32, 16, 32, 16)
+            }
+
+            // Summary
+            val summaryText = android.widget.TextView(this).apply {
+                text = "Tippe zum Übernehmen (${remainingLogos.size} übrig, $savedCount gespeichert)"
+                textSize = 13f
+                setTextColor(0xFF666666.toInt())
+                setPadding(0, 0, 0, 16)
+            }
+            container.addView(summaryText)
+
+            // ScrollView for results
+            val scrollView = android.widget.ScrollView(this).apply {
+                layoutParams = android.widget.LinearLayout.LayoutParams(
+                    android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+                    400.dpToPx()
+                )
+            }
+
+            val resultsList = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+            }
+
+            for (result in remainingLogos.toList()) {
+                val itemLayout = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.HORIZONTAL
+                    setPadding(16, 12, 16, 12)
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    isClickable = true
+                    isFocusable = true
+                    background = getDrawable(android.R.drawable.list_selector_background)
+                }
+
+                // Preview image
+                val imageView = android.widget.ImageView(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(56.dpToPx(), 56.dpToPx()).apply {
+                        marginEnd = 16.dpToPx()
+                    }
+                    scaleType = android.widget.ImageView.ScaleType.CENTER_CROP
+                    setBackgroundColor(0xFFEEEEEE.toInt())
+                }
+                imageView.load(result.logoUrl) {
+                    crossfade(true)
+                    placeholder(R.drawable.ic_cover_placeholder)
+                    error(R.drawable.ic_cover_placeholder)
+                }
+                itemLayout.addView(imageView)
+
+                // Station info
+                val infoLayout = android.widget.LinearLayout(this).apply {
+                    orientation = android.widget.LinearLayout.VERTICAL
+                    layoutParams = android.widget.LinearLayout.LayoutParams(0, android.widget.LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+
+                val nameText = android.widget.TextView(this).apply {
+                    text = result.stationName
+                    textSize = 16f
+                    setTextColor(0xFF333333.toInt())
+                }
+                infoLayout.addView(nameText)
+
+                val sourceText = android.widget.TextView(this).apply {
+                    text = result.source
+                    textSize = 12f
+                    setTextColor(0xFF888888.toInt())
+                }
+                infoLayout.addView(sourceText)
+
+                itemLayout.addView(infoLayout)
+
+                // Arrow icon to indicate clickable
+                val arrowIcon = android.widget.ImageView(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(24.dpToPx(), 24.dpToPx())
+                    setImageResource(android.R.drawable.ic_input_add)
+                    setColorFilter(0xFF4CAF50.toInt())
+                }
+                itemLayout.addView(arrowIcon)
+
+                resultsList.addView(itemLayout)
+
+                // Divider
+                val divider = android.view.View(this).apply {
+                    layoutParams = android.widget.LinearLayout.LayoutParams(
+                        android.widget.LinearLayout.LayoutParams.MATCH_PARENT, 1
+                    )
+                    setBackgroundColor(0xFFEEEEEE.toInt())
+                }
+                resultsList.addView(divider)
+            }
+
+            scrollView.addView(resultsList)
+            container.addView(scrollView)
+
+            val dialog = AlertDialog.Builder(this)
+                .setTitle("Logo Suchergebnisse")
+                .setView(container)
+                .setNegativeButton("Fertig") { dlg, _ ->
+                    dlg.dismiss()
+                    if (savedCount > 0) {
+                        android.widget.Toast.makeText(
+                            this,
+                            "$savedCount Logo(s) gespeichert",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    showRadioEditorDialog(mode)
+                }
+                .setOnCancelListener {
+                    if (savedCount > 0) {
+                        android.widget.Toast.makeText(
+                            this,
+                            "$savedCount Logo(s) gespeichert",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    showRadioEditorDialog(mode)
+                }
+                .create()
+
+            // Set click listeners for each item after dialog is created
+            var itemIndex = 0
+            for (i in 0 until resultsList.childCount step 2) { // Skip dividers
+                val itemLayout = resultsList.getChildAt(i)
+                val resultIndex = itemIndex
+                if (resultIndex < remainingLogos.size) {
+                    val result = remainingLogos[resultIndex]
+                    itemLayout.setOnClickListener {
+                        // Save this logo
+                        saveSingleLogo(result, mode)
+                        savedCount++
+                        remainingLogos.remove(result)
+                        dialog.dismiss()
+                        updateAndShowDialog()
+                    }
+                }
+                itemIndex++
+            }
+
+            dialog.show()
+        }
+
+        updateAndShowDialog()
+    }
+
+    // EXPERIMENTAL_LOGO_SEARCH: Save a single logo
+    private fun saveSingleLogo(
+        result: at.planqton.fytfm.data.logo.LogoSearchService.LogoSearchResult,
+        mode: FrequencyScaleView.RadioMode
+    ) {
+        val templateName = "Auto-Search-${mode.name}"
+        val logoUrl = result.logoUrl ?: return
+        val station = result.station
+
+        // Get or create template
+        var template = radioLogoRepository.getTemplates().find { it.name == templateName }
+        val existingStations = template?.stations?.toMutableList() ?: mutableListOf()
+
+        // Create StationLogo entry
+        val stationLogo = if (station.isDab) {
+            at.planqton.fytfm.data.logo.StationLogo(
+                ps = station.name,
+                logoUrl = logoUrl
+            )
+        } else {
+            at.planqton.fytfm.data.logo.StationLogo(
+                ps = station.name,
+                frequencies = listOf(station.frequency),
+                logoUrl = logoUrl
+            )
+        }
+
+        // Remove existing entry for this station (if any)
+        existingStations.removeAll { existing ->
+            if (station.isDab) {
+                existing.ps == station.name
+            } else {
+                existing.frequencies?.any { Math.abs(it - station.frequency) < 0.05f } == true
+            }
+        }
+
+        existingStations.add(stationLogo)
+
+        // Save template
+        val newTemplate = at.planqton.fytfm.data.logo.RadioLogoTemplate(
+            name = templateName,
+            area = 2,
+            stations = existingStations
+        )
+        radioLogoRepository.saveTemplate(newTemplate)
+
+        // Set as active if no active template
+        if (radioLogoRepository.getActiveTemplateName() == null) {
+            radioLogoRepository.setActiveTemplate(templateName)
+        }
+
+        // Download this single logo in background
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val (updatedTemplate, _) = radioLogoRepository.downloadLogos(newTemplate) { _, _ -> }
+                radioLogoRepository.saveTemplate(updatedTemplate)
+            } catch (e: Exception) {
+                android.util.Log.e("fytFM", "Failed to download logo: ${e.message}", e)
+            }
+        }
+    }
+
+    // Helper extension for dp to px conversion
+    private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
 
     private fun showEditStationDialog(station: at.planqton.fytfm.data.RadioStation, onSave: (String, Boolean) -> Unit) {
         // Create container for name input and toggles
@@ -5791,6 +6181,7 @@ class MainActivity : AppCompatActivity() {
         val dabStations = presetRepository.loadDabStations()
         if (dabStations.isEmpty()) return
 
+        val oldServiceId = currentDabServiceId
         val currentIndex = dabStations.indexOfFirst { it.serviceId == currentDabServiceId }
         val newIndex = if (forward) {
             if (currentIndex < 0 || currentIndex >= dabStations.size - 1) 0 else currentIndex + 1
@@ -5808,6 +6199,8 @@ class MainActivity : AppCompatActivity() {
             }
             updateCarouselSelection()
             updateFavoriteButton()
+            // Show station change overlay
+            showDabStationChangeOverlay(newStation.serviceId, oldServiceId)
             android.util.Log.i("fytFM", "skipDabStation: -> ${newStation.name} (SID=${newStation.serviceId})")
         } catch (e: Exception) {
             android.util.Log.e("fytFM", "skipDabStation error: ${e.message}")
@@ -5856,6 +6249,50 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             android.util.Log.e("fytFM", "Failed to show overlay: ${e.message}")
+        }
+    }
+
+    private fun showDabStationChangeOverlay(serviceId: Int, oldServiceId: Int = 0) {
+        if (!presetRepository.isShowStationChangeToast()) return
+
+        // Build DAB stations JSON
+        val stationsJson = try {
+            val jsonArray = org.json.JSONArray()
+            val dabStations = presetRepository.loadDabStations()
+            dabStations.forEach { station ->
+                val logoPath = radioLogoRepository.getLogoForStation(station.name, null, 0f)
+                val obj = org.json.JSONObject().apply {
+                    put("frequency", 0.0)
+                    put("name", station.name ?: "")
+                    put("logoPath", logoPath ?: "")
+                    put("isAM", false)
+                    put("isDab", true)
+                    put("serviceId", station.serviceId)
+                }
+                jsonArray.put(obj)
+            }
+            jsonArray.toString()
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Error building DAB stations JSON: ${e.message}")
+            null
+        }
+
+        val intent = android.content.Intent(this, StationChangeOverlayService::class.java).apply {
+            action = StationChangeOverlayService.ACTION_SHOW_OVERLAY
+            putExtra(StationChangeOverlayService.EXTRA_IS_DAB, true)
+            putExtra(StationChangeOverlayService.EXTRA_DAB_SERVICE_ID, serviceId)
+            putExtra(StationChangeOverlayService.EXTRA_DAB_OLD_SERVICE_ID, oldServiceId)
+            putExtra(StationChangeOverlayService.EXTRA_APP_IN_FOREGROUND, isAppInForeground)
+            stationsJson?.let { putExtra(StationChangeOverlayService.EXTRA_STATIONS, it) }
+        }
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Failed to show DAB overlay: ${e.message}")
         }
     }
 
@@ -6604,6 +7041,11 @@ class MainActivity : AppCompatActivity() {
                         slideshowBitmap = bitmap,
                         radioLogoPath = radioLogoPath
                     )
+                }
+
+                // Empfangsqualität (SNR, Sync, Quality)
+                dabTunerManager.onReceptionStats = { sync, quality, snr ->
+                    updateDabReceptionStats(sync, quality, snr)
                 }
 
                 val success = dabTunerManager.initialize(this)

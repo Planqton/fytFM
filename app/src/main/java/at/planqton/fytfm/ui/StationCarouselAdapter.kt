@@ -7,6 +7,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import at.planqton.fytfm.R
+import coil.dispose
 import coil.load
 import java.io.File
 
@@ -158,6 +159,8 @@ class StationCarouselAdapter(
                     }
                 }
             } else {
+                // Cancel any pending Coil load and show placeholder
+                holder.stationLogo.dispose()
                 holder.stationLogo.setImageResource(placeholder)
             }
         } else {
@@ -167,6 +170,8 @@ class StationCarouselAdapter(
                     crossfade(true)
                 }
             } else {
+                // Cancel any pending Coil load and show placeholder
+                holder.stationLogo.dispose()
                 holder.stationLogo.setImageResource(placeholder)
             }
         }

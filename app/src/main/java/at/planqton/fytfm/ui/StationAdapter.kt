@@ -9,11 +9,13 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import at.planqton.fytfm.R
 import at.planqton.fytfm.data.RadioStation
+import coil.dispose
 import coil.load
 import java.io.File
 
 class StationAdapter(
     private val onStationClick: (RadioStation) -> Unit,
+    private val onStationLongClick: ((RadioStation) -> Unit)? = null,
     private val getLogoPath: ((ps: String?, pi: Int?, frequency: Float) -> String?)? = null
 ) : RecyclerView.Adapter<StationAdapter.StationViewHolder>() {
 
@@ -69,6 +71,10 @@ class StationAdapter(
         holder.itemView.setOnClickListener {
             (overrideClickListener ?: onStationClick)(station)
         }
+        holder.itemView.setOnLongClickListener {
+            onStationLongClick?.invoke(station)
+            true
+        }
     }
 
     override fun getItemCount(): Int = stations.size
@@ -101,6 +107,8 @@ class StationAdapter(
                     crossfade(true)
                 }
             } else {
+                // Cancel any pending Coil load to prevent stale images
+                ivStationLogo.dispose()
                 ivStationLogo.visibility = View.GONE
             }
 

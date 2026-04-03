@@ -60,6 +60,7 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
     var onDynamicLabel: ((String) -> Unit)? = null  // DLS - DAB Äquivalent zu RDS RT
     var onDlPlus: ((artist: String?, title: String?) -> Unit)? = null  // DL+ Tags für Artist/Title
     var onSlideshow: ((Bitmap) -> Unit)? = null  // MOT Slideshow - Bilder vom DAB-Sender
+    var onReceptionStats: ((sync: Boolean, quality: String, snr: Int) -> Unit)? = null  // Empfangsqualität
 
     val isDabOn: Boolean get() = isInitialized && currentTuner != null
 
@@ -389,7 +390,7 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
                 ensembleLabel = service.ensembleLabel ?: "",
                 ensembleFrequencyKHz = service.ensembleFrequency
             )
-            Log.i(TAG, "Service started: ${dabStation.serviceLabel}")
+            Log.i(TAG, "Service started: ${dabStation.serviceLabel}, freq=${service.ensembleFrequency}, freqKhz=${dabStation.ensembleFrequencyKHz}")
             mainHandler.post { onServiceStarted?.invoke(dabStation) }
         }
     }
@@ -401,7 +402,12 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
     }
 
     override fun tunerReceptionStatistics(tuner: Tuner, sync: Boolean, quality: ReceptionQuality, snr: Int) {
-        // Empfangsqualität - könnte für UI genutzt werden
+        // Convert enum to readable string (name format: RECEPTION_QUALITY_EXCELLENT -> Excellent)
+        val qualityStr = quality.name
+            .removePrefix("RECEPTION_QUALITY_")
+            .lowercase()
+            .replaceFirstChar { it.uppercase() }
+        mainHandler.post { onReceptionStats?.invoke(sync, qualityStr, snr) }
     }
 
     override fun dabDateTime(tuner: Tuner, date: Date) {

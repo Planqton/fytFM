@@ -9,11 +9,15 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import at.planqton.fytfm.R
 import at.planqton.fytfm.data.RadioStation
+import coil.dispose
+import coil.load
+import java.io.File
 
 class StationEditorAdapter(
     private val onEdit: (RadioStation) -> Unit,
     private val onFavorite: (RadioStation) -> Unit,
-    private val onDelete: (RadioStation) -> Unit
+    private val onDelete: (RadioStation) -> Unit,
+    private val getLogoPath: ((ps: String?, pi: Int?, frequency: Float) -> String?)? = null
 ) : RecyclerView.Adapter<StationEditorAdapter.ViewHolder>() {
 
     private var stations = listOf<RadioStation>()
@@ -59,6 +63,19 @@ class StationEditorAdapter(
                 if (station.isDab) station.ensembleLabel ?: "Unbekannt" else "Uncustomised Name"
             } else {
                 station.name
+            }
+
+            // Station Logo
+            val logoPath = getLogoPath?.invoke(station.name, null, station.frequency)
+            if (logoPath != null) {
+                ivLogo.visibility = View.VISIBLE
+                ivLogo.load(File(logoPath)) {
+                    crossfade(true)
+                }
+            } else {
+                // Cancel any pending Coil load to prevent stale images
+                ivLogo.dispose()
+                ivLogo.visibility = View.GONE
             }
 
             // Favorite icon

@@ -24,6 +24,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.LinearSmoothScroller
 import androidx.recyclerview.widget.RecyclerView
 import at.planqton.fytfm.data.PresetRepository
+import coil.dispose
 import coil.load
 import java.io.File
 
@@ -38,6 +39,10 @@ class StationChangeOverlayService : Service() {
         const val EXTRA_STATIONS = "stations"
         const val EXTRA_IS_AM = "is_am"
         const val EXTRA_APP_IN_FOREGROUND = "app_in_foreground"
+        // DAB extras
+        const val EXTRA_IS_DAB = "is_dab"
+        const val EXTRA_DAB_SERVICE_ID = "dab_service_id"
+        const val EXTRA_DAB_OLD_SERVICE_ID = "dab_old_service_id"
         private const val CHANNEL_ID = "station_change_overlay"
         private const val NOTIFICATION_ID = 2001
     }
@@ -46,7 +51,9 @@ class StationChangeOverlayService : Service() {
         val frequency: Float,
         val name: String?,
         val logoPath: String?,
-        val isAM: Boolean = false
+        val isAM: Boolean = false,
+        val isDab: Boolean = false,
+        val serviceId: Int = 0
     )
 
     private var windowManager: WindowManager? = null
@@ -116,6 +123,9 @@ class StationChangeOverlayService : Service() {
                     val frequency = it.getFloatExtra(EXTRA_FREQUENCY, 0f)
                     val oldFrequency = it.getFloatExtra(EXTRA_OLD_FREQUENCY, 0f)
                     val isAM = it.getBooleanExtra(EXTRA_IS_AM, false)
+                    val isDab = it.getBooleanExtra(EXTRA_IS_DAB, false)
+                    val dabServiceId = it.getIntExtra(EXTRA_DAB_SERVICE_ID, 0)
+                    val dabOldServiceId = it.getIntExtra(EXTRA_DAB_OLD_SERVICE_ID, 0)
                     val appInForeground = it.getBooleanExtra(EXTRA_APP_IN_FOREGROUND, false)
 
                     // Don't show overlay if app is in foreground (unless permanent mode)
@@ -129,7 +139,9 @@ class StationChangeOverlayService : Service() {
                         parseStations(stationsJson)
                     }
 
-                    if (frequency > 0 && (presetRepository.isShowStationChangeToast() || isPermanentMode)) {
+                    if (isDab && dabServiceId > 0 && (presetRepository.isShowStationChangeToast() || isPermanentMode)) {
+                        showDabOverlay(dabServiceId, dabOldServiceId)
+                    } else if (frequency > 0 && (presetRepository.isShowStationChangeToast() || isPermanentMode)) {
                         // Don't change isPermanentMode here - keep it as is
                         showOverlay(frequency, isAM, oldFrequency)
                     }
@@ -168,7 +180,9 @@ class StationChangeOverlayService : Service() {
                     frequency = obj.getDouble("frequency").toFloat(),
                     name = obj.optString("name").takeIf { it.isNotBlank() },
                     logoPath = obj.optString("logoPath").takeIf { it.isNotBlank() },
-                    isAM = obj.optBoolean("isAM", false)
+                    isAM = obj.optBoolean("isAM", false),
+                    isDab = obj.optBoolean("isDab", false),
+                    serviceId = obj.optInt("serviceId", 0)
                 ))
             }
             currentStations = stations
@@ -285,6 +299,90 @@ class StationChangeOverlayService : Service() {
         }
     }
 
+    private fun showDabOverlay(serviceId: Int, oldServiceId: Int = 0) {
+        handler.post {
+            try {
+                // Cancel all previous callbacks
+                handler.removeCallbacks(hideOverlayRunnable)
+                scrollToNewRunnable?.let { handler.removeCallbacks(it) }
+                centerRunnable?.let { handler.removeCallbacks(it) }
+
+                if (overlayView == null) {
+                    createOverlayView()
+                }
+
+                // Update adapter - mark the NEW station as selected (use serviceId for DAB)
+                carouselAdapter?.setDabStations(currentStations, serviceId)
+
+                // Find position of NEW station by serviceId
+                val newPosition = currentStations.indexOfFirst { it.isDab && it.serviceId == serviceId }
+
+                val wasAlreadyVisible = isOverlayVisible
+
+                if (!wasAlreadyVisible) {
+                    // ERSTMALIGES Öffnen - Anker = vorheriger Sender
+                    anchorPosition = if (oldServiceId > 0) {
+                        currentStations.indexOfFirst { it.isDab && it.serviceId == oldServiceId }
+                    } else {
+                        newPosition
+                    }
+
+                    // Overlay unsichtbar hinzufügen
+                    overlayView?.alpha = 0f
+                    addOverlayToWindow()
+
+                    // Nach Layout: Scroll so dass BEIDE (Anker und neuer) sichtbar sind
+                    recyclerView?.post {
+                        val layoutManager = recyclerView?.layoutManager as? LinearLayoutManager ?: return@post
+                        if (anchorPosition >= 0) {
+                            val rvWidth = recyclerView?.width ?: 0
+                            val offset = rvWidth / 4
+                            layoutManager.scrollToPositionWithOffset(anchorPosition, offset)
+                        }
+                        overlayView?.alpha = 1f
+                    }
+                } else {
+                    // Netflix-Style: Nur scrollen wenn neues Item am Rand oder außerhalb
+                    recyclerView?.let { rv ->
+                        val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return@let
+                        val firstComplete = layoutManager.findFirstCompletelyVisibleItemPosition()
+                        val lastComplete = layoutManager.findLastCompletelyVisibleItemPosition()
+
+                        if (newPosition < firstComplete || newPosition > lastComplete) {
+                            rv.smoothScrollToPosition(newPosition)
+                        }
+                    }
+                }
+
+                // Nach 2 Sek: Fokussiertes Item in die Mitte scrollen
+                centerRunnable = Runnable {
+                    if (newPosition >= 0) {
+                        recyclerView?.let { rv ->
+                            val layoutManager = rv.layoutManager as? LinearLayoutManager ?: return@let
+                            val targetView = layoutManager.findViewByPosition(newPosition)
+                            if (targetView != null) {
+                                val rvCenter = rv.width / 2
+                                val viewCenter = targetView.left + targetView.width / 2
+                                val scrollBy = viewCenter - rvCenter
+                                rv.smoothScrollBy(scrollBy, 0)
+                            } else {
+                                rv.smoothScrollToPosition(newPosition)
+                            }
+                        }
+                    }
+                }
+                handler.postDelayed(centerRunnable!!, 2000)
+
+                if (!isPermanentMode) {
+                    handler.postDelayed(hideOverlayRunnable, 3000)
+                }
+
+            } catch (e: Exception) {
+                android.util.Log.e("fytFM", "Error showing DAB overlay: ${e.message}")
+            }
+        }
+    }
+
     private fun createOverlayView() {
         val inflater = LayoutInflater.from(this)
         overlayView = inflater.inflate(R.layout.overlay_station_carousel, null)
@@ -388,11 +486,21 @@ class StationChangeOverlayService : Service() {
         private var stations: List<StationData> = emptyList()
         private var selectedFrequency: Float = 0f
         private var selectedIsAM: Boolean = false
+        private var selectedServiceId: Int = 0
+        private var isDabMode: Boolean = false
 
         fun setStations(newStations: List<StationData>, frequency: Float, isAM: Boolean) {
             stations = newStations
             selectedFrequency = frequency
             selectedIsAM = isAM
+            isDabMode = false
+            notifyDataSetChanged()
+        }
+
+        fun setDabStations(newStations: List<StationData>, serviceId: Int) {
+            stations = newStations
+            selectedServiceId = serviceId
+            isDabMode = true
             notifyDataSetChanged()
         }
 
@@ -404,20 +512,27 @@ class StationChangeOverlayService : Service() {
 
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val station = stations[position]
-            val isSelected = Math.abs(station.frequency - selectedFrequency) < 0.05f &&
-                             station.isAM == selectedIsAM
-
-            // Format frequency
-            val freqText = if (station.isAM) {
-                station.frequency.toInt().toString()
+            val isSelected = if (isDabMode) {
+                station.isDab && station.serviceId == selectedServiceId
             } else {
-                "%.2f".format(station.frequency).replace(".", ",")
+                Math.abs(station.frequency - selectedFrequency) < 0.05f && station.isAM == selectedIsAM
             }
-            holder.frequencyText.text = freqText
-            holder.bandLabel.text = if (station.isAM) "AM" else "FM"
 
-            // Station name inline
-            holder.stationNameInline.text = if (!station.name.isNullOrBlank()) " ${station.name}" else ""
+            // Format frequency/name based on mode
+            if (station.isDab) {
+                holder.frequencyText.text = station.name ?: "DAB+"
+                holder.bandLabel.text = "DAB+"
+                holder.stationNameInline.text = ""
+            } else {
+                val freqText = if (station.isAM) {
+                    station.frequency.toInt().toString()
+                } else {
+                    "%.2f".format(station.frequency).replace(".", ",")
+                }
+                holder.frequencyText.text = freqText
+                holder.bandLabel.text = if (station.isAM) "AM" else "FM"
+                holder.stationNameInline.text = if (!station.name.isNullOrBlank()) " ${station.name}" else ""
+            }
 
             // Scaling for selected
             val scale = if (isSelected) 1.0f else 0.75f
@@ -426,21 +541,22 @@ class StationChangeOverlayService : Service() {
             holder.itemView.alpha = if (isSelected) 1.0f else 0.5f
 
             // Station name
-            if (!station.name.isNullOrBlank()) {
+            if (!station.name.isNullOrBlank() && !station.isDab) {
                 holder.stationName.text = station.name
                 holder.stationName.visibility = View.VISIBLE
             } else {
                 holder.stationName.visibility = View.GONE
             }
 
-            // Logo - mit FM/AM Platzhalter falls kein Logo vorhanden
+            // Logo - dispose any pending load first to prevent caching issues
+            holder.stationLogo.dispose()
             holder.stationLogo.visibility = View.VISIBLE
             if (!station.logoPath.isNullOrBlank()) {
                 holder.stationLogo.load(File(station.logoPath)) {
                     crossfade(true)
                 }
             } else {
-                // Platzhalter je nach Band
+                // Use FM placeholder for DAB as well (no dedicated DAB placeholder)
                 val placeholder = if (station.isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
                 holder.stationLogo.setImageResource(placeholder)
             }

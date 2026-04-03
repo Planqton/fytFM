@@ -268,6 +268,10 @@ class RadioLogoRepository(private val context: Context) {
             }
         }
 
+        if (bestMatch != null) {
+            Log.d(TAG, "getLogoForStation: ps='$ps' matched template ps='${bestMatch.ps}' with priority=$bestPriority -> ${bestMatch.localPath}")
+        }
+
         return bestMatch?.localPath
     }
 
