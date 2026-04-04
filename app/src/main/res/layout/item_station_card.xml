@@ -7,7 +7,7 @@
     android:layout_margin="8dp"
     app:cardCornerRadius="16dp"
     app:cardElevation="4dp"
-    app:cardBackgroundColor="#FFFFFF">
+    app:cardBackgroundColor="@color/card_background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -39,7 +39,7 @@
                 android:layout_height="wrap_content"
                 android:text="FM"
                 android:textSize="18sp"
-                android:textColor="#5C8BC8"
+                android:textColor="@color/card_text_primary"
                 android:fontFamily="sans-serif-medium" />
 
             <TextView
@@ -48,7 +48,7 @@
                 android:layout_height="wrap_content"
                 android:text=""
                 android:textSize="10sp"
-                android:textColor="#888888"
+                android:textColor="@color/card_text_secondary"
                 android:fontFamily="sans-serif"
                 android:maxWidth="100dp"
                 android:maxLines="1"
@@ -60,7 +60,7 @@
                 android:layout_height="12dp"
                 android:layout_marginStart="2dp"
                 android:src="@drawable/ic_signal"
-                android:tint="#888888" />
+                app:tint="@color/card_text_secondary" />
 
         </LinearLayout>
 
@@ -71,7 +71,7 @@
             android:layout_height="wrap_content"
             android:text="103.70"
             android:textSize="36sp"
-            android:textColor="#5C8BC8"
+            android:textColor="@color/card_text_primary"
             android:fontFamily="sans-serif-light" />
 
         <!-- Station Name (PS) -->
@@ -82,7 +82,7 @@
             android:layout_marginTop="4dp"
             android:text=""
             android:textSize="12sp"
-            android:textColor="#666666"
+            android:textColor="@color/card_text_tertiary"
             android:maxLines="1"
             android:ellipsize="end"
             android:visibility="gone" />

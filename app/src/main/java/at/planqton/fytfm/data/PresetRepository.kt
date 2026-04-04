@@ -402,6 +402,16 @@ class PresetRepository(private val context: Context) {
         settingsPrefs.edit().putBoolean("auto_background_only_on_boot", onlyOnBoot).apply()
     }
 
+    // Dark Mode Settings
+    // 0 = System, 1 = Light, 2 = Dark
+    fun getDarkModePreference(): Int {
+        return settingsPrefs.getInt("dark_mode_preference", 0)
+    }
+
+    fun setDarkModePreference(mode: Int) {
+        settingsPrefs.edit().putInt("dark_mode_preference", mode).apply()
+    }
+
     // Tuner Settings
     fun isLocalMode(): Boolean {
         return settingsPrefs.getBoolean("local_mode", false)

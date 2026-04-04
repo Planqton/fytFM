@@ -97,6 +97,8 @@ dependencies {
     implementation("com.github.mik3y:usb-serial-for-android:3.8.1")
 
     testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

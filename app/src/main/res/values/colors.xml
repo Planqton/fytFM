@@ -17,4 +17,22 @@
     <color name="radio_accent">#FFC52322</color>
     <color name="radio_scale_line">#FF9E9E9E</color>
     <color name="radio_play_button_bg">#FFEEEEEE</color>
+
+    <!-- Card Colors -->
+    <color name="card_background">#FFFFFFFF</color>
+    <color name="card_background_selected">#FFFFFFFF</color>
+    <color name="card_text_primary">#FF5C8BC8</color>
+    <color name="card_text_secondary">#FF888888</color>
+    <color name="card_text_tertiary">#FF666666</color>
+
+    <!-- Now Playing Bar -->
+    <color name="now_playing_background">#FFEEEEEE</color>
+    <color name="now_playing_border">#FFDDDDDD</color>
+    <color name="now_playing_text">#FF333333</color>
+    <color name="now_playing_subtext">#FF666666</color>
+
+    <!-- Dialog/Overlay Colors -->
+    <color name="dialog_background">#FFFFFFFF</color>
+    <color name="dialog_text">#FF333333</color>
+    <color name="overlay_background">#CCFFFFFF</color>
 </resources>

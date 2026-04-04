@@ -111,6 +111,43 @@
     <string name="seek_started_prev">Seek ◀ started…</string>
     <string name="seek_started_next">Seek ▶ started…</string>
     <string name="root_required_message">Root access is being used for FM control (DUDU7)</string>
+    <string name="tuner_not_available">Tuner for %s not available</string>
+    <string name="tuner_error">Tuner Error: %s</string>
+    <string name="tuner_error_fm_start">Tuner Error: FM Radio could not be started</string>
+    <string name="tuner_error_dab_not_found">Tuner Error: DAB station not found</string>
+    <string name="dab_init_failed">DAB+ initialization failed</string>
+    <string name="dab_stations_found">%d DAB+ stations found</string>
+    <string name="station_renamed">Station renamed: %s</string>
+    <string name="cache_cleared">Cache cleared</string>
+    <string name="deezer_enabled">Deezer enabled</string>
+    <string name="deezer_disabled">Deezer disabled</string>
+    <string name="cannot_open_deezer">Cannot open Deezer</string>
+    <string name="export_failed">Export failed: %s</string>
+    <string name="import_failed">Import failed: %s</string>
+    <string name="imported_template">Imported: %s</string>
+    <string name="file_read_error">File could not be read</string>
+    <string name="template_saved">Template saved</string>
+    <string name="name_cannot_be_empty">Name cannot be empty</string>
+    <string name="template_name_exists">Template with this name already exists</string>
+    <string name="enter_search_term">Enter search term</string>
+    <string name="logo_downloaded">Logo downloaded</string>
+    <string name="logo_download_failed">Logo download failed: %s</string>
+    <string name="provide_ps_pi_or_freq">Provide at least PS, PI or frequency</string>
+    <string name="logo_url_required">Logo URL required</string>
+    <string name="bug_report_saved">Bug report saved to Downloads/fytFM/</string>
+    <string name="bug_report_error">Error creating bug report</string>
+
+    <!-- Settings -->
+    <string name="dark_mode">Dark Mode</string>
+    <string name="dark_mode_system">System</string>
+    <string name="dark_mode_light">Light</string>
+    <string name="dark_mode_dark">Dark</string>
+    <string name="auto_background">Auto-Background</string>
+    <string name="auto_background_delay">Delay</string>
+    <string name="auto_background_only_on_boot">Only on autostart</string>
+    <string name="autostart_on_boot">Autostart on boot</string>
+    <string name="not_supported_fyt">Not supported on FYT devices</string>
+    <string name="seconds_format">%d seconds</string>
 
     <!-- Scan Dialog -->
     <string name="station_scan">Station Scan</string>

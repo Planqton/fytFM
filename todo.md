@@ -2,22 +2,23 @@
 
 ## Hohe Priorität
 
-- [ ] **MainActivity Refactoring** - 7.500+ Zeilen aufteilen
-  - DAB-Logik in eigene Klasse extrahieren
-  - FM/AM-Logik in eigene Klasse extrahieren
-  - MVVM Pattern implementieren (ViewModel)
-  - UI-State in StateFlow auslagern
+- [x] **MainActivity Refactoring** - 7.500+ Zeilen aufteilen
+  - [x] DAB-Logik in eigene Klasse extrahieren (DabController)
+  - [x] FM/AM-Logik in eigene Klasse extrahieren (FmAmController)
+  - [x] RadioController als Koordinator erstellt
+  - [ ] MVVM Pattern implementieren (ViewModel)
+  - [ ] UI-State in StateFlow auslagern
 
 ## Mittlere Priorität
 
-- [ ] **Unit Tests hinzufügen**
-  - RtCombiner testen
-  - PresetRepository testen
-  - RadioScanner testen
+- [x] **Unit Tests hinzufügen**
+  - [x] RtCombiner testen (RtCombinerTest.kt)
+  - [x] PresetRepository testen (PresetRepositoryTest.kt)
+  - [ ] RadioScanner testen
 
-- [ ] **Error Handling verbessern**
-  - DeezerClient Netzwerk-Fehler besser abfangen
-  - Fallbacks für fehlgeschlagene API-Calls
+- [x] **Error Handling verbessern**
+  - [x] DeezerClient Netzwerk-Fehler besser abfangen (Retry-Logik, DeezerError sealed class)
+  - [x] Fallbacks für fehlgeschlagene API-Calls
 
 - [ ] **DAB+ UI verbessern**
   - Eigenes DAB+ Icon statt FM-Icon
@@ -25,9 +26,9 @@
 
 ## Niedrige Priorität
 
-- [ ] **Dark Mode** implementieren
+- [x] **Dark Mode** implementieren (System/Hell/Dunkel in Settings)
 
-- [ ] **Hard-coded Strings** in strings.xml verschieben
+- [x] **Hard-coded Strings** in strings.xml verschieben (EN + DE)
 
 - [ ] **Accessibility** verbessern
   - Content Descriptions hinzufügen
@@ -48,3 +49,6 @@
 - [x] Station Carousel
 - [x] Auto-Background Timer
 - [x] Overlay bei Senderwechsel
+- [x] Dark Mode Support
+- [x] Controller-Architektur (DabController, FmAmController, RadioController)
+- [x] Unit Tests für Core-Komponenten

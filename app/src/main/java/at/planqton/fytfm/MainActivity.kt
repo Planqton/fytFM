@@ -15,6 +15,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import android.widget.ProgressBar
@@ -335,6 +336,30 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Apply dark mode from saved preference before Activity is created.
+     * Called early in onCreate before setContentView.
+     */
+    private fun applyDarkModeFromPreference() {
+        // Must use same prefs name as PresetRepository ("settings")
+        val prefs = getSharedPreferences("settings", Context.MODE_PRIVATE)
+        val mode = prefs.getInt("dark_mode_preference", 0)
+        applyDarkMode(mode)
+    }
+
+    /**
+     * Apply dark mode based on selection.
+     * 0 = System, 1 = Light, 2 = Dark
+     */
+    private fun applyDarkMode(mode: Int) {
+        val nightMode = when (mode) {
+            1 -> AppCompatDelegate.MODE_NIGHT_NO      // Light
+            2 -> AppCompatDelegate.MODE_NIGHT_YES    // Dark
+            else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM  // System default
+        }
+        AppCompatDelegate.setDefaultNightMode(nightMode)
+    }
+
+    /**
      * Setzt uns als bevorzugte App für com.syu.radio Intent.
      * Funktioniert nur als System-App.
      */
@@ -369,6 +394,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Apply dark mode preference before setting content
+        applyDarkModeFromPreference()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
@@ -3982,6 +4009,23 @@ class MainActivity : AppCompatActivity() {
         switchDebug.setOnCheckedChangeListener { _, isChecked ->
             presetRepository.setShowDebugInfos(isChecked)
             updateDebugOverlayVisibility()
+        }
+
+        // Dark Mode spinner
+        val spinnerDarkMode = dialogView.findViewById<Spinner>(R.id.spinnerDarkMode)
+        val darkModeOptions = arrayOf("System", "Hell", "Dunkel")
+        val darkModeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, darkModeOptions)
+        darkModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerDarkMode.adapter = darkModeAdapter
+        spinnerDarkMode.setSelection(presetRepository.getDarkModePreference())
+        spinnerDarkMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                if (presetRepository.getDarkModePreference() != position) {
+                    presetRepository.setDarkModePreference(position)
+                    applyDarkMode(position)
+                }
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
         // Autostart bei Boot toggle

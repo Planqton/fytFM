@@ -106,6 +106,43 @@
     <string name="seek_started_prev">Seek ◀ gestartet…</string>
     <string name="seek_started_next">Seek ▶ gestartet…</string>
     <string name="root_required_message">Root-Zugriff wird für FM-Steuerung verwendet (DUDU7)</string>
+    <string name="tuner_not_available">Tuner für %s nicht verfügbar</string>
+    <string name="tuner_error">Tuner Fehler: %s</string>
+    <string name="tuner_error_fm_start">Tuner Fehler: FM Radio konnte nicht gestartet werden</string>
+    <string name="tuner_error_dab_not_found">Tuner Fehler: DAB Sender nicht gefunden</string>
+    <string name="dab_init_failed">DAB+ Initialisierung fehlgeschlagen</string>
+    <string name="dab_stations_found">%d DAB+ Sender gefunden</string>
+    <string name="station_renamed">Sender umbenannt: %s</string>
+    <string name="cache_cleared">Cache gelöscht</string>
+    <string name="deezer_enabled">Deezer aktiviert</string>
+    <string name="deezer_disabled">Deezer deaktiviert</string>
+    <string name="cannot_open_deezer">Kann Deezer nicht öffnen</string>
+    <string name="export_failed">Export fehlgeschlagen: %s</string>
+    <string name="import_failed">Import fehlgeschlagen: %s</string>
+    <string name="imported_template">Importiert: %s</string>
+    <string name="file_read_error">Datei konnte nicht gelesen werden</string>
+    <string name="template_saved">Template gespeichert</string>
+    <string name="name_cannot_be_empty">Name darf nicht leer sein</string>
+    <string name="template_name_exists">Template mit diesem Namen existiert bereits</string>
+    <string name="enter_search_term">Suchbegriff eingeben</string>
+    <string name="logo_downloaded">Logo heruntergeladen</string>
+    <string name="logo_download_failed">Logo-Download fehlgeschlagen: %s</string>
+    <string name="provide_ps_pi_or_freq">Mindestens PS, PI oder Frequenz angeben</string>
+    <string name="logo_url_required">Logo-URL erforderlich</string>
+    <string name="bug_report_saved">Bug Report gespeichert in Downloads/fytFM/</string>
+    <string name="bug_report_error">Fehler beim Erstellen des Bug Reports</string>
+
+    <!-- Settings -->
+    <string name="dark_mode">Dark Mode</string>
+    <string name="dark_mode_system">System</string>
+    <string name="dark_mode_light">Hell</string>
+    <string name="dark_mode_dark">Dunkel</string>
+    <string name="auto_background">Auto-Background</string>
+    <string name="auto_background_delay">Verzögerung</string>
+    <string name="auto_background_only_on_boot">Nur bei Autostart</string>
+    <string name="autostart_on_boot">Autostart bei Boot</string>
+    <string name="not_supported_fyt">Nicht unterstützt auf FYT-Geräten</string>
+    <string name="seconds_format">%d Sekunden</string>
 
     <!-- Scan Dialog -->
     <string name="station_scan">Sendersuche</string>

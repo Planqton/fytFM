@@ -1,16 +1,47 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Theme.FytFM" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
+    <!-- Dark Mode application theme. -->
+    <style name="Theme.FytFM" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/purple_200</item>
-        <item name="colorPrimaryVariant">@color/purple_700</item>
-        <item name="colorOnPrimary">@color/black</item>
+        <item name="colorPrimary">@color/radio_background</item>
+        <item name="colorPrimaryVariant">@color/radio_background</item>
+        <item name="colorOnPrimary">@color/radio_text_primary</item>
         <!-- Secondary brand color. -->
-        <item name="colorSecondary">@color/teal_200</item>
-        <item name="colorSecondaryVariant">@color/teal_200</item>
-        <item name="colorOnSecondary">@color/black</item>
+        <item name="colorSecondary">@color/radio_indicator</item>
+        <item name="colorSecondaryVariant">@color/radio_indicator</item>
+        <item name="colorOnSecondary">@color/white</item>
         <!-- Status bar color. -->
-        <item name="android:statusBarColor">?attr/colorPrimaryVariant</item>
-        <!-- Customize your theme here. -->
+        <item name="android:statusBarColor">@color/radio_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <!-- Navigation bar -->
+        <item name="android:navigationBarColor">@color/radio_background</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <!-- Background -->
+        <item name="android:windowBackground">@color/radio_background</item>
+        <!-- Dialog Theme -->
+        <item name="alertDialogTheme">@style/FytFM.AlertDialog</item>
+        <item name="android:alertDialogTheme">@style/FytFM.AlertDialog</item>
+    </style>
+
+    <!-- AlertDialog Style Dark -->
+    <style name="FytFM.AlertDialog" parent="ThemeOverlay.MaterialComponents.Dialog.Alert">
+        <item name="colorPrimary">#CCCCCC</item>
+        <item name="colorAccent">#CCCCCC</item>
+        <item name="buttonBarPositiveButtonStyle">@style/FytFM.DialogButton</item>
+        <item name="buttonBarNegativeButtonStyle">@style/FytFM.DialogButton</item>
+        <item name="buttonBarNeutralButtonStyle">@style/FytFM.DialogButton</item>
+        <item name="android:background">@color/radio_background</item>
+    </style>
+
+    <style name="FytFM.DialogButton" parent="Widget.MaterialComponents.Button.TextButton.Dialog">
+        <item name="android:textColor">#CCCCCC</item>
+    </style>
+
+    <!-- Transparent Dialog Style -->
+    <style name="TransparentDialog" parent="Theme.MaterialComponents.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowMinWidthMajor">90%</item>
+        <item name="android:windowMinWidthMinor">90%</item>
     </style>
 </resources>

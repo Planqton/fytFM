@@ -5,6 +5,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import at.planqton.fytfm.R
 import coil.dispose
@@ -116,11 +118,20 @@ class StationCarouselAdapter(
         // Station name inline (next to FM/AM label)
         holder.stationNameInline.text = if (!station.name.isNullOrBlank()) " ${station.name}" else ""
 
-        // Card scaling for selected item
+        // Card scaling and styling for selected item
         val scale = if (isSelected) 1.0f else 0.85f
         holder.itemView.scaleX = scale
         holder.itemView.scaleY = scale
         holder.itemView.alpha = if (isSelected) 1.0f else 0.7f
+
+        // Set card background color based on selection (for proper dark mode support)
+        val cardView = holder.itemView as? CardView
+        val bgColor = if (isSelected) {
+            ContextCompat.getColor(holder.itemView.context, R.color.card_background_selected)
+        } else {
+            ContextCompat.getColor(holder.itemView.context, R.color.card_background)
+        }
+        cardView?.setCardBackgroundColor(bgColor)
 
         // Station name (PS)
         if (!station.name.isNullOrBlank()) {
