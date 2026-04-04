@@ -15,7 +15,7 @@
         android:paddingTop="24dp"
         android:paddingBottom="20dp"
         android:text="@string/settings_title"
-        android:textColor="#333333"
+        android:textColor="@color/dialog_text"
         android:textSize="20sp"
         android:textStyle="bold" />
 
@@ -67,7 +67,7 @@
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
                     android:text="Beim Start einschalten"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
             </LinearLayout>
@@ -91,7 +91,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Sender bearbeiten"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
                 <ImageView
@@ -128,14 +128,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/loc_local_only"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/loc_description"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -168,14 +168,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/mono_noise_reduction"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/mono_description"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -206,7 +206,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/radio_area"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
@@ -214,7 +214,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/area_europe"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -248,7 +248,7 @@
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
                     android:text="@string/auto_scan_sensitivity"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
             </LinearLayout>
@@ -279,14 +279,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Deezer Cover"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Album-Cover via Deezer laden"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -336,7 +336,7 @@
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
                     android:text="Beim Start einschalten"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
             </LinearLayout>
@@ -360,7 +360,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Sender bearbeiten"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
                 <ImageView
@@ -414,7 +414,7 @@
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
                     android:text="Beim Start einschalten"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
             </LinearLayout>
@@ -438,7 +438,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="Sender bearbeiten"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
                 <ImageView
@@ -475,14 +475,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Deezer Cover"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Album-Cover via Deezer (statt Slideshow)"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -505,7 +505,7 @@
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
                 android:text="ALLGEMEIN"
-                android:textColor="#666666"
+                android:textColor="@color/radio_text_secondary"
                 android:textSize="12sp"
                 android:textAllCaps="true"
                 android:letterSpacing="0.1" />
@@ -531,36 +531,55 @@
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
                     android:text="@string/show_debug_infos"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
             </LinearLayout>
 
             <!-- Dark Mode Toggle -->
+            <!-- Dark Mode Setting -->
             <LinearLayout
+                android:id="@+id/darkModeRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:minHeight="56dp"
+                android:minHeight="64dp"
                 android:orientation="horizontal"
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
-                android:gravity="center_vertical">
+                android:gravity="center_vertical"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true">
 
-                <TextView
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Dark Mode"
-                    android:textColor="#333333"
-                    android:textSize="16sp" />
+                    android:orientation="vertical">
 
-                <Spinner
-                    android:id="@+id/spinnerDarkMode"
-                    android:layout_width="wrap_content"
-                    android:layout_height="40dp"
-                    android:minWidth="120dp"
-                    android:background="@drawable/spinner_background"
-                    android:popupBackground="@color/white" />
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Dark Mode"
+                        android:textColor="@color/dialog_text"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/tvDarkModeValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="System"
+                        android:textColor="@color/radio_text_secondary"
+                        android:textSize="13sp"
+                        android:layout_marginTop="2dp" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:tint="@color/radio_text_secondary" />
 
             </LinearLayout>
 
@@ -593,14 +612,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Autostart bei Boot"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Nicht unterstützt auf FYT-Geräten"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -633,14 +652,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Auto-Background"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="App geht nach X Sekunden in den Hintergrund"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -671,7 +690,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Sekunden:"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="14sp" />
 
                     <SeekBar
@@ -690,7 +709,7 @@
                         android:layout_width="40dp"
                         android:layout_height="wrap_content"
                         android:text="5s"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="14sp"
                         android:gravity="end" />
 
@@ -715,7 +734,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginStart="12dp"
                         android:text="Nur bei Autostart"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="14sp" />
 
                 </LinearLayout>
@@ -748,14 +767,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Overlay bei Senderwechsel"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Popup bei Lenkradtasten"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -788,14 +807,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Prev/Next vertauschen"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Lenkradtasten Richtung umkehren"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -819,7 +838,7 @@
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
                 android:text="RADIO LOGOS"
-                android:textColor="#666666"
+                android:textColor="@color/radio_text_secondary"
                 android:textSize="12sp"
                 android:textAllCaps="true"
                 android:letterSpacing="0.1" />
@@ -848,7 +867,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Logo Template Manager"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
@@ -856,7 +875,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Kein Template"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -890,7 +909,7 @@
                     android:layout_weight="1"
                     android:layout_marginStart="16dp"
                     android:text="Logos in Favoriten anzeigen"
-                    android:textColor="#333333"
+                    android:textColor="@color/dialog_text"
                     android:textSize="16sp" />
 
             </LinearLayout>
@@ -912,7 +931,7 @@
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
                 android:text="@string/section_app"
-                android:textColor="#666666"
+                android:textColor="@color/radio_text_secondary"
                 android:textSize="12sp"
                 android:textAllCaps="true"
                 android:letterSpacing="0.1" />
@@ -941,7 +960,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/app_version"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
@@ -949,7 +968,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="v1.0.0"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -994,7 +1013,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/language"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
@@ -1002,7 +1021,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/language_system"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -1039,7 +1058,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Now Playing Animation"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
@@ -1047,7 +1066,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Slide"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -1086,14 +1105,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Correction Helpers"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Trash/Refresh in Now Playing"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -1124,7 +1143,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="RT Korrektur Regeln"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
@@ -1132,7 +1151,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="0 Korrekturen"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -1162,7 +1181,7 @@
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
                 android:text="@string/section_rds_archive"
-                android:textColor="#666666"
+                android:textColor="@color/radio_text_secondary"
                 android:textSize="12sp"
                 android:textAllCaps="true"
                 android:letterSpacing="0.1" />
@@ -1193,14 +1212,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/rds_logging"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/rds_logging_desc"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -1231,7 +1250,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/archive_retention"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
@@ -1239,7 +1258,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/days_format"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -1284,7 +1303,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="@string/entries_format"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -1308,7 +1327,7 @@
                 android:paddingTop="16dp"
                 android:paddingBottom="8dp"
                 android:text="DEEZER"
-                android:textColor="#666666"
+                android:textColor="@color/radio_text_secondary"
                 android:textSize="12sp"
                 android:textAllCaps="true"
                 android:letterSpacing="0.1" />
@@ -1333,14 +1352,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Lokaler Cache"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Tracks lokal speichern"
-                        android:textColor="#666666"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>
@@ -1362,7 +1381,7 @@
                 android:paddingEnd="24dp"
                 android:paddingTop="4dp"
                 android:text="Cache: 0 Tracks"
-                android:textColor="#666666"
+                android:textColor="@color/radio_text_secondary"
                 android:textSize="12sp" />
 
             <!-- Deezer Cache Buttons -->
@@ -1467,14 +1486,14 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Bug Report erstellen"
-                        android:textColor="#333333"
+                        android:textColor="@color/dialog_text"
                         android:textSize="16sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Logs in Downloads speichern"
-                        android:textColor="#888888"
+                        android:textColor="@color/radio_text_secondary"
                         android:textSize="12sp" />
 
                 </LinearLayout>

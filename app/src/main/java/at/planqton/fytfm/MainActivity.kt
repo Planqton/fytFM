@@ -4011,21 +4011,24 @@ class MainActivity : AppCompatActivity() {
             updateDebugOverlayVisibility()
         }
 
-        // Dark Mode spinner
-        val spinnerDarkMode = dialogView.findViewById<Spinner>(R.id.spinnerDarkMode)
+        // Dark Mode setting
         val darkModeOptions = arrayOf("System", "Hell", "Dunkel")
-        val darkModeAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, darkModeOptions)
-        darkModeAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerDarkMode.adapter = darkModeAdapter
-        spinnerDarkMode.setSelection(presetRepository.getDarkModePreference())
-        spinnerDarkMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                if (presetRepository.getDarkModePreference() != position) {
-                    presetRepository.setDarkModePreference(position)
-                    applyDarkMode(position)
+        val tvDarkModeValue = dialogView.findViewById<TextView>(R.id.tvDarkModeValue)
+        tvDarkModeValue.text = darkModeOptions[presetRepository.getDarkModePreference()]
+
+        val darkModeRow = dialogView.findViewById<LinearLayout>(R.id.darkModeRow)
+        darkModeRow.setOnClickListener {
+            val currentSelection = presetRepository.getDarkModePreference()
+            AlertDialog.Builder(this)
+                .setTitle("Dark Mode")
+                .setSingleChoiceItems(darkModeOptions, currentSelection) { dialog, which ->
+                    presetRepository.setDarkModePreference(which)
+                    tvDarkModeValue.text = darkModeOptions[which]
+                    applyDarkMode(which)
+                    dialog.dismiss()
                 }
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
+                .setNegativeButton("Abbrechen", null)
+                .show()
         }
 
         // Autostart bei Boot toggle
