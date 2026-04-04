@@ -3,6 +3,7 @@ package at.planqton.fytfm.ui
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
@@ -23,6 +24,18 @@ class DabStripAdapter(
     fun setStations(newStations: List<RadioStation>) {
         stations = newStations
         notifyDataSetChanged()
+    }
+
+    fun updateFavoriteStatus(serviceId: Int, isFavorite: Boolean) {
+        val position = stations.indexOfFirst { it.serviceId == serviceId }
+        if (position >= 0) {
+            // Update the station in our list
+            stations = stations.toMutableList().also {
+                it[position] = it[position].copy(isFavorite = isFavorite)
+            }
+            // Force immediate refresh
+            notifyDataSetChanged()
+        }
     }
 
     fun setSelectedStation(serviceId: Int) {
@@ -79,6 +92,9 @@ class DabStripAdapter(
         holder.stationName.setTextColor(textColor)
         holder.ensemble.setTextColor(secondaryColor)
 
+        // Show favorite indicator
+        holder.favoriteIcon.visibility = if (station.isFavorite) View.VISIBLE else View.GONE
+
         holder.itemView.setOnClickListener {
             onStationClick(station)
         }
@@ -87,5 +103,6 @@ class DabStripAdapter(
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val stationName: TextView = view.findViewById(R.id.stripStationName)
         val ensemble: TextView = view.findViewById(R.id.stripEnsemble)
+        val favoriteIcon: ImageView = view.findViewById(R.id.stripFavoriteIcon)
     }
 }

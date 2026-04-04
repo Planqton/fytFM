@@ -339,7 +339,8 @@
                     android:id="@+id/dabListCover"
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
-                    android:scaleType="centerCrop"
+                    android:scaleType="fitCenter"
+                    android:padding="32dp"
                     android:background="@drawable/dab_cover_placeholder"
                     android:layout_gravity="center" />
 
@@ -396,17 +397,61 @@
                     android:maxLines="4"
                     android:ellipsize="end" />
 
-                <!-- Favorite Button -->
-                <ImageButton
-                    android:id="@+id/dabListFavoriteBtn"
-                    android:layout_width="48dp"
-                    android:layout_height="48dp"
+                <!-- Action Buttons Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:layout_marginTop="24dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:src="@drawable/ic_favorite_border"
-                    android:scaleType="fitCenter"
-                    android:padding="8dp"
-                    android:contentDescription="Favorite" />
+                    android:orientation="horizontal"
+                    android:gravity="center">
+
+                    <!-- Mode Spinner -->
+                    <Spinner
+                        android:id="@+id/dabListModeSpinner"
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:spinnerMode="dropdown"
+                        android:gravity="center"
+                        android:dropDownWidth="120dp" />
+
+                    <!-- Favorite Button -->
+                    <ImageButton
+                        android:id="@+id/dabListFavoriteBtn"
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
+                        android:layout_marginStart="20dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_favorite_border"
+                        android:scaleType="fitCenter"
+                        android:padding="18dp"
+                        android:contentDescription="Favorite" />
+
+                    <!-- Favorites Filter Toggle -->
+                    <ImageButton
+                        android:id="@+id/dabListFilterBtn"
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
+                        android:layout_marginStart="20dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_folder"
+                        android:scaleType="fitCenter"
+                        android:padding="18dp"
+                        android:contentDescription="Filter favorites" />
+
+                    <!-- Settings Button -->
+                    <ImageButton
+                        android:id="@+id/dabListSettingsBtn"
+                        android:layout_width="80dp"
+                        android:layout_height="80dp"
+                        android:layout_marginStart="20dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_settings"
+                        android:scaleType="fitCenter"
+                        android:padding="18dp"
+                        android:contentDescription="Settings" />
+
+                </LinearLayout>
 
             </LinearLayout>
 

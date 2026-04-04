@@ -211,6 +211,8 @@ class MainActivity : AppCompatActivity() {
     private var dabListEnsemble: TextView? = null
     private var dabListRadiotext: TextView? = null
     private var dabListFavoriteBtn: ImageButton? = null
+    private var dabListFilterBtn: ImageButton? = null
+    private var dabListSettingsBtn: ImageButton? = null
     private var dabListStationStrip: RecyclerView? = null
     private var dabListMainArea: View? = null
     private var dabStripAdapter: at.planqton.fytfm.ui.DabStripAdapter? = null
@@ -2463,6 +2465,8 @@ class MainActivity : AppCompatActivity() {
         dabListEnsemble = findViewById(R.id.dabListEnsemble)
         dabListRadiotext = findViewById(R.id.dabListRadiotext)
         dabListFavoriteBtn = findViewById(R.id.dabListFavoriteBtn)
+        dabListFilterBtn = findViewById(R.id.dabListFilterBtn)
+        dabListSettingsBtn = findViewById(R.id.dabListSettingsBtn)
         dabListStationStrip = findViewById(R.id.dabListStationStrip)
         dabListMainArea = findViewById(R.id.dabListMainArea)
 
@@ -2486,6 +2490,55 @@ class MainActivity : AppCompatActivity() {
             if (currentDabServiceId != -1) {
                 val isFav = presetRepository.toggleDabFavorite(currentDabServiceId)
                 updateDabListFavoriteIcon(isFav)
+                // Reload both station adapters to show updated favorite
+                refreshDabStationStrip()
+                loadStationsForCurrentMode()
+            }
+        }
+
+        // Favorites filter toggle button
+        dabListFilterBtn?.setOnClickListener {
+            toggleFavoritesFilter()
+            updateDabListFilterIcon()
+        }
+
+        // Settings button
+        dabListSettingsBtn?.setOnClickListener {
+            showSettingsDialog()
+        }
+
+        // Mode spinner
+        val dabListModeSpinner = findViewById<Spinner>(R.id.dabListModeSpinner)
+        dabListModeSpinner?.let { spinner ->
+            val adapter = android.widget.ArrayAdapter.createFromResource(
+                this, R.array.radio_modes, R.layout.item_radio_mode_spinner
+            )
+            adapter.setDropDownViewResource(R.layout.item_radio_mode_dropdown)
+            spinner.adapter = adapter
+            spinner.setSelection(2) // DAB is position 2
+
+            spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                private var isInitialSelection = true
+
+                override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                    if (isInitialSelection) {
+                        isInitialSelection = false
+                        return
+                    }
+
+                    val newMode = when (position) {
+                        0 -> FrequencyScaleView.RadioMode.FM
+                        1 -> FrequencyScaleView.RadioMode.AM
+                        2 -> FrequencyScaleView.RadioMode.DAB
+                        else -> FrequencyScaleView.RadioMode.FM
+                    }
+
+                    if (newMode != FrequencyScaleView.RadioMode.DAB) {
+                        setRadioMode(newMode)
+                    }
+                }
+
+                override fun onNothingSelected(parent: AdapterView<*>?) {}
             }
         }
 
@@ -2494,44 +2547,106 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Setup swipe gestures for DAB List Mode main area
+     * Setup swipe gestures for DAB List Mode main area with visual feedback
      */
-    private fun setupDabListSwipeGestures() {
-        val gestureDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
-            private val SWIPE_THRESHOLD = 100
-            private val SWIPE_VELOCITY_THRESHOLD = 100
+    private var dabSwipeFlingDetected = false
 
+    private fun setupDabListSwipeGestures() {
+        var startX = 0f
+        var isSwiping = false
+        val maxTranslation = 150f // Max pixels to translate during drag
+        val swipeThreshold = 100
+        val swipeVelocityThreshold = 100
+
+        val gestureDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
             override fun onFling(e1: android.view.MotionEvent?, e2: android.view.MotionEvent, velocityX: Float, velocityY: Float): Boolean {
                 if (e1 == null) return false
                 val diffX = e2.x - e1.x
                 val diffY = e2.y - e1.y
 
                 if (Math.abs(diffX) > Math.abs(diffY) &&
-                    Math.abs(diffX) > SWIPE_THRESHOLD &&
-                    Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+                    Math.abs(diffX) > swipeThreshold &&
+                    Math.abs(velocityX) > swipeVelocityThreshold) {
 
-                    if (diffX > 0) {
-                        // Swipe right -> previous station
-                        navigateDabListStation(-1)
-                    } else {
-                        // Swipe left -> next station
-                        navigateDabListStation(1)
-                    }
+                    dabSwipeFlingDetected = true
+                    val direction = if (diffX > 0) -1 else 1
+                    // Animate out, change station, animate in
+                    animateDabListStationChange(direction)
                     return true
                 }
                 return false
             }
 
             override fun onSingleTapConfirmed(e: android.view.MotionEvent): Boolean {
-                // Single tap could toggle play/pause or do nothing
                 return true
             }
         })
 
-        dabListMainArea?.setOnTouchListener { _, event ->
+        dabListMainArea?.setOnTouchListener { view, event ->
             gestureDetector.onTouchEvent(event)
+
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    startX = event.x
+                    isSwiping = true
+                    dabSwipeFlingDetected = false
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (isSwiping && !dabSwipeFlingDetected) {
+                        val deltaX = event.x - startX
+                        // Apply damping factor for smoother feel
+                        val translation = (deltaX * 0.4f).coerceIn(-maxTranslation, maxTranslation)
+                        view.translationX = translation
+                        // Slight alpha change for feedback
+                        view.alpha = 1f - (Math.abs(translation) / maxTranslation) * 0.15f
+                    }
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    if (isSwiping && !dabSwipeFlingDetected) {
+                        // Animate back to original position (no fling detected)
+                        view.animate()
+                            .translationX(0f)
+                            .alpha(1f)
+                            .setDuration(200)
+                            .setInterpolator(android.view.animation.DecelerateInterpolator())
+                            .start()
+                    }
+                    isSwiping = false
+                }
+            }
             true
         }
+    }
+
+    /**
+     * Animate station change with slide effect
+     */
+    private fun animateDabListStationChange(direction: Int) {
+        val view = dabListMainArea ?: return
+        val slideDistance = view.width.toFloat() * 0.3f
+
+        // Animate out
+        view.animate()
+            .translationX(if (direction > 0) -slideDistance else slideDistance)
+            .alpha(0.3f)
+            .setDuration(150)
+            .setInterpolator(android.view.animation.AccelerateInterpolator())
+            .withEndAction {
+                // Change station
+                navigateDabListStation(direction)
+
+                // Reset position to opposite side
+                view.translationX = if (direction > 0) slideDistance else -slideDistance
+
+                // Animate in
+                view.animate()
+                    .translationX(0f)
+                    .alpha(1f)
+                    .setDuration(200)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator())
+                    .start()
+            }
+            .start()
     }
 
     /**
@@ -2562,6 +2677,35 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Refresh DAB station strip to reflect current favorite status
+     */
+    private fun refreshDabStationStrip() {
+        val strip = dabListStationStrip ?: return
+        val serviceId = currentDabServiceId
+
+        // Load fresh data
+        val stations = presetRepository.loadDabStations()
+        android.util.Log.d("fytFM", "refreshDabStationStrip: ${stations.size} stations, current fav count: ${stations.count { it.isFavorite }}")
+
+        // Create new adapter with fresh data
+        val newAdapter = at.planqton.fytfm.ui.DabStripAdapter { station ->
+            tuneToDabStation(station.serviceId, station.ensembleId)
+        }
+        newAdapter.setStations(stations)
+        newAdapter.setSelectedStation(serviceId)
+
+        // Replace adapter
+        dabStripAdapter = newAdapter
+        strip.adapter = newAdapter
+
+        // Scroll to current station
+        val position = newAdapter.getPositionForServiceId(serviceId)
+        if (position >= 0) {
+            strip.scrollToPosition(position)
+        }
+    }
+
+    /**
      * Update DAB List Mode selection to current station
      */
     private fun updateDabListModeSelection() {
@@ -2587,7 +2731,7 @@ class MainActivity : AppCompatActivity() {
             // Update favorite icon
             updateDabListFavoriteIcon(station.isFavorite)
 
-            // Load cover image: Station logo -> Slideshow -> FM placeholder
+            // Load cover image: Station logo -> Slideshow -> DAB+ icon fallback (light version for dark bg)
             val stationLogo = radioLogoRepository.getLogoForStation(
                 ps = station.name,
                 pi = null,
@@ -2596,21 +2740,21 @@ class MainActivity : AppCompatActivity() {
             if (stationLogo != null) {
                 dabListCover?.load(java.io.File(stationLogo)) {
                     crossfade(true)
-                    placeholder(R.drawable.placeholder_fm)
-                    error(R.drawable.placeholder_fm)
+                    placeholder(R.drawable.ic_fytfm_dab_plus_light)
+                    error(R.drawable.ic_fytfm_dab_plus_light)
                 }
             } else if (currentDabSlideshow != null) {
                 // Use current slideshow if available
                 dabListCover?.setImageBitmap(currentDabSlideshow)
             } else {
-                // Fallback to FM placeholder
-                dabListCover?.setImageResource(R.drawable.placeholder_fm)
+                // Fallback to DAB+ icon (light version for dark background)
+                dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
             }
         } else {
             dabListStationName?.text = "Kein Sender"
             dabListEnsemble?.text = ""
             dabListRadiotext?.text = ""
-            dabListCover?.setImageResource(R.drawable.placeholder_fm)
+            dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
         }
     }
 
@@ -2640,6 +2784,15 @@ class MainActivity : AppCompatActivity() {
     private fun updateDabListFavoriteIcon(isFavorite: Boolean) {
         dabListFavoriteBtn?.setImageResource(
             if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
+        )
+    }
+
+    /**
+     * Update filter icon in DAB List Mode based on showFavoritesOnly state
+     */
+    private fun updateDabListFilterIcon() {
+        dabListFilterBtn?.setImageResource(
+            if (showFavoritesOnly) R.drawable.ic_folder else R.drawable.ic_folder_all
         )
     }
 

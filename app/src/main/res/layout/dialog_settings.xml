@@ -35,16 +35,17 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="24dp"
+                android:background="@drawable/settings_section_header_bg"
+                android:paddingStart="20dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
                 android:text="FM"
                 android:textColor="#FEAA2D"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 android:textAllCaps="true"
-                android:letterSpacing="0.1" />
+                android:letterSpacing="0.15" />
 
             <!-- FM Power on at Startup -->
             <LinearLayout
@@ -55,6 +56,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_power"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchPowerOnStartupFm"
@@ -86,6 +94,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_edit"
+                    android:tint="#757575" />
+
                 <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -111,6 +126,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_signal"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchLocalMode"
@@ -151,6 +173,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_headphones"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchMonoMode"
@@ -196,6 +225,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_globe"
+                    android:tint="#757575" />
+
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -237,6 +273,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_search"
+                    android:tint="#757575" />
+
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchAutoScanSensitivity"
                     android:layout_width="52dp"
@@ -262,6 +305,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_image"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchDeezerFm"
@@ -304,16 +354,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="24dp"
+                android:background="@drawable/settings_section_header_bg"
+                android:paddingStart="20dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:layout_marginTop="8dp"
                 android:text="AM"
                 android:textColor="#FEAA2D"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 android:textAllCaps="true"
-                android:letterSpacing="0.1" />
+                android:letterSpacing="0.15" />
 
             <!-- AM Power on at Startup -->
             <LinearLayout
@@ -324,6 +376,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_power"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchPowerOnStartupAm"
@@ -355,6 +414,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_edit"
+                    android:tint="#757575" />
+
                 <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -382,16 +448,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="24dp"
+                android:background="@drawable/settings_section_header_bg"
+                android:paddingStart="20dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:layout_marginTop="8dp"
                 android:text="DAB+"
                 android:textColor="#FEAA2D"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 android:textAllCaps="true"
-                android:letterSpacing="0.1" />
+                android:letterSpacing="0.15" />
 
             <!-- DAB Power on at Startup -->
             <LinearLayout
@@ -402,6 +470,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_power"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchPowerOnStartupDab"
@@ -433,6 +508,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_edit"
+                    android:tint="#757575" />
+
                 <TextView
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -458,6 +540,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_image"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchDeezerDab"
@@ -500,15 +589,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="24dp"
+                android:background="@drawable/settings_section_header_bg"
+                android:paddingStart="20dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:layout_marginTop="8dp"
                 android:text="ALLGEMEIN"
-                android:textColor="@color/radio_text_secondary"
-                android:textSize="12sp"
+                android:textColor="#FEAA2D"
+                android:textSize="13sp"
+                android:textStyle="bold"
                 android:textAllCaps="true"
-                android:letterSpacing="0.1" />
+                android:letterSpacing="0.15" />
 
             <!-- Show Debug Infos Toggle -->
             <LinearLayout
@@ -519,6 +611,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_bug"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchShowDebug"
@@ -550,6 +649,13 @@
                 android:background="?attr/selectableItemBackground"
                 android:clickable="true"
                 android:focusable="true">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_brightness"
+                    android:tint="#757575" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -593,6 +699,14 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_power"
+                    android:tint="#757575"
+                    android:alpha="0.5" />
+
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchAutoStart"
                     android:layout_width="52dp"
@@ -635,6 +749,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_timer"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchAutoBackground"
@@ -751,6 +872,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_popup"
+                    android:tint="#757575" />
+
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchStationChangeToast"
                     android:layout_width="52dp"
@@ -790,6 +918,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_swap"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchRevertPrevNext"
@@ -833,15 +968,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="24dp"
+                android:background="@drawable/settings_section_header_bg"
+                android:paddingStart="20dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:layout_marginTop="8dp"
                 android:text="RADIO LOGOS"
-                android:textColor="@color/radio_text_secondary"
-                android:textSize="12sp"
+                android:textColor="#FEAA2D"
+                android:textSize="13sp"
+                android:textStyle="bold"
                 android:textAllCaps="true"
-                android:letterSpacing="0.1" />
+                android:letterSpacing="0.15" />
 
             <!-- Logo Template Manager Item -->
             <LinearLayout
@@ -856,6 +994,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_image"
+                    android:tint="#757575" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -898,6 +1043,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_favorite_border"
+                    android:tint="#757575" />
+
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchShowLogosInFavorites"
                     android:layout_width="52dp"
@@ -926,15 +1078,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="24dp"
+                android:background="@drawable/settings_section_header_bg"
+                android:paddingStart="20dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:layout_marginTop="8dp"
                 android:text="@string/section_app"
-                android:textColor="@color/radio_text_secondary"
-                android:textSize="12sp"
+                android:textColor="#FEAA2D"
+                android:textSize="13sp"
+                android:textStyle="bold"
                 android:textAllCaps="true"
-                android:letterSpacing="0.1" />
+                android:letterSpacing="0.15" />
 
             <!-- App Version Item -->
             <LinearLayout
@@ -949,6 +1104,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_info"
+                    android:tint="#757575" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -1003,6 +1165,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_language"
+                    android:tint="#757575" />
+
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -1048,6 +1217,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_animation"
+                    android:tint="#757575" />
+
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -1088,6 +1264,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_edit"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchCorrectionHelpers"
@@ -1133,6 +1316,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_rule"
+                    android:tint="#757575" />
+
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -1176,15 +1366,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="24dp"
+                android:background="@drawable/settings_section_header_bg"
+                android:paddingStart="20dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:layout_marginTop="8dp"
                 android:text="@string/section_rds_archive"
-                android:textColor="@color/radio_text_secondary"
-                android:textSize="12sp"
+                android:textColor="#FEAA2D"
+                android:textSize="13sp"
+                android:textStyle="bold"
                 android:textAllCaps="true"
-                android:letterSpacing="0.1" />
+                android:letterSpacing="0.15" />
 
             <!-- RDS Logging Toggle -->
             <LinearLayout
@@ -1195,6 +1388,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_storage"
+                    android:tint="#757575" />
 
                 <androidx.appcompat.widget.SwitchCompat
                     android:id="@+id/switchRdsLogging"
@@ -1239,6 +1439,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_timer"
+                    android:tint="#757575" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -1285,6 +1492,13 @@
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
 
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_delete"
+                    android:tint="#D32F2F" />
+
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
@@ -1322,15 +1536,18 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:paddingStart="24dp"
+                android:background="@drawable/settings_section_header_bg"
+                android:paddingStart="20dp"
                 android:paddingEnd="24dp"
-                android:paddingTop="16dp"
-                android:paddingBottom="8dp"
+                android:paddingTop="12dp"
+                android:paddingBottom="12dp"
+                android:layout_marginTop="8dp"
                 android:text="DEEZER"
-                android:textColor="@color/radio_text_secondary"
-                android:textSize="12sp"
+                android:textColor="#FEAA2D"
+                android:textSize="13sp"
+                android:textStyle="bold"
                 android:textAllCaps="true"
-                android:letterSpacing="0.1" />
+                android:letterSpacing="0.15" />
 
             <!-- Deezer Cache Enable Toggle -->
             <LinearLayout
@@ -1341,6 +1558,13 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_storage"
+                    android:tint="#757575" />
 
                 <LinearLayout
                     android:layout_width="0dp"

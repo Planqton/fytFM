@@ -195,7 +195,7 @@ class PresetRepository(private val context: Context) {
             }
             jsonArray.put(obj)
         }
-        prefs.edit().putString(KEY_STATIONS, jsonArray.toString()).apply()
+        prefs.edit().putString(KEY_STATIONS, jsonArray.toString()).commit()
     }
 
     private fun loadStations(prefs: SharedPreferences, isAM: Boolean, isDab: Boolean = false): List<RadioStation> {
