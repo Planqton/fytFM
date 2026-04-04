@@ -33,6 +33,23 @@
             android:scaleType="fitCenter"
             android:src="@drawable/ic_power" />
 
+        <!-- Auto-Background Countdown Timer -->
+        <TextView
+            android:id="@+id/tvAutoBackgroundCountdown"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:background="#88FF5722"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:visibility="invisible"
+            android:text="99s" />
+
         <View
             android:layout_width="0dp"
             android:layout_height="0dp"

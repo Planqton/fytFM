@@ -368,6 +368,40 @@ class PresetRepository(private val context: Context) {
         settingsPrefs.edit().putBoolean("show_debug_infos", enabled).apply()
     }
 
+    // Autostart Settings
+    fun isAutoStartEnabled(): Boolean {
+        return settingsPrefs.getBoolean("auto_start_enabled", false)
+    }
+
+    fun setAutoStartEnabled(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("auto_start_enabled", enabled).apply()
+    }
+
+    // Auto-Background Settings
+    fun isAutoBackgroundEnabled(): Boolean {
+        return settingsPrefs.getBoolean("auto_background_enabled", false)
+    }
+
+    fun setAutoBackgroundEnabled(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("auto_background_enabled", enabled).apply()
+    }
+
+    fun getAutoBackgroundDelay(): Int {
+        return settingsPrefs.getInt("auto_background_delay", 5)
+    }
+
+    fun setAutoBackgroundDelay(seconds: Int) {
+        settingsPrefs.edit().putInt("auto_background_delay", seconds).apply()
+    }
+
+    fun isAutoBackgroundOnlyOnBoot(): Boolean {
+        return settingsPrefs.getBoolean("auto_background_only_on_boot", true)
+    }
+
+    fun setAutoBackgroundOnlyOnBoot(onlyOnBoot: Boolean) {
+        settingsPrefs.edit().putBoolean("auto_background_only_on_boot", onlyOnBoot).apply()
+    }
+
     // Tuner Settings
     fun isLocalMode(): Boolean {
         return settingsPrefs.getBoolean("local_mode", false)

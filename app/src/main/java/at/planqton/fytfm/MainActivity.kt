@@ -134,6 +134,14 @@ class MainActivity : AppCompatActivity() {
     private var tunerInfoUpdateHandler: android.os.Handler? = null
     private var tunerInfoUpdateRunnable: Runnable? = null
 
+    // Auto-Background Timer
+    private var autoBackgroundHandler: android.os.Handler? = null
+    private var autoBackgroundRunnable: Runnable? = null
+    private var wasStartedFromBoot = false
+    private var autoBackgroundSecondsRemaining = 0
+    private var autoBackgroundTimerStartTime = 0L
+    private var autoBackgroundToast: android.widget.Toast? = null
+
     // Steering Wheel Key Handler
     private var steeringWheelKeyManager: SteeringWheelKeyManager? = null
     private var syuToolkitManager: SyuToolkitManager? = null
@@ -363,6 +371,12 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Check if app was started from boot
+        wasStartedFromBoot = intent?.getBooleanExtra(BootReceiver.EXTRA_FROM_BOOT, false) ?: false
+        if (wasStartedFromBoot) {
+            android.util.Log.i("fytFM", "App started from boot")
+        }
 
         presetRepository = PresetRepository(this)
         FmNative.initAudio(this) // Audio-Routing initialisieren
@@ -944,11 +958,23 @@ class MainActivity : AppCompatActivity() {
         isAppInForeground = true
         // Re-check PiP mode when resuming (wichtig für Start im kleinen Fenster)
         recheckPipMode("onResume")
+        // Start Auto-Background timer if enabled
+        startAutoBackgroundTimerIfNeeded()
     }
 
     override fun onPause() {
         super.onPause()
         isAppInForeground = false
+        // Cancel Auto-Background timer when app goes to background
+        cancelAutoBackgroundTimer()
+    }
+
+    override fun onUserInteraction() {
+        super.onUserInteraction()
+        // Cancel Auto-Background timer on user interaction (but only if it has been running for at least 1 second)
+        if (autoBackgroundTimerStartTime > 0 && System.currentTimeMillis() - autoBackgroundTimerStartTime > 1000) {
+            cancelAutoBackgroundTimer()
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -3237,6 +3263,84 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Start Auto-Background timer if enabled and conditions are met
+     */
+    private fun startAutoBackgroundTimerIfNeeded() {
+        val enabled = presetRepository.isAutoBackgroundEnabled()
+        val onlyOnBoot = presetRepository.isAutoBackgroundOnlyOnBoot()
+        android.util.Log.d("fytFM", "Auto-Background check: enabled=$enabled, onlyOnBoot=$onlyOnBoot, wasStartedFromBoot=$wasStartedFromBoot")
+
+        if (!enabled) {
+            android.util.Log.d("fytFM", "Auto-Background: Disabled in settings")
+            return
+        }
+
+        // Check if "only on boot" is enabled
+        if (onlyOnBoot && !wasStartedFromBoot) {
+            android.util.Log.d("fytFM", "Auto-Background: Skipping - not started from boot")
+            return
+        }
+
+        startAutoBackgroundTimer()
+    }
+
+    /**
+     * Start the Auto-Background timer
+     */
+    private fun startAutoBackgroundTimer() {
+        cancelAutoBackgroundTimer()
+
+        autoBackgroundSecondsRemaining = presetRepository.getAutoBackgroundDelay()
+        autoBackgroundTimerStartTime = System.currentTimeMillis()
+        android.util.Log.d("fytFM", "Auto-Background: Starting timer for $autoBackgroundSecondsRemaining seconds")
+
+        // Show countdown toast
+        showAutoBackgroundToast()
+
+        autoBackgroundHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        autoBackgroundRunnable = object : Runnable {
+            override fun run() {
+                autoBackgroundSecondsRemaining--
+                android.util.Log.d("fytFM", "Auto-Background: Tick - ${autoBackgroundSecondsRemaining}s remaining")
+                if (autoBackgroundSecondsRemaining <= 0) {
+                    android.util.Log.i("fytFM", "Auto-Background: Moving app to background")
+                    autoBackgroundToast?.cancel()
+                    moveTaskToBack(true)
+                } else {
+                    showAutoBackgroundToast()
+                    autoBackgroundHandler?.postDelayed(this, 1000L)
+                }
+            }
+        }
+        autoBackgroundHandler?.postDelayed(autoBackgroundRunnable!!, 1000L)
+    }
+
+    private fun showAutoBackgroundToast() {
+        autoBackgroundToast?.cancel()
+        autoBackgroundToast = android.widget.Toast.makeText(
+            this,
+            "Auto-Background in ${autoBackgroundSecondsRemaining}s",
+            android.widget.Toast.LENGTH_SHORT
+        )
+        autoBackgroundToast?.show()
+    }
+
+    /**
+     * Cancel the Auto-Background timer
+     */
+    private fun cancelAutoBackgroundTimer() {
+        autoBackgroundRunnable?.let {
+            autoBackgroundHandler?.removeCallbacks(it)
+        }
+        autoBackgroundRunnable = null
+        autoBackgroundHandler = null
+        autoBackgroundSecondsRemaining = 0
+        autoBackgroundTimerStartTime = 0L
+        autoBackgroundToast?.cancel()
+        autoBackgroundToast = null
+    }
+
+    /**
      * Update carousel favorite icon state
      */
     private fun updateCarouselFavoriteIcon() {
@@ -3878,6 +3982,50 @@ class MainActivity : AppCompatActivity() {
         switchDebug.setOnCheckedChangeListener { _, isChecked ->
             presetRepository.setShowDebugInfos(isChecked)
             updateDebugOverlayVisibility()
+        }
+
+        // Autostart bei Boot toggle
+        val switchAutoStart = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchAutoStart)
+        switchAutoStart.isChecked = presetRepository.isAutoStartEnabled()
+        switchAutoStart.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setAutoStartEnabled(isChecked)
+        }
+
+        // Auto-Background toggle
+        val switchAutoBackground = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchAutoBackground)
+        val layoutAutoBackgroundOptions = dialogView.findViewById<android.widget.LinearLayout>(R.id.layoutAutoBackgroundOptions)
+        val seekBarDelay = dialogView.findViewById<android.widget.SeekBar>(R.id.seekBarAutoBackgroundDelay)
+        val textDelayValue = dialogView.findViewById<android.widget.TextView>(R.id.textAutoBackgroundDelayValue)
+        val switchOnlyOnBoot = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchAutoBackgroundOnlyOnBoot)
+
+        // Initial state
+        switchAutoBackground.isChecked = presetRepository.isAutoBackgroundEnabled()
+        layoutAutoBackgroundOptions.visibility = if (switchAutoBackground.isChecked) android.view.View.VISIBLE else android.view.View.GONE
+        val currentDelay = presetRepository.getAutoBackgroundDelay()
+        seekBarDelay.progress = currentDelay
+        textDelayValue.text = "${currentDelay}s"
+        switchOnlyOnBoot.isChecked = presetRepository.isAutoBackgroundOnlyOnBoot()
+
+        // Listeners
+        switchAutoBackground.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setAutoBackgroundEnabled(isChecked)
+            layoutAutoBackgroundOptions.visibility = if (isChecked) android.view.View.VISIBLE else android.view.View.GONE
+        }
+
+        seekBarDelay.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                val value = if (progress < 1) 1 else progress
+                textDelayValue.text = "${value}s"
+                if (fromUser) {
+                    presetRepository.setAutoBackgroundDelay(value)
+                }
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+
+        switchOnlyOnBoot.setOnCheckedChangeListener { _, isChecked ->
+            presetRepository.setAutoBackgroundOnlyOnBoot(isChecked)
         }
 
         // Station Change Toast toggle
@@ -6850,7 +6998,6 @@ class MainActivity : AppCompatActivity() {
                 // DAB Tuner Manager Callbacks setzen
                 dabTunerManager.onTunerReady = {
                     android.util.Log.i("fytFM", "DAB Tuner ready!")
-                    android.widget.Toast.makeText(this, "DAB+ Tuner bereit", android.widget.Toast.LENGTH_SHORT).show()
 
                     // Falls gespeicherte Sender vorhanden, lade sie
                     val dabStations = presetRepository.loadDabStations()

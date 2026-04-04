@@ -536,6 +536,164 @@
 
             </LinearLayout>
 
+            <!-- Autostart bei Boot Toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchAutoStart"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp"
+                    android:enabled="false"
+                    android:alpha="0.4" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical"
+                    android:alpha="0.5">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Autostart bei Boot"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Nicht unterstützt auf FYT-Geräten"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Auto-Background Toggle -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switchAutoBackground"
+                    android:layout_width="52dp"
+                    android:layout_height="32dp" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="16dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Auto-Background"
+                        android:textColor="#333333"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="App geht nach X Sekunden in den Hintergrund"
+                        android:textColor="#888888"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Auto-Background Options (nur sichtbar wenn aktiviert) -->
+            <LinearLayout
+                android:id="@+id/layoutAutoBackgroundOptions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:paddingBottom="8dp">
+
+                <!-- Delay SeekBar -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginStart="68dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Sekunden:"
+                        android:textColor="#333333"
+                        android:textSize="14sp" />
+
+                    <SeekBar
+                        android:id="@+id/seekBarAutoBackgroundDelay"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginEnd="8dp"
+                        android:min="1"
+                        android:max="60"
+                        android:progress="5" />
+
+                    <TextView
+                        android:id="@+id/textAutoBackgroundDelayValue"
+                        android:layout_width="40dp"
+                        android:layout_height="wrap_content"
+                        android:text="5s"
+                        android:textColor="#333333"
+                        android:textSize="14sp"
+                        android:gravity="end" />
+
+                </LinearLayout>
+
+                <!-- Nur bei Autostart Switch -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="48dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginStart="68dp">
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switchAutoBackgroundOnlyOnBoot"
+                        android:layout_width="42dp"
+                        android:layout_height="24dp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:text="Nur bei Autostart"
+                        android:textColor="#333333"
+                        android:textSize="14sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
             <!-- Station Change Toast Toggle -->
             <LinearLayout
                 android:layout_width="match_parent"
