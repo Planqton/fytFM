@@ -78,6 +78,7 @@ class MainActivity : AppCompatActivity() {
     private var currentDabSlideshow: android.graphics.Bitmap? = null
     private var suppressSpinnerCallback = false
     private lateinit var controlBar: LinearLayout
+    private lateinit var stationBar: LinearLayout
     private lateinit var stationRecycler: RecyclerView
     private lateinit var tvAllList: TextView
     private var debugOverlay: View? = null
@@ -200,8 +201,19 @@ class MainActivity : AppCompatActivity() {
     // View Mode Toggle (Equalizer vs Image/Carousel)
     private var mainContentArea: View? = null
     private var carouselContentArea: View? = null
+    private var dabListContentArea: View? = null
     private var btnViewModeEqualizer: View? = null
     private var btnViewModeImage: View? = null
+
+    // DAB List Mode Views
+    private var dabListCover: ImageView? = null
+    private var dabListStationName: TextView? = null
+    private var dabListEnsemble: TextView? = null
+    private var dabListRadiotext: TextView? = null
+    private var dabListFavoriteBtn: ImageButton? = null
+    private var dabListStationStrip: RecyclerView? = null
+    private var dabListMainArea: View? = null
+    private var dabStripAdapter: at.planqton.fytfm.ui.DabStripAdapter? = null
     private var stationCarousel: RecyclerView? = null
     private var carouselFrequencyLabel: TextView? = null
     private var btnCarouselFavorite: ImageButton? = null
@@ -503,13 +515,23 @@ class MainActivity : AppCompatActivity() {
             currentDabEnsembleId = lastEnsembleId
             android.util.Log.i("fytFM", "=== APP START DAB: currentDabServiceId=$currentDabServiceId ===")
 
-            if (!isCarouselMode) {
-                setViewMode(true)
-            } else {
+            // DAB: View Mode initialisieren
+            if (isCarouselMode) {
                 populateCarousel()
                 updateCarouselSelection()
+                controlBar.visibility = View.VISIBLE
+                stationBar.visibility = View.VISIBLE
+            } else {
+                // DAB List Mode - show proper UI
+                mainContentArea?.visibility = View.GONE
+                carouselContentArea?.visibility = View.GONE
+                dabListContentArea?.visibility = View.VISIBLE
+                dabListStationStrip?.visibility = View.GONE
+                controlBar.visibility = View.GONE
+                stationBar.visibility = View.VISIBLE
+                populateDabListMode()
+                updateDabListModeSelection()
             }
-            findViewById<View>(R.id.viewModeToggle)?.visibility = View.GONE
             // DAB-Anzeige initialisieren (Sendername statt Frequenz)
             initDabDisplay()
             // DAB-Tuner automatisch einschalten wenn in Settings aktiviert
@@ -1084,6 +1106,7 @@ class MainActivity : AppCompatActivity() {
         setupRadioModeSpinner()
         btnPower = findViewById(R.id.btnPower)
         controlBar = findViewById(R.id.controlBar)
+        stationBar = findViewById(R.id.stationBar)
         stationRecycler = findViewById(R.id.stationRecycler)
         tvAllList = findViewById(R.id.tvAllList)
 
@@ -1195,6 +1218,7 @@ class MainActivity : AppCompatActivity() {
         // View Mode Toggle
         mainContentArea = findViewById(R.id.mainContentArea)
         carouselContentArea = findViewById(R.id.carouselContentArea)
+        dabListContentArea = findViewById(R.id.dabListContentArea)
         btnViewModeEqualizer = findViewById(R.id.btnViewModeEqualizer)
         btnViewModeImage = findViewById(R.id.btnViewModeImage)
         stationCarousel = findViewById(R.id.stationCarousel)
@@ -1202,6 +1226,9 @@ class MainActivity : AppCompatActivity() {
         btnCarouselFavorite = findViewById(R.id.btnCarouselFavorite)
         setupViewModeToggle()
         // NOTE: Carousel wird später in onCreate befüllt, NACH loadLastRadioMode()
+
+        // DAB List Mode Setup
+        setupDabListMode()
 
         setupDebugOverlayDrag()
         setupDebugBuildOverlayDrag()
@@ -2425,6 +2452,223 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ==================== DAB LIST MODE ====================
+
+    /**
+     * Setup DAB List Mode views and adapters
+     */
+    private fun setupDabListMode() {
+        dabListCover = findViewById(R.id.dabListCover)
+        dabListStationName = findViewById(R.id.dabListStationName)
+        dabListEnsemble = findViewById(R.id.dabListEnsemble)
+        dabListRadiotext = findViewById(R.id.dabListRadiotext)
+        dabListFavoriteBtn = findViewById(R.id.dabListFavoriteBtn)
+        dabListStationStrip = findViewById(R.id.dabListStationStrip)
+        dabListMainArea = findViewById(R.id.dabListMainArea)
+
+        // Setup horizontal station strip
+        dabStripAdapter = at.planqton.fytfm.ui.DabStripAdapter { station ->
+            // Station clicked - tune to it
+            tuneToDabStation(station.serviceId, station.ensembleId)
+        }
+
+        dabListStationStrip?.apply {
+            layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
+                this@MainActivity,
+                androidx.recyclerview.widget.LinearLayoutManager.HORIZONTAL,
+                false
+            )
+            adapter = dabStripAdapter
+        }
+
+        // Favorite button
+        dabListFavoriteBtn?.setOnClickListener {
+            if (currentDabServiceId != -1) {
+                val isFav = presetRepository.toggleDabFavorite(currentDabServiceId)
+                updateDabListFavoriteIcon(isFav)
+            }
+        }
+
+        // Setup swipe gestures on main area
+        setupDabListSwipeGestures()
+    }
+
+    /**
+     * Setup swipe gestures for DAB List Mode main area
+     */
+    private fun setupDabListSwipeGestures() {
+        val gestureDetector = android.view.GestureDetector(this, object : android.view.GestureDetector.SimpleOnGestureListener() {
+            private val SWIPE_THRESHOLD = 100
+            private val SWIPE_VELOCITY_THRESHOLD = 100
+
+            override fun onFling(e1: android.view.MotionEvent?, e2: android.view.MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                if (e1 == null) return false
+                val diffX = e2.x - e1.x
+                val diffY = e2.y - e1.y
+
+                if (Math.abs(diffX) > Math.abs(diffY) &&
+                    Math.abs(diffX) > SWIPE_THRESHOLD &&
+                    Math.abs(velocityX) > SWIPE_VELOCITY_THRESHOLD) {
+
+                    if (diffX > 0) {
+                        // Swipe right -> previous station
+                        navigateDabListStation(-1)
+                    } else {
+                        // Swipe left -> next station
+                        navigateDabListStation(1)
+                    }
+                    return true
+                }
+                return false
+            }
+
+            override fun onSingleTapConfirmed(e: android.view.MotionEvent): Boolean {
+                // Single tap could toggle play/pause or do nothing
+                return true
+            }
+        })
+
+        dabListMainArea?.setOnTouchListener { _, event ->
+            gestureDetector.onTouchEvent(event)
+            true
+        }
+    }
+
+    /**
+     * Navigate to next/previous DAB station in list mode
+     */
+    private fun navigateDabListStation(direction: Int) {
+        val stations = presetRepository.loadDabStations()
+        if (stations.isEmpty()) return
+
+        val currentIndex = stations.indexOfFirst { it.serviceId == currentDabServiceId }
+        val newIndex = when {
+            currentIndex < 0 -> 0
+            else -> (currentIndex + direction).coerceIn(0, stations.size - 1)
+        }
+
+        if (newIndex != currentIndex && newIndex >= 0 && newIndex < stations.size) {
+            val station = stations[newIndex]
+            tuneToDabStation(station.serviceId, station.ensembleId)
+        }
+    }
+
+    /**
+     * Populate DAB List Mode with stations
+     */
+    private fun populateDabListMode() {
+        val stations = presetRepository.loadDabStations()
+        dabStripAdapter?.setStations(stations)
+    }
+
+    /**
+     * Update DAB List Mode selection to current station
+     */
+    private fun updateDabListModeSelection() {
+        if (dabListContentArea?.visibility != View.VISIBLE) return
+
+        val stations = presetRepository.loadDabStations()
+        val station = stations.find { it.serviceId == currentDabServiceId }
+
+        // Update station strip selection
+        dabStripAdapter?.setSelectedStation(currentDabServiceId)
+
+        // Scroll strip to selected station
+        val position = dabStripAdapter?.getPositionForServiceId(currentDabServiceId) ?: -1
+        if (position >= 0) {
+            dabListStationStrip?.smoothScrollToPosition(position)
+        }
+
+        if (station != null) {
+            // Update station info
+            dabListStationName?.text = station.name ?: "Unknown"
+            dabListEnsemble?.text = station.ensembleLabel ?: ""
+
+            // Update favorite icon
+            updateDabListFavoriteIcon(station.isFavorite)
+
+            // Load cover image: Station logo -> Slideshow -> FM placeholder
+            val stationLogo = radioLogoRepository.getLogoForStation(
+                ps = station.name,
+                pi = null,
+                frequency = 0f
+            )
+            if (stationLogo != null) {
+                dabListCover?.load(java.io.File(stationLogo)) {
+                    crossfade(true)
+                    placeholder(R.drawable.placeholder_fm)
+                    error(R.drawable.placeholder_fm)
+                }
+            } else if (currentDabSlideshow != null) {
+                // Use current slideshow if available
+                dabListCover?.setImageBitmap(currentDabSlideshow)
+            } else {
+                // Fallback to FM placeholder
+                dabListCover?.setImageResource(R.drawable.placeholder_fm)
+            }
+        } else {
+            dabListStationName?.text = "Kein Sender"
+            dabListEnsemble?.text = ""
+            dabListRadiotext?.text = ""
+            dabListCover?.setImageResource(R.drawable.placeholder_fm)
+        }
+    }
+
+    /**
+     * Update DAB List Mode radiotext/DLS
+     */
+    private fun updateDabListRadiotext(text: String?) {
+        if (dabListContentArea?.visibility != View.VISIBLE) return
+        dabListRadiotext?.text = text ?: ""
+    }
+
+    /**
+     * Update DAB List Mode cover with slideshow image
+     */
+    private fun updateDabListCover(imagePath: String?) {
+        if (dabListContentArea?.visibility != View.VISIBLE) return
+        if (imagePath != null) {
+            dabListCover?.load(java.io.File(imagePath)) {
+                crossfade(true)
+            }
+        }
+    }
+
+    /**
+     * Update favorite icon in DAB List Mode
+     */
+    private fun updateDabListFavoriteIcon(isFavorite: Boolean) {
+        dabListFavoriteBtn?.setImageResource(
+            if (isFavorite) R.drawable.ic_favorite else R.drawable.ic_favorite_border
+        )
+    }
+
+    /**
+     * Tune to a specific DAB station
+     */
+    private fun tuneToDabStation(serviceId: Int, ensembleId: Int) {
+        if (!isDabOn) {
+            android.util.Log.w("fytFM", "DAB tuner not on, cannot tune to station")
+            return
+        }
+
+        try {
+            currentDabServiceId = serviceId
+            currentDabEnsembleId = ensembleId
+            val success = dabTunerManager.tuneService(serviceId, ensembleId)
+            if (success) {
+                android.util.Log.i("fytFM", "Tuned to DAB service: $serviceId")
+                saveLastDabService(serviceId, ensembleId)
+            } else {
+                android.util.Log.e("fytFM", "Failed to tune to DAB service: $serviceId")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Error tuning DAB: ${e.message}")
+        }
+    }
+
+    // ==================== END DAB LIST MODE ====================
+
     /**
      * Auto-names a station with PS value if the station has no name yet
      */
@@ -2989,8 +3233,6 @@ class MainActivity : AppCompatActivity() {
 
         // Toggle button click handlers
         btnViewModeEqualizer?.setOnClickListener {
-            // In DAB mode, only carousel view is allowed
-            if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) return@setOnClickListener
             setViewMode(false)
         }
 
@@ -3025,12 +3267,19 @@ class MainActivity : AppCompatActivity() {
         isCarouselMode = carousel
         presetRepository.setCarouselMode(carousel)
 
+        val isDabMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB
+
         if (carousel) {
             // Switch to carousel mode
             mainContentArea?.visibility = View.GONE
+            dabListContentArea?.visibility = View.GONE
             carouselContentArea?.visibility = View.VISIBLE
             btnViewModeEqualizer?.background = null
             btnViewModeImage?.setBackgroundResource(R.drawable.toggle_selected)
+
+            // Show control bar and station bar in carousel mode
+            controlBar.visibility = View.VISIBLE
+            stationBar.visibility = View.VISIBLE
 
             // Populate carousel with stations
             populateCarousel()
@@ -3038,9 +3287,26 @@ class MainActivity : AppCompatActivity() {
             // Initial scroll will be triggered by frequency listener
             carouselNeedsInitialScroll = true
         } else {
-            // Switch to equalizer mode
-            mainContentArea?.visibility = View.VISIBLE
+            // Switch to equalizer/list mode
             carouselContentArea?.visibility = View.GONE
+
+            if (isDabMode) {
+                // DAB List Mode - special layout, hide control bar but show station bar
+                mainContentArea?.visibility = View.GONE
+                dabListContentArea?.visibility = View.VISIBLE
+                dabListStationStrip?.visibility = View.GONE  // Hide the DAB strip, use stationBar instead
+                controlBar.visibility = View.GONE
+                stationBar.visibility = View.VISIBLE  // Show the original station bar
+                populateDabListMode()
+                updateDabListModeSelection()
+            } else {
+                // FM/AM Equalizer Mode
+                mainContentArea?.visibility = View.VISIBLE
+                dabListContentArea?.visibility = View.GONE
+                controlBar.visibility = View.VISIBLE
+                stationBar.visibility = View.VISIBLE
+            }
+
             btnViewModeEqualizer?.setBackgroundResource(R.drawable.toggle_selected)
             btnViewModeImage?.background = null
         }
@@ -6686,13 +6952,11 @@ class MainActivity : AppCompatActivity() {
         android.util.Log.i("fytFM", "=== setRadioMode: frequencyScale.getMode() is now ${frequencyScale.getMode()} (expected: $mode) ===")
 
         // Neuen Modus initialisieren
-        if (mode == FrequencyScaleView.RadioMode.DAB) {
-            // Zu DAB: Carousel aktivieren und DAB-Tuner starten
-            if (!isCarouselMode) {
-                setViewMode(true)
-            }
-            findViewById<View>(R.id.viewModeToggle)?.visibility = View.GONE
+        // View-Mode-Toggle für alle Modi sichtbar
+        findViewById<View>(R.id.viewModeToggle)?.visibility = View.VISIBLE
 
+        if (mode == FrequencyScaleView.RadioMode.DAB) {
+            // Zu DAB: DAB-Tuner starten (View Mode bleibt wie eingestellt)
             // DAB-Anzeige initialisieren (Sendername statt Frequenz)
             initDabDisplay()
 
@@ -6702,10 +6966,7 @@ class MainActivity : AppCompatActivity() {
                 toggleDabPower()
             }
         } else {
-            // Zu FM/AM: View-Mode-Toggle einblenden, FM Radio starten
-            findViewById<View>(R.id.viewModeToggle)?.visibility = View.VISIBLE
-
-            // FM Radio starten
+            // Zu FM/AM: FM Radio starten
             android.util.Log.i("fytFM", "Starting FM/AM radio...")
             if (!isRadioOn) {
                 try {
@@ -6731,10 +6992,28 @@ class MainActivity : AppCompatActivity() {
         loadFavoritesFilterState()
         loadStationsForCurrentMode()
 
-        // Carousel aktualisieren wenn aktiv
+        // View Mode und Control Bar aktualisieren
         if (isCarouselMode) {
+            // Carousel mode - show control bar and station bar
             populateCarousel()
             updateCarouselSelection()
+            controlBar.visibility = View.VISIBLE
+            stationBar.visibility = View.VISIBLE
+        } else if (mode == FrequencyScaleView.RadioMode.DAB) {
+            // DAB List Mode - hide control bar but show station bar
+            mainContentArea?.visibility = View.GONE
+            dabListContentArea?.visibility = View.VISIBLE
+            dabListStationStrip?.visibility = View.GONE  // Hide the DAB strip, use stationBar instead
+            controlBar.visibility = View.GONE
+            stationBar.visibility = View.VISIBLE  // Show the original station bar
+            populateDabListMode()
+            updateDabListModeSelection()
+        } else {
+            // FM/AM Equalizer Mode - show control bar and station bar
+            mainContentArea?.visibility = View.VISIBLE
+            dabListContentArea?.visibility = View.GONE
+            controlBar.visibility = View.VISIBLE
+            stationBar.visibility = View.VISIBLE
         }
 
         updateFavoriteButton()
@@ -7085,6 +7364,7 @@ class MainActivity : AppCompatActivity() {
                     currentDabSlideshow = null  // Slideshow zurücksetzen
                     saveLastDabService(dabStation.serviceId, dabStation.ensembleId)
                     updateCarouselSelection()
+                    updateDabListModeSelection()  // DAB List Mode aktualisieren
                     stationAdapter.setSelectedDabService(dabStation.serviceId)
                     updateFavoriteButton()
                     // Now Playing Bar für DAB aktualisieren
@@ -7122,6 +7402,8 @@ class MainActivity : AppCompatActivity() {
                     nowPlayingTitle?.visibility = if (dls.isNotBlank()) View.VISIBLE else View.GONE
                     carouselNowPlayingTitle?.text = dls
                     carouselNowPlayingTitle?.visibility = if (dls.isNotBlank()) View.VISIBLE else View.GONE
+                    // DAB List Mode Radiotext aktualisieren
+                    updateDabListRadiotext(dls)
                     // Debug Overlay RT-Feld aktualisieren
                     updateDabDebugInfo(dls = dls)
 
@@ -7226,6 +7508,10 @@ class MainActivity : AppCompatActivity() {
                     // Bild in Now Playing Bar Cover anzeigen
                     nowPlayingCover?.setImageBitmap(bitmap)
                     carouselNowPlayingCover?.setImageBitmap(bitmap)
+                    // DAB List Mode Cover aktualisieren
+                    if (dabListContentArea?.visibility == View.VISIBLE) {
+                        dabListCover?.setImageBitmap(bitmap)
+                    }
                     // MediaSession für DAB mit Slideshow aktualisieren
                     val radioLogoPath = radioLogoRepository.getLogoForStation(currentDabServiceLabel, null, 0f)
                     FytFMMediaService.instance?.updateDabMetadata(

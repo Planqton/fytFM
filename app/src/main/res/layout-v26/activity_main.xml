@@ -308,6 +308,122 @@
 
     </LinearLayout>
 
+    <!-- DAB List View Mode (hidden by default) -->
+    <LinearLayout
+        android:id="@+id/dabListContentArea"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp">
+
+        <!-- Main Content: Cover + Info -->
+        <LinearLayout
+            android:id="@+id/dabListMainArea"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <!-- Left: Large Cover Image (50%) -->
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:padding="16dp">
+
+                <ImageView
+                    android:id="@+id/dabListCover"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:scaleType="centerCrop"
+                    android:background="@drawable/dab_cover_placeholder"
+                    android:layout_gravity="center" />
+
+            </FrameLayout>
+
+            <!-- Right: Station Info (50%) -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="24dp"
+                android:paddingEnd="16dp">
+
+                <!-- Station Name -->
+                <TextView
+                    android:id="@+id/dabListStationName"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="DAB+ Station"
+                    android:textColor="@color/radio_text_primary"
+                    android:textSize="32sp"
+                    android:textStyle="bold"
+                    android:maxLines="2"
+                    android:ellipsize="end" />
+
+                <!-- Ensemble Label -->
+                <TextView
+                    android:id="@+id/dabListEnsemble"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Ensemble"
+                    android:textColor="@color/radio_accent"
+                    android:textSize="14sp" />
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="60dp"
+                    android:layout_height="2dp"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginBottom="16dp"
+                    android:background="@color/radio_accent" />
+
+                <!-- Radiotext / Now Playing -->
+                <TextView
+                    android:id="@+id/dabListRadiotext"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Radiotext wird hier angezeigt..."
+                    android:textColor="@color/radio_text_secondary"
+                    android:textSize="18sp"
+                    android:lineSpacingMultiplier="1.3"
+                    android:maxLines="4"
+                    android:ellipsize="end" />
+
+                <!-- Favorite Button -->
+                <ImageButton
+                    android:id="@+id/dabListFavoriteBtn"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_marginTop="24dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_favorite_border"
+                    android:scaleType="fitCenter"
+                    android:padding="8dp"
+                    android:contentDescription="Favorite" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Bottom: Horizontal Station Strip -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/dabListStationStrip"
+            android:layout_width="match_parent"
+            android:layout_height="90dp"
+            android:layout_marginBottom="8dp"
+            android:clipToPadding="false"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp" />
+
+    </LinearLayout>
+
     <!-- Carousel View Mode (hidden by default) -->
     <LinearLayout
         android:id="@+id/carouselContentArea"
