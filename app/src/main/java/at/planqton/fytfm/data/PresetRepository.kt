@@ -19,6 +19,8 @@ class PresetRepository(private val context: Context) {
         private const val KEY_POWER_ON_STARTUP_DAB = "power_on_startup_dab"
         private const val KEY_DEEZER_ENABLED_FM = "deezer_enabled_fm"
         private const val KEY_DEEZER_ENABLED_DAB = "deezer_enabled_dab"
+        private const val KEY_TICK_SOUND_ENABLED = "tick_sound_enabled"
+        private const val KEY_TICK_SOUND_VOLUME = "tick_sound_volume"
     }
 
     private val fmPrefs: SharedPreferences = context.getSharedPreferences(PREFS_FM, Context.MODE_PRIVATE)
@@ -310,6 +312,16 @@ class PresetRepository(private val context: Context) {
         return loadDabStations().find { it.serviceId == serviceId }?.isFavorite ?: false
     }
 
+    // Autoplay at startup (single setting for all modes)
+    fun isAutoplayAtStartup(): Boolean {
+        return settingsPrefs.getBoolean("autoplay_at_startup", false)
+    }
+
+    fun setAutoplayAtStartup(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("autoplay_at_startup", enabled).apply()
+    }
+
+    @Deprecated("Use isAutoplayAtStartup() instead")
     fun isPowerOnStartup(): Boolean {
         return settingsPrefs.getBoolean(KEY_POWER_ON_STARTUP, false)
     }
@@ -671,6 +683,20 @@ class PresetRepository(private val context: Context) {
         settingsPrefs.edit().putBoolean("carousel_mode", enabled).apply()
     }
 
+    /**
+     * Get carousel mode for specific radio mode (FM, AM, DAB)
+     */
+    fun isCarouselModeForRadioMode(radioMode: String): Boolean {
+        return settingsPrefs.getBoolean("carousel_mode_$radioMode", false)
+    }
+
+    /**
+     * Set carousel mode for specific radio mode (FM, AM, DAB)
+     */
+    fun setCarouselModeForRadioMode(radioMode: String, enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("carousel_mode_$radioMode", enabled).apply()
+    }
+
     // Import Dialog - nur einmal beim ersten Start fragen
     fun hasAskedAboutImport(): Boolean {
         return settingsPrefs.getBoolean("asked_about_import", false)
@@ -705,5 +731,56 @@ class PresetRepository(private val context: Context) {
 
     fun setRevertPrevNext(enabled: Boolean) {
         settingsPrefs.edit().putBoolean("revert_prev_next", enabled).apply()
+    }
+
+    // DAB Visualizer Settings
+    fun isDabVisualizerEnabled(): Boolean {
+        return settingsPrefs.getBoolean("dab_visualizer_enabled", true) // Default: enabled
+    }
+
+    fun setDabVisualizerEnabled(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("dab_visualizer_enabled", enabled).apply()
+    }
+
+    // 0 = Bars, 1 = Waveform, 2 = Circular
+    fun getDabVisualizerStyle(): Int {
+        return settingsPrefs.getInt("dab_visualizer_style", 0) // Default: Bars
+    }
+
+    fun setDabVisualizerStyle(style: Int) {
+        settingsPrefs.edit().putInt("dab_visualizer_style", style).apply()
+    }
+
+    // DAB Recording Settings
+    fun getDabRecordingPath(): String? {
+        return settingsPrefs.getString("dab_recording_path", null)
+    }
+
+    fun setDabRecordingPath(path: String?) {
+        settingsPrefs.edit().putString("dab_recording_path", path).apply()
+    }
+
+    fun isDabRecordingEnabled(): Boolean {
+        return getDabRecordingPath() != null
+    }
+
+    // Tick Sound Settings (Senderwechsel)
+    fun isTickSoundEnabled(): Boolean {
+        return settingsPrefs.getBoolean(KEY_TICK_SOUND_ENABLED, false) // Default: aus
+    }
+
+    fun setTickSoundEnabled(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean(KEY_TICK_SOUND_ENABLED, enabled).apply()
+    }
+
+    /**
+     * Tick Sound Lautstärke (0-100)
+     */
+    fun getTickSoundVolume(): Int {
+        return settingsPrefs.getInt(KEY_TICK_SOUND_VOLUME, 50) // Default: 50%
+    }
+
+    fun setTickSoundVolume(volume: Int) {
+        settingsPrefs.edit().putInt(KEY_TICK_SOUND_VOLUME, volume.coerceIn(0, 100)).apply()
     }
 }

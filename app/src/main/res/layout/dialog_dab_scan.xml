@@ -9,7 +9,7 @@
         android:id="@+id/tvScanStatus"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="DAB+ Sendersuche..."
+        android:text="@string/dab_scan_title"
         android:textSize="16sp"
         android:textStyle="bold"
         android:layout_marginBottom="8dp" />
@@ -35,7 +35,7 @@
         android:id="@+id/tvFoundCount"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Gefundene Sender: 0"
+        android:text="@string/stations_found_count"
         android:textSize="13sp"
         android:layout_marginBottom="8dp" />
 

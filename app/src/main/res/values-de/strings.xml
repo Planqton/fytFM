@@ -150,4 +150,134 @@
     <string name="stations_found">%d Sender gefunden</string>
     <string name="start_scan">Suche starten</string>
     <string name="add_all">Alle hinzufügen</string>
+
+    <!-- EPG -->
+    <string name="epg_title">Programmvorschau</string>
+    <string name="epg_now">JETZT</string>
+    <string name="epg_upcoming">ALS NÄCHSTES</string>
+    <string name="epg_no_data">Keine Programmdaten verfügbar</string>
+    <string name="epg_no_data_desc">Dieser Sender sendet aktuell keine EPG-Informationen.</string>
+    <string name="epg_updated">Aktualisiert: %s</string>
+    <string name="epg_until">bis %s</string>
+    <string name="epg_close">Schließen</string>
+
+    <!-- Settings Dialog - Additional -->
+    <string name="power_on_startup_short">Beim Start einschalten</string>
+    <string name="edit_stations">Sender bearbeiten</string>
+    <string name="deezer_cover">Deezer Cover</string>
+    <string name="deezer_cover_desc_fm">Album-Cover via Deezer laden</string>
+    <string name="deezer_cover_desc_dab">Album-Cover via Deezer (statt Slideshow)</string>
+    <string name="audio_visualizer">Audio Visualizer</string>
+    <string name="audio_visualizer_desc">FFT Visualisierung anzeigen</string>
+    <string name="visualizer_style">Visualizer Stil</string>
+    <string name="style_bars">Balken</string>
+    <string name="recording_path">Aufnahme-Speicherort</string>
+    <string name="not_configured">Nicht konfiguriert</string>
+    <string name="section_general">ALLGEMEIN</string>
+    <string name="auto_background_desc">App geht nach X Sekunden in den Hintergrund</string>
+    <string name="seconds_label">Sekunden:</string>
+    <string name="station_change_overlay">Overlay bei Senderwechsel</string>
+    <string name="station_change_overlay_desc">Popup bei Lenkradtasten</string>
+    <string name="swap_prev_next">Prev/Next vertauschen</string>
+    <string name="swap_prev_next_desc">Lenkradtasten Richtung umkehren</string>
+    <string name="section_radio_logos">RADIO LOGOS</string>
+    <string name="logo_template_manager">Logo Template Manager</string>
+    <string name="no_template">Kein Template</string>
+    <string name="show_logos_in_favorites">Logos in Favoriten anzeigen</string>
+    <string name="now_playing_animation">Now Playing Animation</string>
+    <string name="animation_slide">Slide</string>
+    <string name="correction_helpers">Correction Helpers</string>
+    <string name="correction_helpers_desc">Trash/Refresh in Now Playing</string>
+    <string name="rt_correction_rules">RT Korrektur Regeln</string>
+    <string name="corrections_count_format">%d Korrekturen</string>
+    <string name="local_cache">Lokaler Cache</string>
+    <string name="local_cache_desc">Tracks lokal speichern</string>
+    <string name="cache_tracks_format">Cache: %d Tracks</string>
+    <string name="view">Anzeigen</string>
+    <string name="export">Export</string>
+    <string name="import_action">Import</string>
+    <string name="create_bug_report">Bug Report erstellen</string>
+    <string name="save_logs_to_downloads">Logs in Downloads speichern</string>
+
+    <!-- Scan Dialog -->
+    <string name="station_scan_title">Sendersuche</string>
+    <string name="skip">Überspringen</string>
+    <string name="no_stations_found">Keine Sender gefunden.\nTippe Scan um zu suchen.</string>
+    <string name="rds_filter">RDS-Filter:</string>
+    <string name="ps_name">PS (Name)</string>
+    <string name="pi_id">PI (ID)</string>
+    <string name="both_and">Beide (UND)</string>
+    <string name="one_or">Eines (ODER)</string>
+    <string name="rds_wait_time">RDS-Wartezeit: %ds</string>
+    <string name="rescan">Neu Scannen</string>
+    <string name="filter">Filtern</string>
+    <string name="add">Hinzufügen</string>
+    <string name="close">Schließen</string>
+    <string name="scan_method">Scan-Methode:</string>
+    <string name="quick_scan">Quick Scan (direkt hinzufügen)</string>
+    <string name="native_scan">Native (Schnell)</string>
+    <string name="experimental_scan">Experimentell (Frequenz-Scan)</string>
+    <string name="overwrite_favorites_short">Favoriten überschreiben</string>
+    <string name="overwrite_favorites_scan_desc">Aktualisiert auch favorisierte Sender</string>
+    <string name="start">Starten</string>
+    <string name="start_filter">Starten + Filter</string>
+
+    <!-- Template Editor -->
+    <string name="edit_template">Template bearbeiten</string>
+    <string name="name_label">Name:</string>
+    <string name="template_name_hint">Template Name</string>
+    <string name="stations_count">Sender (%d)</string>
+    <string name="no_stations">Keine Sender</string>
+    <string name="add_station">Sender hinzufügen</string>
+
+    <!-- Deezer Cache Dialog -->
+    <string name="deezer_cache">Deezer Cache</string>
+    <string name="tracks_count">%d Tracks</string>
+    <string name="no_tracks_in_cache">Keine Tracks im Cache</string>
+    <string name="search_hint">Suchen…</string>
+
+    <!-- Corrections Viewer -->
+    <string name="rules">Regeln</string>
+    <string name="rules_description">Texte die vor der Suche ersetzt/entfernt werden</string>
+    <string name="no_rules_defined">Keine Regeln definiert</string>
+    <string name="ignored_rts">Ignorierte RTs / Übersprungene Tracks</string>
+    <string name="ignored_rts_description">RTs die ignoriert oder deren Tracks übersprungen werden</string>
+    <string name="no_rt_corrections">Keine RT Korrekturen vorhanden</string>
+    <string name="delete_all">Alle löschen</string>
+    <string name="add_rule">Regel hinzufügen</string>
+
+    <!-- DAB Scan Dialog -->
+    <string name="dab_scan_title">DAB+ Sendersuche…</string>
+    <string name="stations_found_count">Gefundene Sender: %d</string>
+
+    <!-- Other Dialogs -->
+    <string name="logo_search">Logo suchen</string>
+    <string name="enter_search_and_search">Suchbegriff eingeben und suchen</string>
+    <string name="search_logo_hint">z.B. Ö3 Radio Logo</string>
+    <string name="ps_name_rds">PS Name (RDS)</string>
+    <string name="ps_hint">z.B. OE3, FM4</string>
+    <string name="pi_code_hex">PI Code (hex)</string>
+    <string name="pi_hint">z.B. A3E0</string>
+    <string name="frequencies_mhz">Frequenzen (MHz, kommagetrennt)</string>
+    <string name="frequencies_hint">z.B. 88.8, 90.4, 99.5</string>
+    <string name="logo_url">Logo URL *</string>
+    <string name="minimum_ps_pi_freq">Mindestens PS, PI oder Frequenz angeben.</string>
+    <string name="logo_downloading">Logo wird heruntergeladen…</string>
+    <string name="tuner_edit">Tuner bearbeiten</string>
+    <string name="tuner_name_hint">Tuner Name</string>
+    <string name="name">Name</string>
+    <string name="plugin">Plugin</string>
+    <string name="no_device_detected">Kein Gerät erkannt</string>
+    <string name="plugin_manager">Plugin Manager</string>
+    <string name="import_plugin">+ Plugin importieren</string>
+    <string name="logo_template_manager_title">Logo Template Manager</string>
+    <string name="region_format">Region: %s</string>
+    <string name="no_templates_for_region">Keine Templates für diese Region</string>
+    <string name="import_template">Template importieren</string>
+    <string name="no_template_use">Kein Template verwenden</string>
+    <string name="tuner_manager">Tuner Manager</string>
+    <string name="new_tuner">+ Neuer Tuner</string>
+    <string name="bug_reports">Bug Reports</string>
+    <string name="no_bug_reports">Keine Bug Reports gefunden</string>
+    <string name="built_in">built-in</string>
 </resources>

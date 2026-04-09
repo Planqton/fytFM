@@ -52,6 +52,10 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
     private var audioTrack: AudioTrack? = null
     private var currentSampleRate = 0
     private var currentChannels = 0
+    private var pendingAudioStartedNotify = false
+
+    // Recording
+    private var recorder: DabRecorder? = null
 
     var onServiceStarted: ((DabStation) -> Unit)? = null
     var onServiceStopped: (() -> Unit)? = null
@@ -59,8 +63,22 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
     var onTunerError: ((String) -> Unit)? = null
     var onDynamicLabel: ((String) -> Unit)? = null  // DLS - DAB Äquivalent zu RDS RT
     var onDlPlus: ((artist: String?, title: String?) -> Unit)? = null  // DL+ Tags für Artist/Title
+    var onAudioStarted: ((audioSessionId: Int) -> Unit)? = null  // Fires when AudioTrack is created
     var onSlideshow: ((Bitmap) -> Unit)? = null  // MOT Slideshow - Bilder vom DAB-Sender
     var onReceptionStats: ((sync: Boolean, quality: String, snr: Int) -> Unit)? = null  // Empfangsqualität
+
+    // Recording callbacks
+    var onRecordingStarted: (() -> Unit)? = null
+    var onRecordingStopped: ((java.io.File) -> Unit)? = null
+    var onRecordingError: ((String) -> Unit)? = null
+    var onRecordingProgress: ((durationSeconds: Long) -> Unit)? = null
+
+    // EPG callbacks
+    var onEpgDataReceived: ((EpgData) -> Unit)? = null
+
+    // EPG State
+    private var currentEpgData: EpgData? = null
+    private val sbtItems = mutableListOf<EpgItem>()
 
     val isDabOn: Boolean get() = isInitialized && currentTuner != null
 
@@ -230,6 +248,9 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
                 // Unsubscribe from old service
                 currentService?.unsubscribe(this)
 
+                // Clear EPG data from old service
+                clearEpgData()
+
                 // Subscribe to new service for audio data
                 service.subscribe(this)
 
@@ -251,6 +272,10 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
      */
     fun stopService() {
         try {
+            // Stop recording if active
+            if (isRecording()) {
+                stopRecording()
+            }
             currentService?.unsubscribe(this)
             currentTuner?.stopRadioService()
             releaseAudioTrack()
@@ -295,6 +320,118 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
     fun hasTuner(): Boolean = currentTuner != null
 
     fun getTunerStatus(): TunerStatus? = currentTuner?.tunerStatus
+
+    /**
+     * Returns the audio session ID from the AudioTrack for use with Visualizer API.
+     * Returns 0 if no AudioTrack is active.
+     */
+    fun getAudioSessionId(): Int {
+        return audioTrack?.audioSessionId ?: 0
+    }
+
+    // ==================== RECORDING ====================
+
+    /**
+     * Start recording the current DAB audio to MP3.
+     * @param folderUri The SAF tree URI for the recording folder
+     */
+    fun startRecording(context: android.content.Context, folderUri: String): Boolean {
+        if (recorder?.isRecording() == true) {
+            Log.w(TAG, "Already recording")
+            return false
+        }
+
+        val stationName = currentService?.let {
+            (it as? RadioServiceDab)?.serviceLabel
+        } ?: "DAB"
+
+        recorder = DabRecorder(context).apply {
+            onRecordingStarted = { mainHandler.post { this@DabTunerManager.onRecordingStarted?.invoke() } }
+            onRecordingStopped = { file -> mainHandler.post { this@DabTunerManager.onRecordingStopped?.invoke(file) } }
+            onRecordingError = { error -> mainHandler.post { this@DabTunerManager.onRecordingError?.invoke(error) } }
+            onRecordingProgress = { duration -> mainHandler.post { this@DabTunerManager.onRecordingProgress?.invoke(duration) } }
+        }
+
+        return recorder?.startRecording(stationName, folderUri) ?: false
+    }
+
+    /**
+     * Stop recording and return the recorded file name.
+     */
+    fun stopRecording(): String? {
+        val fileName = recorder?.stopRecording()
+        recorder = null
+        return fileName
+    }
+
+    /**
+     * Check if currently recording.
+     */
+    fun isRecording(): Boolean = recorder?.isRecording() ?: false
+
+    /**
+     * Get current recording duration in seconds.
+     */
+    fun getRecordingDuration(): Long = recorder?.getRecordingDuration() ?: 0
+
+    // ==================== EPG ====================
+
+    /**
+     * Get current EPG data for the active service.
+     */
+    fun getCurrentEpgData(): EpgData? = currentEpgData
+
+    /**
+     * Check if EPG data is available.
+     */
+    fun hasEpgData(): Boolean = currentEpgData?.hasEpgData() == true
+
+    /**
+     * Add an EPG item (called from SBT callback or manual parsing).
+     */
+    fun addEpgItem(item: EpgItem) {
+        // Insert at beginning, keep max 10 items
+        sbtItems.add(0, item)
+        if (sbtItems.size > 10) {
+            sbtItems.removeAt(sbtItems.size - 1)
+        }
+        updateEpgData()
+    }
+
+    /**
+     * Update EPG data and notify listeners.
+     */
+    private fun updateEpgData() {
+        val service = currentService ?: return
+
+        // Find current (live) item
+        val now = System.currentTimeMillis() / 1000
+        val current = sbtItems.firstOrNull { item ->
+            item.isLive || (item.endTime != null && item.startTime <= now && item.endTime > now)
+        }
+
+        // Find upcoming items (not live, start time in future)
+        val upcoming = sbtItems.filter { item ->
+            !item.isLive && item.startTime > now
+        }.sortedBy { it.startTime }
+
+        currentEpgData = EpgData(
+            serviceId = service.serviceId,
+            serviceName = service.serviceLabel ?: "Unknown",
+            currentItem = current,
+            upcomingItems = upcoming
+        )
+
+        mainHandler.post { onEpgDataReceived?.invoke(currentEpgData!!) }
+    }
+
+    /**
+     * Clear EPG data (called when service changes).
+     */
+    private fun clearEpgData() {
+        sbtItems.clear()
+        currentEpgData = null
+    }
 
     /**
      * Prüft ob ein DAB-Tuner verfügbar ist (USB-Gerät angeschlossen).
@@ -350,8 +487,23 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
     }
 
     override fun tunerScanProgress(tuner: Tuner, progress: Int, total: Int) {
-        val percent = if (total > 0) (progress * 100) / total else 0
-        val blockLabel = "Block $progress/$total"
+        // total = aktuelle Frequenz in Hz, progress = Block-Index
+        val freqHz = total.toLong()
+
+        // Ignoriere ungültige Frequenzen (Reset-Callbacks vom Tuner)
+        if (freqHz < 170_000_000L) {
+            Log.d(TAG, "Scan progress: ignoring invalid freq $freqHz")
+            return
+        }
+
+        val freqMHz = freqHz / 1_000_000.0
+
+        // DAB Band III: 174.928 MHz (5A) bis 239.200 MHz (13F)
+        val startFreq = 174_928_000L
+        val endFreq = 239_200_000L
+        val percent = ((freqHz - startFreq) * 100L / (endFreq - startFreq)).toInt().coerceIn(0, 100)
+
+        val blockLabel = "Block $progress (%.1f MHz)".format(freqMHz)
         Log.d(TAG, "Scan progress: $percent% ($blockLabel)")
         mainHandler.post { scanListener?.onScanProgress(percent, blockLabel) }
     }
@@ -391,6 +543,7 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
                 ensembleFrequencyKHz = service.ensembleFrequency
             )
             Log.i(TAG, "Service started: ${dabStation.serviceLabel}, freq=${service.ensembleFrequency}, freqKhz=${dabStation.ensembleFrequencyKHz}")
+            pendingAudioStartedNotify = true  // Will trigger onAudioStarted when audio data arrives
             mainHandler.post { onServiceStarted?.invoke(dabStation) }
         }
     }
@@ -443,9 +596,17 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
         if (sampleRate <= 0 || channels <= 0) return
         if (audioTrack == null || sampleRate != currentSampleRate || channels != currentChannels) {
             createAudioTrack(sampleRate, channels)
+        } else if (pendingAudioStartedNotify && audioTrack != null) {
+            // AudioTrack already exists but we need to notify (e.g., after station change)
+            pendingAudioStartedNotify = false
+            audioTrack?.audioSessionId?.let { sessionId ->
+                mainHandler.post { onAudioStarted?.invoke(sessionId) }
+            }
         }
         try {
             audioTrack?.write(data, 0, data.size)
+            // Send data to recorder if recording
+            recorder?.writePcmData(data, channels, sampleRate)
         } catch (e: Exception) {
             Log.e(TAG, "Error writing audio data: ${e.message}")
         }
@@ -482,6 +643,11 @@ class DabTunerManager : TunerListener, RadioStatusListener, RadioServiceAudiodat
                 .build()
             audioTrack?.play()
             Log.i(TAG, "AudioTrack created: sampleRate=$sampleRate, channels=$channels, bufferSize=$bufferSize")
+            // Notify that audio has started with the session ID
+            pendingAudioStartedNotify = false
+            audioTrack?.audioSessionId?.let { sessionId ->
+                mainHandler.post { onAudioStarted?.invoke(sessionId) }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error creating AudioTrack: ${e.message}", e)
         }

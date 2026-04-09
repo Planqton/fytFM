@@ -10,7 +10,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Sendersuche"
+        android:text="@string/station_scan_title"
         android:textColor="@color/radio_text_primary"
         android:textSize="18sp"
         android:textStyle="bold"
@@ -20,7 +20,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Scan-Methode:"
+        android:text="@string/scan_method"
         android:textColor="@color/radio_text_primary"
         android:textStyle="bold"
         android:layout_marginBottom="4dp" />
@@ -36,7 +36,7 @@
             android:id="@+id/rbQuickScan"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Quick Scan (direkt hinzufügen)"
+            android:text="@string/quick_scan"
             android:textColor="@color/radio_text_primary"
             android:buttonTint="@color/radio_text_primary"
             android:checked="true" />
@@ -45,7 +45,7 @@
             android:id="@+id/rbNative"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Native (Schnell)"
+            android:text="@string/native_scan"
             android:textColor="@color/radio_text_primary"
             android:buttonTint="@color/radio_text_primary" />
 
@@ -53,7 +53,7 @@
             android:id="@+id/rbExperimental"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Experimentell (Frequenz-Scan)"
+            android:text="@string/experimental_scan"
             android:textColor="@color/radio_text_primary"
             android:buttonTint="@color/radio_text_primary" />
 
@@ -70,7 +70,7 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="RDS-Filter:"
+        android:text="@string/rds_filter"
         android:textColor="@color/radio_text_primary"
         android:textStyle="bold"
         android:layout_marginBottom="8dp" />
@@ -87,7 +87,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="24dp"
-            android:text="PS (Name)"
+            android:text="@string/ps_name"
             android:textColor="@color/radio_text_primary"
             android:buttonTint="@color/radio_text_primary" />
 
@@ -95,7 +95,7 @@
             android:id="@+id/cbRequirePi"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="PI (ID)"
+            android:text="@string/pi_id"
             android:textColor="@color/radio_text_primary"
             android:buttonTint="@color/radio_text_primary" />
 
@@ -115,7 +115,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginEnd="24dp"
-            android:text="Beide (UND)"
+            android:text="@string/both_and"
             android:textColor="@color/radio_text_primary"
             android:buttonTint="@color/radio_text_primary"
             android:checked="true" />
@@ -124,7 +124,7 @@
             android:id="@+id/rbFilterOr"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Eines (ODER)"
+            android:text="@string/one_or"
             android:textColor="@color/radio_text_primary"
             android:buttonTint="@color/radio_text_primary" />
 
@@ -143,7 +143,7 @@
             android:id="@+id/tvRdsTimeout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="RDS-Wartezeit: 8s"
+            android:text="@string/rds_wait_time"
             android:textColor="@color/radio_text_primary"
             android:layout_marginBottom="4dp" />
 
@@ -183,14 +183,14 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Favoriten überschreiben"
+                android:text="@string/overwrite_favorites_short"
                 android:textColor="@color/radio_text_primary"
                 android:textSize="14sp" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Aktualisiert auch favorisierte Sender"
+                android:text="@string/overwrite_favorites_scan_desc"
                 android:textColor="@color/radio_text_secondary"
                 android:textSize="12sp" />
 
@@ -219,7 +219,7 @@
             android:layout_weight="1"
             android:layout_marginEnd="8dp"
             android:background="@drawable/button_background"
-            android:text="Starten"
+            android:text="@string/start"
             android:textColor="@color/radio_text_primary" />
 
         <Button
@@ -228,7 +228,7 @@
             android:layout_height="40dp"
             android:layout_weight="1"
             android:background="@drawable/button_background"
-            android:text="Starten + Filter"
+            android:text="@string/start_filter"
             android:textColor="@color/radio_text_primary" />
 
     </LinearLayout>
@@ -241,7 +241,7 @@
         android:layout_marginTop="12dp"
         android:layout_marginBottom="4dp"
         android:background="@android:color/transparent"
-        android:text="Abbrechen"
+        android:text="@string/cancel"
         android:textColor="@color/radio_text_secondary" />
 
 </LinearLayout>

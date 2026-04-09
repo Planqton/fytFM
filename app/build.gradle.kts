@@ -80,6 +80,9 @@ dependencies {
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
+    // DocumentFile for SAF (Storage Access Framework)
+    implementation("androidx.documentfile:documentfile:1.0.1")
+
     // Media3 (MediaSession für Car Launcher)
     implementation(libs.androidx.media3.session)
     implementation(libs.androidx.media3.exoplayer)
@@ -95,6 +98,11 @@ dependencies {
 
     // USB Serial for UART debug
     implementation("com.github.mik3y:usb-serial-for-android:3.8.1")
+
+    // LAME MP3 Encoder for DAB recording
+    implementation("com.github.naman14:TAndroidLame:1.1") {
+        exclude(group = "com.android.support")
+    }
 
     testImplementation(libs.junit)
     testImplementation(libs.mockk)

@@ -13,7 +13,7 @@
         android:gravity="center"
         android:paddingTop="24dp"
         android:paddingBottom="16dp"
-        android:text="Logo Template Manager"
+        android:text="@string/logo_template_manager_title"
         android:textColor="#333333"
         android:textSize="20sp"
         android:textStyle="bold" />
@@ -25,7 +25,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:paddingBottom="16dp"
-        android:text="Region: Europe"
+        android:text="@string/region_format"
         android:textColor="#888888"
         android:textSize="12sp" />
 
@@ -46,7 +46,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:padding="32dp"
-        android:text="Keine Templates für diese Region"
+        android:text="@string/no_templates_for_region"
         android:textColor="#AAAAAA"
         android:textSize="14sp"
         android:visibility="gone" />
@@ -71,7 +71,7 @@
             android:clickable="true"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackground"
-            android:text="Template importieren"
+            android:text="@string/import_template"
             android:textColor="#1976D2"
             android:textSize="14sp" />
 
@@ -86,7 +86,7 @@
             android:clickable="true"
             android:focusable="true"
             android:foreground="?attr/selectableItemBackground"
-            android:text="Kein Template verwenden"
+            android:text="@string/no_template_use"
             android:textColor="#666666"
             android:textSize="14sp" />
 

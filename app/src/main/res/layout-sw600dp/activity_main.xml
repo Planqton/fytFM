@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -408,8 +409,9 @@
                     <!-- Mode Spinner -->
                     <Spinner
                         android:id="@+id/dabListModeSpinner"
-                        android:layout_width="80dp"
-                        android:layout_height="80dp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:minWidth="70dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:spinnerMode="dropdown"
                         android:gravity="center"
@@ -418,40 +420,83 @@
                     <!-- Favorite Button -->
                     <ImageButton
                         android:id="@+id/dabListFavoriteBtn"
-                        android:layout_width="80dp"
-                        android:layout_height="80dp"
-                        android:layout_marginStart="20dp"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:src="@drawable/ic_favorite_border"
                         android:scaleType="fitCenter"
-                        android:padding="18dp"
+                        android:padding="10dp"
                         android:contentDescription="Favorite" />
 
                     <!-- Favorites Filter Toggle -->
                     <ImageButton
                         android:id="@+id/dabListFilterBtn"
-                        android:layout_width="80dp"
-                        android:layout_height="80dp"
-                        android:layout_marginStart="20dp"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:src="@drawable/ic_folder"
                         android:scaleType="fitCenter"
-                        android:padding="18dp"
+                        android:padding="10dp"
                         android:contentDescription="Filter favorites" />
+
+                    <!-- Search/Scan Button -->
+                    <ImageButton
+                        android:id="@+id/dabListSearchBtn"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_search"
+                        android:scaleType="fitCenter"
+                        android:padding="10dp"
+                        android:contentDescription="@string/search" />
+
+                    <!-- Record Button -->
+                    <ImageButton
+                        android:id="@+id/dabListRecordBtn"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_record_inactive"
+                        android:scaleType="fitCenter"
+                        android:padding="10dp"
+                        android:contentDescription="Record" />
+
+                    <!-- EPG Button -->
+                    <ImageButton
+                        android:id="@+id/dabListEpgBtn"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_epg"
+                        android:scaleType="fitCenter"
+                        android:padding="10dp"
+                        android:contentDescription="EPG" />
 
                     <!-- Settings Button -->
                     <ImageButton
                         android:id="@+id/dabListSettingsBtn"
-                        android:layout_width="80dp"
-                        android:layout_height="80dp"
-                        android:layout_marginStart="20dp"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
                         android:background="?attr/selectableItemBackgroundBorderless"
                         android:src="@drawable/ic_settings"
                         android:scaleType="fitCenter"
-                        android:padding="18dp"
+                        android:padding="10dp"
                         android:contentDescription="Settings" />
 
                 </LinearLayout>
+
+                <!-- Audio Visualizer for DAB -->
+                <at.planqton.fytfm.ui.AudioVisualizerView
+                    android:id="@+id/dabVisualizerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="60dp"
+                    android:layout_marginTop="16dp" />
 
             </LinearLayout>
 
@@ -514,6 +559,30 @@
                 android:text="FM 103.70"
                 android:textSize="24sp"
                 android:textColor="@color/radio_text_primary" />
+
+            <!-- Record Button (nur bei DAB sichtbar) -->
+            <ImageButton
+                android:id="@+id/btnCarouselRecord"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_record_inactive"
+                android:scaleType="fitCenter"
+                android:visibility="gone"
+                android:contentDescription="Record" />
+
+            <!-- EPG Button (nur bei DAB sichtbar) -->
+            <ImageButton
+                android:id="@+id/btnCarouselEpg"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="8dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_epg"
+                android:scaleType="fitCenter"
+                android:visibility="gone"
+                android:contentDescription="EPG" />
 
         </LinearLayout>
 
@@ -847,7 +916,7 @@
             android:id="@+id/checkLayoutInfo"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Layout Info"
+            android:text="UI Info"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:buttonTint="#FFFFFF"
@@ -923,6 +992,16 @@
             android:buttonTint="#FFFFFF"
             android:checked="false" />
 
+        <CheckBox
+            android:id="@+id/checkParserInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="RT-DLS Parser"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:buttonTint="#FFFFFF"
+            android:checked="false" />
+
         <!-- Global Alpha Slider for all Debug Overlays -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -949,7 +1028,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- Layout Info Debug Overlay -->
+    <!-- UI Info Debug Overlay -->
     <LinearLayout
         android:id="@+id/debugLayoutOverlay"
         android:layout_width="wrap_content"
@@ -964,20 +1043,46 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Layout Info"
+            android:text="UI Info"
             android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold"
             android:layout_marginBottom="8dp" />
 
         <TextView
-            android:id="@+id/debugLayoutName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="layout-sw600dp"
+            android:text="UI Cover:"
+            android:textColor="#AAAAAA"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/debugUiCoverArtwork"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="(none)"
             android:textColor="#00FF00"
-            android:textSize="16sp"
-            android:fontFamily="monospace" />
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:maxWidth="280dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="MediaSession:"
+            android:textColor="#AAAAAA"
+            android:textSize="11sp"
+            android:layout_marginTop="6dp" />
+
+        <TextView
+            android:id="@+id/debugMediaSessionArtwork"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="(none)"
+            android:textColor="#00FF00"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:maxWidth="280dp" />
 
         <TextView
             android:id="@+id/debugScreenInfo"
@@ -985,9 +1090,10 @@
             android:layout_height="wrap_content"
             android:text="Screen: 0x0"
             android:textColor="#AAAAAA"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:fontFamily="monospace"
-            android:layout_marginTop="4dp" />
+            android:layout_marginTop="8dp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/debugDensityInfo"
@@ -995,8 +1101,9 @@
             android:layout_height="wrap_content"
             android:text="Density: 0"
             android:textColor="#AAAAAA"
-            android:textSize="12sp"
-            android:fontFamily="monospace" />
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Build Info Debug Overlay -->
@@ -1252,8 +1359,8 @@
                         android:id="@+id/debugDeezerSource"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="SPOTIFY"
-                        android:textColor="#1DB954"
+                        android:text="DEEZER"
+                        android:textColor="#FF6600"
                         android:textSize="16sp"
                         android:textStyle="bold" />
 
@@ -1530,7 +1637,7 @@
                 android:textColor="#FFFFFF"
                 android:textSize="12sp"
                 android:fontFamily="monospace"
-                android:maxLines="4"
+                android:maxLines="6"
                 android:ellipsize="end" />
         </LinearLayout>
 
@@ -1646,6 +1753,20 @@
                 android:textSize="12sp"
                 android:fontFamily="monospace" />
         </LinearLayout>
+
+        <!-- DLS Log Button (nur für DAB sichtbar) -->
+        <Button
+            android:id="@+id/btnDlsLog"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:layout_marginTop="8dp"
+            android:text="DLS Log"
+            android:textSize="10sp"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/button_dialog"
+            app:backgroundTint="@null"
+            android:paddingHorizontal="12dp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- Debug Buttons Overlay -->
@@ -1709,6 +1830,16 @@
             android:textColor="#FFFFFF"
             android:textSize="12sp"
             android:backgroundTint="#990000" />
+
+        <Button
+            android:id="@+id/btnDebugCrashApp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Crash App"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:backgroundTint="#FF0000" />
 
     </LinearLayout>
 
@@ -2047,6 +2178,116 @@
                 android:textSize="11sp"
                 android:fontFamily="monospace" />
         </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- Parser Debug Overlay -->
+    <LinearLayout
+        android:id="@+id/debugParserOverlay"
+        android:layout_width="550dp"
+        android:layout_height="350dp"
+        android:layout_gravity="end|center_vertical"
+        android:layout_margin="16dp"
+        android:background="@drawable/debug_overlay_background"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Parser"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <!-- Tab Buttons -->
+            <TextView
+                android:id="@+id/btnParserTabFm"
+                android:layout_width="wrap_content"
+                android:layout_height="26dp"
+                android:layout_marginStart="12dp"
+                android:text="FM"
+                android:textSize="11sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="#4CAF50"
+                android:paddingHorizontal="14dp" />
+
+            <TextView
+                android:id="@+id/btnParserTabDab"
+                android:layout_width="wrap_content"
+                android:layout_height="26dp"
+                android:layout_marginStart="4dp"
+                android:text="DAB+"
+                android:textSize="11sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="#555555"
+                android:paddingHorizontal="14dp" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <Button
+                android:id="@+id/btnParserClear"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:text="Clear"
+                android:textSize="10sp"
+                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                android:background="@drawable/button_dialog"
+                app:backgroundTint="@null"
+                android:paddingHorizontal="12dp" />
+
+            <Button
+                android:id="@+id/btnParserExport"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:layout_marginStart="8dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:text="Export"
+                android:textSize="10sp"
+                android:textColor="#FFFFFF"
+                android:textAllCaps="false"
+                android:background="@drawable/button_dialog"
+                app:backgroundTint="@null"
+                android:paddingHorizontal="12dp" />
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/parserLogScrollView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:fillViewport="true">
+
+            <TextView
+                android:id="@+id/parserLogText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="(keine Log-Einträge)"
+                android:textColor="#AAAAAA"
+                android:textSize="9sp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="2dp" />
+
+        </ScrollView>
 
     </LinearLayout>
 

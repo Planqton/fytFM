@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/debugOverlay"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
@@ -198,5 +199,19 @@
             android:textSize="12sp"
             android:fontFamily="monospace" />
     </LinearLayout>
+
+    <!-- DLS Log Button (nur für DAB sichtbar) -->
+    <Button
+        android:id="@+id/btnDlsLog"
+        android:layout_width="wrap_content"
+        android:layout_height="32dp"
+        android:layout_marginTop="8dp"
+        android:text="DLS Log"
+        android:textSize="10sp"
+        android:textColor="#FFFFFF"
+        android:background="@drawable/button_dialog"
+        app:backgroundTint="@null"
+        android:paddingHorizontal="12dp"
+        android:visibility="gone" />
 
 </LinearLayout>

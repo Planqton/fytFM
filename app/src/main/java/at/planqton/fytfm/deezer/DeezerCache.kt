@@ -130,6 +130,7 @@ class DeezerCache(private val context: Context) : SQLiteOpenHelper(context, DATA
 
     /**
      * Search for a track in local cache by query string.
+     * STRICT matching: Only returns if BOTH artist AND title are found in the query.
      */
     fun searchLocal(query: String): TrackInfo? {
         val normalizedQuery = normalizeForSearch(query)
@@ -137,86 +138,78 @@ class DeezerCache(private val context: Context) : SQLiteOpenHelper(context, DATA
 
         val db = readableDatabase
 
-        // Try exact match first
-        var cursor = db.rawQuery("""
+        // Get all cached tracks and check for strict match
+        val cursor = db.rawQuery("""
             SELECT * FROM $TABLE_TRACKS
-            WHERE artist || ' ' || title LIKE ? COLLATE NOCASE
             ORDER BY popularity DESC
-            LIMIT 1
-        """, arrayOf("%$normalizedQuery%"))
+        """, null)
 
         cursor.use {
-            if (it.moveToFirst()) {
-                return cursorToTrackInfo(it).also {
-                    Log.d(TAG, "Local search hit: ${it?.artist} - ${it?.title}")
+            while (it.moveToNext()) {
+                val track = cursorToTrackInfo(it) ?: continue
+                val normalizedArtist = normalizeForSearch(track.artist ?: "")
+                val normalizedTitle = normalizeForSearch(track.title ?: "")
+
+                // STRICT: Both artist AND title must be present in query
+                if (normalizedArtist.length >= 2 && normalizedTitle.length >= 2) {
+                    val artistInQuery = normalizedQuery.contains(normalizedArtist)
+                    val titleInQuery = normalizedQuery.contains(normalizedTitle)
+
+                    if (artistInQuery && titleInQuery) {
+                        Log.d(TAG, "Local search STRICT hit: ${track.artist} - ${track.title}")
+                        return track
+                    }
                 }
             }
         }
 
-        // Try word-based matching
-        val words = normalizedQuery.split(" ").filter { it.length >= 2 }
-        if (words.isEmpty()) return null
-
-        val whereClause = words.joinToString(" AND ") {
-            "(artist || ' ' || title LIKE ? COLLATE NOCASE)"
-        }
-        val args = words.map { "%$it%" }.toTypedArray()
-
-        cursor = db.rawQuery("""
-            SELECT * FROM $TABLE_TRACKS
-            WHERE $whereClause
-            ORDER BY popularity DESC
-            LIMIT 1
-        """, args)
-
-        cursor.use {
-            if (it.moveToFirst()) {
-                return cursorToTrackInfo(it).also {
-                    Log.d(TAG, "Local search hit (words): ${it?.artist} - ${it?.title}")
-                }
-            }
-        }
-
+        Log.d(TAG, "Local search: no strict match for '$query'")
         return null
     }
 
     /**
      * Search by artist and title separately.
+     * STRICT: Requires BOTH artist AND title to match closely.
      */
     fun searchLocalByParts(artist: String?, title: String?): TrackInfo? {
         val normalizedArtist = artist?.let { normalizeForSearch(it) }?.takeIf { it.length >= 2 }
         val normalizedTitle = title?.let { normalizeForSearch(it) }?.takeIf { it.length >= 2 }
 
-        if (normalizedArtist == null && normalizedTitle == null) return null
+        // STRICT: Require BOTH artist AND title
+        if (normalizedArtist == null || normalizedTitle == null) {
+            Log.d(TAG, "Local search (parts): need both artist and title")
+            return null
+        }
 
         val db = readableDatabase
-        val conditions = mutableListOf<String>()
-        val args = mutableListOf<String>()
 
-        normalizedArtist?.let {
-            conditions.add("artist LIKE ? COLLATE NOCASE")
-            args.add("%$it%")
-        }
-        normalizedTitle?.let {
-            conditions.add("title LIKE ? COLLATE NOCASE")
-            args.add("%$it%")
-        }
-
+        // Get all cached tracks and check for strict match
         val cursor = db.rawQuery("""
             SELECT * FROM $TABLE_TRACKS
-            WHERE ${conditions.joinToString(" AND ")}
             ORDER BY popularity DESC
-            LIMIT 1
-        """, args.toTypedArray())
+        """, null)
 
         cursor.use {
-            if (it.moveToFirst()) {
-                return cursorToTrackInfo(it).also {
-                    Log.d(TAG, "Local search hit (parts): ${it?.artist} - ${it?.title}")
+            while (it.moveToNext()) {
+                val track = cursorToTrackInfo(it) ?: continue
+                val cachedArtist = normalizeForSearch(track.artist ?: "")
+                val cachedTitle = normalizeForSearch(track.title ?: "")
+
+                // Check if artist matches (either direction)
+                val artistMatches = cachedArtist.contains(normalizedArtist) ||
+                                   normalizedArtist.contains(cachedArtist)
+                // Check if title matches (either direction)
+                val titleMatches = cachedTitle.contains(normalizedTitle) ||
+                                  normalizedTitle.contains(cachedTitle)
+
+                if (artistMatches && titleMatches) {
+                    Log.d(TAG, "Local search STRICT hit (parts): ${track.artist} - ${track.title}")
+                    return track
                 }
             }
         }
 
+        Log.d(TAG, "Local search (parts): no strict match for '$artist - $title'")
         return null
     }
 

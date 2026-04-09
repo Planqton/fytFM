@@ -13,7 +13,7 @@
         android:gravity="center"
         android:paddingTop="24dp"
         android:paddingBottom="16dp"
-        android:text="Logo suchen"
+        android:text="@string/logo_search"
         android:textColor="#333333"
         android:textSize="20sp"
         android:textStyle="bold" />
@@ -33,7 +33,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:hint="z.B. Ö3 Radio Logo"
+            android:hint="@string/search_logo_hint"
             android:inputType="text"
             android:imeOptions="actionSearch"
             android:textSize="14sp" />
@@ -45,7 +45,7 @@
             android:layout_marginStart="8dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_search"
-            android:contentDescription="Suchen" />
+            android:contentDescription="@string/search" />
 
     </LinearLayout>
 
@@ -73,7 +73,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:padding="32dp"
-        android:text="Suchbegriff eingeben und suchen"
+        android:text="@string/enter_search_and_search"
         android:textColor="#AAAAAA"
         android:textSize="14sp" />
 
@@ -89,7 +89,7 @@
             android:id="@+id/btnCloseSearch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Schließen"
+            android:text="@string/close"
             style="?attr/borderlessButtonStyle" />
 
     </LinearLayout>

@@ -62,6 +62,10 @@ class FytFMMediaService : MediaLibraryService() {
     // Binder für lokale Bindung
     private val binder = LocalBinder()
 
+    // Current artwork source for debug UI
+    var currentArtworkSource: String = "(none)"
+        private set
+
     inner class LocalBinder : Binder() {
         fun getService(): FytFMMediaService = this@FytFMMediaService
     }
@@ -193,8 +197,14 @@ class FytFMMediaService : MediaLibraryService() {
         val artworkPath = localCoverPath ?: radioLogoPath
         val fallbackDrawable = if (isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
         val artworkData: ByteArray? = when {
-            !artworkPath.isNullOrBlank() && File(artworkPath).exists() -> loadImageAsBytes(artworkPath)
-            else -> loadDrawableAsBytes(fallbackDrawable)
+            !artworkPath.isNullOrBlank() && File(artworkPath).exists() -> {
+                currentArtworkSource = artworkPath
+                loadImageAsBytes(artworkPath)
+            }
+            else -> {
+                currentArtworkSource = if (isAM) "drawable:placeholder_am" else "drawable:placeholder_fm"
+                loadDrawableAsBytes(fallbackDrawable)
+            }
         }
 
         val metadata = MediaMetadata.Builder()
@@ -237,26 +247,87 @@ class FytFMMediaService : MediaLibraryService() {
      * @param dls Dynamic Label Segment (Radiotext, z.B. "Nachrichten um 12:00")
      * @param slideshowBitmap MOT Slideshow Bild (falls gesendet)
      * @param radioLogoPath Lokaler Pfad zum Radio-Logo (Fallback wenn kein Slideshow)
+     * @param deezerCoverPath Lokaler Pfad oder URL zum Deezer Cover (höchste Priorität wenn vorhanden)
      */
     fun updateDabMetadata(
         serviceLabel: String?,
         ensembleLabel: String? = null,
         dls: String? = null,
         slideshowBitmap: android.graphics.Bitmap? = null,
-        radioLogoPath: String? = null
+        radioLogoPath: String? = null,
+        deezerCoverPath: String? = null
     ) {
         val stationName = serviceLabel ?: "DAB+"
-
-        // Title: DLS wenn vorhanden, sonst Stationsname
         val displayTitle = dls?.takeIf { it.isNotBlank() } ?: stationName
 
-        // Artwork: Slideshow → Radio-Logo → DAB Fallback
-        val artworkData: ByteArray? = when {
-            slideshowBitmap != null -> bitmapToByteArray(slideshowBitmap)
-            !radioLogoPath.isNullOrBlank() && File(radioLogoPath).exists() -> loadImageAsBytes(radioLogoPath)
-            else -> loadDrawableAsBytes(R.drawable.placeholder_fm)  // DAB nutzt FM-Placeholder als Fallback
-        }
+        // Check if we need to load from URL (asynchronously)
+        val isUrl = !deezerCoverPath.isNullOrBlank() &&
+                    (deezerCoverPath.startsWith("http://") || deezerCoverPath.startsWith("https://"))
 
+        if (isUrl) {
+            // Sofort Fallback-Artwork setzen, damit kein schwarzes Bild erscheint
+            val initialArtwork: ByteArray? = when {
+                slideshowBitmap != null -> {
+                    currentArtworkSource = "slideshow (loading URL...)"
+                    bitmapToByteArray(slideshowBitmap)
+                }
+                !radioLogoPath.isNullOrBlank() && File(radioLogoPath).exists() -> {
+                    currentArtworkSource = "$radioLogoPath (loading URL...)"
+                    loadImageAsBytes(radioLogoPath)
+                }
+                else -> {
+                    currentArtworkSource = "drawable:ic_fytfm_dab_plus_light (loading URL...)"
+                    loadDrawableAsBytes(R.drawable.ic_fytfm_dab_plus_light)
+                }
+            }
+            updateDabMetadataInternal(stationName, displayTitle, ensembleLabel, initialArtwork, deezerCoverPath, radioLogoPath)
+
+            // Dann URL asynchron laden und Artwork aktualisieren
+            Thread {
+                val artworkData = loadImageAsBytes(deezerCoverPath!!)
+                if (artworkData != null) {
+                    android.os.Handler(android.os.Looper.getMainLooper()).post {
+                        currentArtworkSource = deezerCoverPath
+                        updateDabMetadataInternal(stationName, displayTitle, ensembleLabel, artworkData, deezerCoverPath, radioLogoPath)
+                    }
+                }
+            }.start()
+        } else {
+            // Load locally (synchronous)
+            val artworkData: ByteArray? = when {
+                // Deezer Cover: Lokaler Pfad
+                !deezerCoverPath.isNullOrBlank() && deezerCoverPath.startsWith("/") && File(deezerCoverPath).exists() -> {
+                    currentArtworkSource = deezerCoverPath
+                    loadImageAsBytes(deezerCoverPath)
+                }
+                // MOT Slideshow
+                slideshowBitmap != null -> {
+                    currentArtworkSource = "slideshow"
+                    bitmapToByteArray(slideshowBitmap)
+                }
+                // Radio Logo
+                !radioLogoPath.isNullOrBlank() && File(radioLogoPath).exists() -> {
+                    currentArtworkSource = radioLogoPath
+                    loadImageAsBytes(radioLogoPath)
+                }
+                // Fallback: DAB+ Icon (weiß auf dunklem Hintergrund)
+                else -> {
+                    currentArtworkSource = "drawable:ic_fytfm_dab_plus_light"
+                    loadDrawableAsBytes(R.drawable.ic_fytfm_dab_plus_light)
+                }
+            }
+            updateDabMetadataInternal(stationName, displayTitle, ensembleLabel, artworkData, deezerCoverPath, radioLogoPath)
+        }
+    }
+
+    private fun updateDabMetadataInternal(
+        stationName: String,
+        displayTitle: String,
+        ensembleLabel: String?,
+        artworkData: ByteArray?,
+        deezerCoverPath: String?,
+        radioLogoPath: String?
+    ) {
         val metadata = MediaMetadata.Builder()
             .setTitle(displayTitle)                                    // DLS oder Stationsname
             .setSubtitle(stationName)                                  // Sendername als Untertitel
@@ -276,13 +347,13 @@ class FytFMMediaService : MediaLibraryService() {
 
         player.updateMetadata(metadata)
 
-        // Legacy MediaButtonSession auch aktualisieren
-        val displayForLegacy = dls?.takeIf { it.isNotBlank() } ?: stationName
-        val coverForLegacy = radioLogoPath
+        // Legacy MediaButtonSession auch aktualisieren (nur lokale Pfade unterstützt)
+        val displayForLegacy = displayTitle
+        val coverForLegacy = if (deezerCoverPath?.startsWith("/") == true) deezerCoverPath else radioLogoPath
         val subtitleForLegacy = ensembleLabel ?: "DAB+"
         mediaButtonSession?.updateMetadata(displayForLegacy, subtitleForLegacy, coverForLegacy)
 
-        Log.d(TAG, "DAB Metadata updated: $stationName | $dls | data=${artworkData?.size ?: 0}b")
+        Log.d(TAG, "DAB Metadata updated: $stationName | $displayTitle | deezerCover=$deezerCoverPath | data=${artworkData?.size ?: 0}b")
     }
 
     private fun bitmapToByteArray(bitmap: android.graphics.Bitmap): ByteArray {
@@ -310,28 +381,18 @@ class FytFMMediaService : MediaLibraryService() {
 
     /**
      * Lädt ein Bild als Byte-Array für MediaMetadata.setArtworkData()
+     * Unterstützt lokale Dateipfade UND URLs
      * Resized auf max 300x300 für bessere Kompatibilität
      */
     private fun loadImageAsBytes(imagePath: String): ByteArray? {
         return try {
-            // Erst Dimensionen lesen ohne zu dekodieren
-            val options = BitmapFactory.Options().apply {
-                inJustDecodeBounds = true
+            val bitmap = if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+                // URL laden
+                loadBitmapFromUrl(imagePath)
+            } else {
+                // Lokale Datei laden
+                loadBitmapFromFile(imagePath)
             }
-            BitmapFactory.decodeFile(imagePath, options)
-
-            // Sample-Size berechnen für max 300x300
-            val maxSize = 300
-            var sampleSize = 1
-            while (options.outWidth / sampleSize > maxSize || options.outHeight / sampleSize > maxSize) {
-                sampleSize *= 2
-            }
-
-            // Jetzt mit Sample-Size dekodieren
-            val decodeOptions = BitmapFactory.Options().apply {
-                inSampleSize = sampleSize
-            }
-            val bitmap = BitmapFactory.decodeFile(imagePath, decodeOptions)
 
             if (bitmap != null) {
                 // Auf exakt 300x300 skalieren
@@ -357,8 +418,59 @@ class FytFMMediaService : MediaLibraryService() {
     }
 
     /**
+     * Lädt Bitmap von lokaler Datei mit Downsampling
+     */
+    private fun loadBitmapFromFile(filePath: String): android.graphics.Bitmap? {
+        return try {
+            val options = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            BitmapFactory.decodeFile(filePath, options)
+
+            val maxSize = 300
+            var sampleSize = 1
+            while (options.outWidth / sampleSize > maxSize || options.outHeight / sampleSize > maxSize) {
+                sampleSize *= 2
+            }
+
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+            }
+            BitmapFactory.decodeFile(filePath, decodeOptions)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading bitmap from file: $filePath", e)
+            null
+        }
+    }
+
+    /**
+     * Lädt Bitmap von URL (synchron - sollte vom IO-Thread aufgerufen werden)
+     */
+    private fun loadBitmapFromUrl(url: String): android.graphics.Bitmap? {
+        return try {
+            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            connection.doInput = true
+            connection.connect()
+
+            val inputStream = connection.inputStream
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+            inputStream.close()
+            connection.disconnect()
+
+            Log.d(TAG, "Loaded bitmap from URL: $url")
+            bitmap
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading bitmap from URL: $url", e)
+            null
+        }
+    }
+
+    /**
      * Lädt ein Drawable als Byte-Array für MediaMetadata.setArtworkData()
      * Verwendet für Fallback-Icon wenn kein Cover/Logo vorhanden
+     * Zeichnet auf dunklem Hintergrund für bessere Sichtbarkeit in MediaSession
      */
     private fun loadDrawableAsBytes(drawableResId: Int): ByteArray? {
         return try {
@@ -367,6 +479,8 @@ class FytFMMediaService : MediaLibraryService() {
 
             val bitmap = android.graphics.Bitmap.createBitmap(300, 300, android.graphics.Bitmap.Config.ARGB_8888)
             val canvas = android.graphics.Canvas(bitmap)
+            // Dunkler Hintergrund für bessere Sichtbarkeit (wichtig für MediaSession)
+            canvas.drawColor(0xFF2D2D2D.toInt())
             drawable.setBounds(0, 0, 300, 300)
             drawable.draw(canvas)
 

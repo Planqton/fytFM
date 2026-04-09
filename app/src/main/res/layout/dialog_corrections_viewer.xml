@@ -13,7 +13,7 @@
         android:gravity="center"
         android:paddingTop="24dp"
         android:paddingBottom="16dp"
-        android:text="RT Korrektur Regeln"
+        android:text="@string/rt_correction_rules"
         android:textColor="#333333"
         android:textSize="22sp"
         android:textStyle="bold" />
@@ -43,7 +43,7 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="Regeln"
+                    android:text="@string/rules"
                     android:textColor="#4CAF50"
                     android:textSize="14sp"
                     android:textAllCaps="true"
@@ -58,7 +58,7 @@
                     android:src="@drawable/ic_add"
                     android:scaleType="centerInside"
                     android:padding="6dp"
-                    android:contentDescription="Add edit string" />
+                    android:contentDescription="@string/add_rule" />
 
             </LinearLayout>
 
@@ -68,7 +68,7 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:paddingBottom="12dp"
-                android:text="Texte die vor der Suche ersetzt/entfernt werden"
+                android:text="@string/rules_description"
                 android:textColor="#888888"
                 android:textSize="12sp" />
 
@@ -88,7 +88,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:padding="24dp"
-                android:text="Keine Regeln definiert"
+                android:text="@string/no_rules_defined"
                 android:textColor="#AAAAAA"
                 android:textSize="13sp"
                 android:visibility="gone" />
@@ -110,7 +110,7 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:paddingTop="8dp"
-                android:text="Ignorierte RTs / Übersprungene Tracks"
+                android:text="@string/ignored_rts"
                 android:textColor="#FF9800"
                 android:textSize="14sp"
                 android:textAllCaps="true"
@@ -123,7 +123,7 @@
                 android:paddingStart="24dp"
                 android:paddingEnd="24dp"
                 android:paddingBottom="12dp"
-                android:text="RTs die ignoriert oder deren Tracks übersprungen werden"
+                android:text="@string/ignored_rts_description"
                 android:textColor="#888888"
                 android:textSize="12sp" />
 
@@ -144,7 +144,7 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:padding="24dp"
-                android:text="Keine RT Korrekturen vorhanden"
+                android:text="@string/no_rt_corrections"
                 android:textColor="#AAAAAA"
                 android:textSize="13sp"
                 android:visibility="gone" />
@@ -171,7 +171,7 @@
         android:clickable="true"
         android:focusable="true"
         android:foreground="?attr/selectableItemBackground"
-        android:text="Alle löschen"
+        android:text="@string/delete_all"
         android:textColor="#D32F2F"
         android:textSize="14sp" />
 

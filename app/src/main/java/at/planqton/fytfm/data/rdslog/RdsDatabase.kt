@@ -6,15 +6,14 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 
 @Database(
-    entities = [RdsLogEntry::class, RtCorrection::class, EditString::class],
-    version = 8,
+    entities = [RdsLogEntry::class, RtCorrection::class],
+    version = 9,
     exportSchema = false
 )
 abstract class RdsDatabase : RoomDatabase() {
 
     abstract fun rdsLogDao(): RdsLogDao
     abstract fun rtCorrectionDao(): RtCorrectionDao
-    abstract fun editStringDao(): EditStringDao
 
     companion object {
         @Volatile

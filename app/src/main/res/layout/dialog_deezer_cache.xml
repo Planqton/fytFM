@@ -18,7 +18,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Deezer Cache"
+            android:text="@string/deezer_cache"
             android:textColor="#FFFFFF"
             android:textSize="20sp"
             android:textStyle="bold" />
@@ -27,7 +27,7 @@
             android:id="@+id/tvCacheCount"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="0 Tracks"
+            android:text="@string/tracks_count"
             android:textColor="#FFFFFF"
             android:textSize="14sp" />
 
@@ -40,7 +40,7 @@
         android:layout_height="48dp"
         android:layout_margin="12dp"
         android:background="@drawable/edittext_background"
-        android:hint="Suchen..."
+        android:hint="@string/search_hint"
         android:inputType="text"
         android:padding="12dp"
         android:textSize="14sp"
@@ -63,7 +63,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:gravity="center"
-        android:text="Keine Tracks im Cache"
+        android:text="@string/no_tracks_in_cache"
         android:textColor="#999999"
         android:textSize="16sp"
         android:visibility="gone" />
@@ -76,7 +76,7 @@
         android:layout_margin="16dp"
         android:background="@drawable/button_outline"
         android:gravity="center"
-        android:text="Schließen"
+        android:text="@string/close"
         android:textColor="#FEAA2D"
         android:textSize="16sp" />
 

@@ -68,7 +68,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:text="Scanning..."
+            android:text="@string/scanning"
             android:textColor="@color/radio_text_secondary" />
 
         <Button
@@ -79,7 +79,7 @@
             android:background="@drawable/button_background"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:text="Überspringen"
+            android:text="@string/skip"
             android:textColor="@color/radio_text_primary"
             android:visibility="gone" />
 
@@ -99,7 +99,7 @@
         android:layout_width="match_parent"
         android:layout_height="200dp"
         android:gravity="center"
-        android:text="Keine Sender gefunden.\nTippe Scan um zu suchen."
+        android:text="@string/no_stations_found"
         android:textColor="@color/radio_text_secondary"
         android:visibility="gone" />
 
@@ -117,7 +117,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="RDS-Filter:"
+            android:text="@string/rds_filter"
             android:textColor="@color/radio_text_primary"
             android:textStyle="bold"
             android:layout_marginBottom="4dp" />
@@ -134,7 +134,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="24dp"
-                android:text="PS (Name)"
+                android:text="@string/ps_name"
                 android:textColor="@color/radio_text_primary"
                 android:buttonTint="@color/radio_text_primary" />
 
@@ -142,7 +142,7 @@
                 android:id="@+id/cbFilterPi"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="PI (ID)"
+                android:text="@string/pi_id"
                 android:textColor="@color/radio_text_primary"
                 android:buttonTint="@color/radio_text_primary" />
 
@@ -162,7 +162,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="24dp"
-                android:text="Beide (UND)"
+                android:text="@string/both_and"
                 android:textColor="@color/radio_text_primary"
                 android:buttonTint="@color/radio_text_primary"
                 android:checked="true" />
@@ -171,7 +171,7 @@
                 android:id="@+id/rbFilterOr"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Eines (ODER)"
+                android:text="@string/one_or"
                 android:textColor="@color/radio_text_primary"
                 android:buttonTint="@color/radio_text_primary" />
 
@@ -182,7 +182,7 @@
             android:id="@+id/tvRdsTimeout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="RDS-Wartezeit: 8s"
+            android:text="@string/rds_wait_time"
             android:textColor="@color/radio_text_primary"
             android:layout_marginBottom="4dp" />
 
@@ -214,7 +214,7 @@
             android:background="@drawable/button_background"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:text="Neu Scannen"
+            android:text="@string/rescan"
             android:textColor="@color/radio_text_primary" />
 
         <Button
@@ -225,7 +225,7 @@
             android:background="@drawable/button_background"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:text="Filtern"
+            android:text="@string/filter"
             android:textColor="@color/radio_text_primary"
             android:visibility="gone" />
 
@@ -237,7 +237,7 @@
             android:background="@drawable/button_background"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:text="Hinzufügen"
+            android:text="@string/add"
             android:textColor="@color/radio_text_primary"
             android:visibility="gone" />
 
@@ -248,7 +248,7 @@
             android:background="@drawable/button_background"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:text="Schließen"
+            android:text="@string/close"
             android:textColor="@color/radio_text_primary" />
 
     </LinearLayout>

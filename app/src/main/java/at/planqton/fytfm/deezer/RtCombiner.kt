@@ -1,8 +1,6 @@
 package at.planqton.fytfm.deezer
 
 import android.util.Log
-import at.planqton.fytfm.data.rdslog.EditString
-import at.planqton.fytfm.data.rdslog.EditStringDao
 import at.planqton.fytfm.data.rdslog.RtCorrection
 import at.planqton.fytfm.data.rdslog.RtCorrectionDao
 import kotlinx.coroutines.*
@@ -17,8 +15,7 @@ import kotlinx.coroutines.*
  *
  * Solution:
  * - Use Deezer Search API to identify and format track info correctly
- * - Apply EditStrings to transform RT before search (e.g., remove "Jetzt On Air:", replace " mit " with " - ")
- * - Two-phase search: immediate rules first, then fallback rules if nothing found
+ * - DlsParser handles common prefixes, station names and promotional text
  */
 class RtCombiner(
     private val deezerClient: DeezerClient?,
@@ -26,7 +23,6 @@ class RtCombiner(
     private val isCacheEnabled: (() -> Boolean)? = null,
     private val isNetworkAvailable: (() -> Boolean)? = null,
     private val correctionDao: RtCorrectionDao? = null,
-    private val editStringDao: EditStringDao? = null,
     private val onDebugUpdate: ((status: String, originalRt: String?, strippedRt: String?, query: String?, trackInfo: TrackInfo?) -> Unit)? = null
 ) {
     companion object {
@@ -70,6 +66,7 @@ class RtCombiner(
     // Current RT for correction buttons
     private var currentRt: String? = null
     private var currentTrackInfo: TrackInfo? = null
+    private var currentPi: Int = 0  // Current PI for clearing lastTrackInfo on "Not found"
 
     /**
      * Get current RT (for correction buttons)
@@ -82,102 +79,20 @@ class RtCombiner(
     fun getCurrentTrackInfo(): TrackInfo? = currentTrackInfo
 
     /**
-     * Apply EditStrings to RT
-     * @param rt The RT to transform
-     * @param originalRt The original RT (for condition checking)
-     * @param frequency Current frequency in MHz (for frequency-specific rules)
-     * @param editStrings List of edit rules to apply
-     * @return Transformed RT
-     */
-    private fun applyEditStrings(rt: String, originalRt: String, frequency: Float?, editStrings: List<EditString>): String {
-        if (editStrings.isEmpty()) return rt
-
-        var result = rt
-
-        for (edit in editStrings) {
-            // Check frequency condition
-            if (edit.forFrequency != null && frequency != null) {
-                // Allow small tolerance for float comparison (0.05 MHz)
-                if (kotlin.math.abs(edit.forFrequency - frequency) > 0.05f) {
-                    continue // Skip this rule - frequency doesn't match
-                }
-            }
-
-            // Check conditionContains (respects caseSensitiveCondition flag)
-            if (!edit.conditionContains.isNullOrEmpty()) {
-                val conditionMatches = if (edit.caseSensitiveCondition) {
-                    originalRt.contains(edit.conditionContains)
-                } else {
-                    originalRt.lowercase().contains(edit.conditionContains.lowercase())
-                }
-                if (!conditionMatches) {
-                    continue // Skip this rule - condition not met
-                }
-            }
-
-            // Find text comparison (respects caseSensitiveFind flag)
-            val findText = if (edit.caseSensitiveFind) edit.textOriginal else edit.textNormalized
-            val compareResult = if (edit.caseSensitiveFind) result else result.lowercase()
-
-            val matched = when (edit.position) {
-                EditString.POSITION_PREFIX -> compareResult.startsWith(findText)
-                EditString.POSITION_SUFFIX -> compareResult.endsWith(findText)
-                EditString.POSITION_EITHER -> compareResult.startsWith(findText) || compareResult.endsWith(findText)
-                EditString.POSITION_ANYWHERE -> compareResult.contains(findText)
-                else -> false
-            }
-
-            if (matched) {
-                val oldResult = result
-                when (edit.position) {
-                    EditString.POSITION_PREFIX -> {
-                        result = edit.replaceWith + result.substring(findText.length)
-                        result = result.trim()
-                    }
-                    EditString.POSITION_SUFFIX -> {
-                        val idx = compareResult.lastIndexOf(findText)
-                        if (idx >= 0) {
-                            result = result.substring(0, idx) + edit.replaceWith
-                            result = result.trim()
-                        }
-                    }
-                    EditString.POSITION_EITHER -> {
-                        if (compareResult.startsWith(findText)) {
-                            result = edit.replaceWith + result.substring(findText.length)
-                            result = result.trim()
-                        } else if (compareResult.endsWith(findText)) {
-                            val idx = compareResult.lastIndexOf(findText)
-                            if (idx >= 0) {
-                                result = result.substring(0, idx) + edit.replaceWith
-                                result = result.trim()
-                            }
-                        }
-                    }
-                    EditString.POSITION_ANYWHERE -> {
-                        val idx = compareResult.indexOf(findText)
-                        if (idx >= 0) {
-                            result = result.substring(0, idx) + edit.replaceWith + result.substring(idx + findText.length)
-                            result = result.trim()
-                        }
-                    }
-                }
-                Log.d(TAG, "Applied edit '${edit.textOriginal}' -> '${edit.replaceWith}' (${edit.position}): '$oldResult' -> '$result'")
-            }
-        }
-
-        return result
-    }
-
-    /**
      * Process incoming RT
      * @param pi PI-Code of the station
      * @param rt Radio Text
      * @param frequency Current frequency in MHz (for frequency-specific edit rules)
+     * @param rawOriginal Optional raw original text (e.g., unprocessed DLS) for debug display
      * @return Formatted "Artist - Title" or null if not yet determined
      */
-    suspend fun processRt(pi: Int, rt: String, frequency: Float? = null): String? {
+    suspend fun processRt(pi: Int, rt: String, frequency: Float? = null, rawOriginal: String? = null, skipBuffer: Boolean = false): String? {
+        currentPi = pi  // Store for clearing lastTrackInfo on "Not found"
         val trimmedRt = rt.trim()
         if (trimmedRt.isBlank()) return null
+
+        // Use rawOriginal for debug display if provided (e.g., original DLS before parsing)
+        val displayOriginal = rawOriginal?.trim() ?: trimmedRt
 
         // Silent early-out: If this RT is part of the current result and nothing changed,
         // return cached immediately WITHOUT any debug updates or UI triggers
@@ -202,10 +117,12 @@ class RtCombiner(
         }
 
         // Check if RT is ignored
+        Log.d(TAG, "Checking if RT is ignored...")
         val normalizedRt = RtCorrection.normalizeRt(trimmedRt)
+        Log.d(TAG, "Normalized RT: $normalizedRt")
         if (correctionDao?.isRtIgnored(normalizedRt) == true) {
             Log.d(TAG, "RT is ignored: $trimmedRt")
-            onDebugUpdate?.invoke("Ignored", trimmedRt, trimmedRt, null, null)
+            onDebugUpdate?.invoke("Ignored", displayOriginal, trimmedRt, null, null)
             return null
         }
 
@@ -234,18 +151,17 @@ class RtCombiner(
         }
 
         lastProcessedRt[pi] = trimmedRt
-        lastOriginalRt[pi] = trimmedRt
-        currentRt = trimmedRt
+        lastOriginalRt[pi] = displayOriginal
+        currentRt = displayOriginal
 
-        // Phase 1: Apply immediate edit strings (not fallback)
-        val immediateEdits = editStringDao?.getAllImmediate() ?: emptyList()
-        var searchRt = applyEditStrings(trimmedRt, trimmedRt, frequency, immediateEdits)
+        // Use trimmedRt directly for search (DlsParser already handles cleanup)
+        val searchRt = trimmedRt
 
         // Cache the stripped RT for debug display
         lastSearchRt[pi] = searchRt
 
-        Log.d(TAG, "Processing RT for PI=$pi: $trimmedRt" + (if (searchRt != trimmedRt) " -> '$searchRt'" else ""))
-        onDebugUpdate?.invoke("Processing...", trimmedRt, searchRt, null, null)
+        Log.d(TAG, "Processing RT for PI=$pi: $displayOriginal")
+        onDebugUpdate?.invoke("Processing...", displayOriginal, searchRt, null, null)
 
         // Check if Deezer is available - if not, try local cache only
         if (deezerClient == null) {
@@ -268,7 +184,9 @@ class RtCombiner(
 
         // Check if this RT should be buffered first (short RT without separator)
         // This helps with stations like Kronehit that send Artist and Title separately
-        val bufferFirst = shouldBufferFirst(searchRt)
+        // For DAB+ (skipBuffer=true), always search directly - DLS is usually complete
+        val bufferFirst = !skipBuffer && shouldBufferFirst(searchRt)
+        Log.d(TAG, "shouldBufferFirst('$searchRt') = $bufferFirst, len=${searchRt.length}, has ' - '=${searchRt.contains(" - ")}, skipBuffer=$skipBuffer")
         if (bufferFirst) {
             Log.d(TAG, "Short RT without separator, buffering first: '$searchRt'")
             onDebugUpdate?.invoke("Buffering...", trimmedRt, searchRt, null, null)
@@ -306,26 +224,10 @@ class RtCombiner(
             return lastResult[pi]
         }
 
-        // Try to find track with immediate edits applied
-        var (result, track) = searchTrack(pi, searchRt)
-
-        // Phase 2: If nothing found, apply fallback edit strings and try again
-        if (result == null) {
-            val fallbackEdits = editStringDao?.getAllFallback() ?: emptyList()
-            if (fallbackEdits.isNotEmpty()) {
-                val fallbackRt = applyEditStrings(searchRt, trimmedRt, frequency, fallbackEdits)
-                if (fallbackRt != searchRt) {
-                    Log.d(TAG, "Trying fallback: '$searchRt' -> '$fallbackRt'")
-                    onDebugUpdate?.invoke("Fallback...", trimmedRt, fallbackRt, null, null)
-
-                    val (fallbackResult, fallbackTrack) = searchTrack(pi, fallbackRt)
-                    if (fallbackResult != null) {
-                        result = fallbackResult
-                        track = fallbackTrack
-                    }
-                }
-            }
-        }
+        // Try to find track
+        Log.d(TAG, "Calling searchTrack...")
+        val (result, track) = searchTrack(pi, searchRt)
+        Log.d(TAG, "searchTrack returned: result=$result")
 
         if (result != null) {
             lastResult[pi] = result
@@ -359,13 +261,14 @@ class RtCombiner(
      * Search for track in cache
      */
     private fun searchInCache(searchRt: String): TrackInfo? {
-        return if (searchRt.contains(" - ")) {
+        val result = if (searchRt.contains(" - ")) {
             val parts = searchRt.split(" - ", limit = 2)
             deezerCache?.searchLocalByParts(parts[0].trim(), parts[1].trim())
                 ?: deezerCache?.searchLocal(searchRt)
         } else {
             deezerCache?.searchLocal(searchRt)
         }
+        return result
     }
 
     /**
@@ -477,18 +380,19 @@ class RtCombiner(
         // Try Deezer API
         val track = deezerClient?.searchTrack(combined)
         if (track != null) {
-            val result = "${track.artist} - ${track.title}"
+            // Cache the result and get updated track with local cover
+            val cachedTrack = cacheTrackAndGetUpdated(track)
+            val result = "${cachedTrack.artist} - ${cachedTrack.title}"
             Log.d(TAG, "Found by combined search: $result")
-            onDebugUpdate?.invoke("Found!", currentRt, combined, combined, track)
-            // Cache the result
-            cacheTrack(track)
-            return Pair(result, track)
+            onDebugUpdate?.invoke("Found!", currentRt, combined, combined, cachedTrack)
+            return Pair(result, cachedTrack)
         }
 
         return Pair(null, null)
     }
 
     private suspend fun validateWithDeezer(possibleArtist: String, possibleTitle: String, rawQuery: String): Pair<String?, TrackInfo?> {
+        Log.d(TAG, "validateWithDeezer: artist='$possibleArtist', title='$possibleTitle', query='$rawQuery'")
         val normalizedRt = currentRt?.let { RtCorrection.normalizeRt(it) }
 
         // Get list of skipped trackIds for this RT
@@ -528,13 +432,13 @@ class RtCombiner(
                 deezerClient?.searchTrackByParts(possibleArtist, possibleTitle)
             }
             if (track != null && track.trackId !in skippedTrackIds) {
-                val result = "${track.artist} - ${track.title}"
+                // Cache the result and get updated track with local cover
+                val cachedTrack = cacheTrackAndGetUpdated(track)
+                val result = "${cachedTrack.artist} - ${cachedTrack.title}"
                 Log.d(TAG, "Validated: $result")
-                onDebugUpdate?.invoke("Found!", currentRt, rawQuery, "artist:\"$possibleArtist\" track:\"$possibleTitle\"", track)
-                // Cache the result
-                cacheTrack(track)
-                currentTrackInfo = track
-                return Pair(result, track)
+                onDebugUpdate?.invoke("Found!", currentRt, rawQuery, "artist:\"$possibleArtist\" track:\"$possibleTitle\"", cachedTrack)
+                currentTrackInfo = cachedTrack
+                return Pair(result, cachedTrack)
             }
         }
 
@@ -545,28 +449,48 @@ class RtCombiner(
             deezerClient?.searchTrack(rawQuery)
         }
         if (simpleTrack != null && simpleTrack.trackId !in skippedTrackIds) {
-            val result = "${simpleTrack.artist} - ${simpleTrack.title}"
+            // Cache the result and get updated track with local cover
+            val cachedTrack = cacheTrackAndGetUpdated(simpleTrack)
+            val result = "${cachedTrack.artist} - ${cachedTrack.title}"
             Log.d(TAG, "Found by simple search: $result")
-            onDebugUpdate?.invoke("Found!", currentRt, rawQuery, rawQuery, simpleTrack)
-            // Cache the result
-            cacheTrack(simpleTrack)
-            currentTrackInfo = simpleTrack
-            return Pair(result, simpleTrack)
+            onDebugUpdate?.invoke("Found!", currentRt, rawQuery, rawQuery, cachedTrack)
+            currentTrackInfo = cachedTrack
+            return Pair(result, cachedTrack)
         }
 
+        // Clear lastTrackInfo for this PI so getLastTrackInfo returns null
+        lastTrackInfo.remove(currentPi)
         onDebugUpdate?.invoke("Not found", currentRt, rawQuery, rawQuery, null)
         return Pair(null, null)
     }
 
-    private fun cacheTrack(track: TrackInfo) {
+    /**
+     * Cache track and return updated track with local cover path.
+     * Checks if cover is already cached (fast), starts background download if not.
+     */
+    private fun cacheTrackAndGetUpdated(track: TrackInfo): TrackInfo {
         // Only cache if enabled
-        if (isCacheEnabled?.invoke() != false) {
-            deezerCache?.let { cache ->
-                scope.launch {
-                    cache.cacheTrack(track)
-                }
-            }
+        if (isCacheEnabled?.invoke() == false) {
+            return track
         }
+
+        val cache = deezerCache ?: return track
+
+        // First check if cover is ALREADY cached (fast, no network)
+        val existingLocalPath = cache.getLocalCoverPath(track.trackId)
+        if (existingLocalPath != null) {
+            // Cover already cached - return immediately with local path
+            return track.copy(coverUrl = existingLocalPath)
+        }
+
+        // Cover not yet cached - start background download (non-blocking)
+        scope.launch {
+            cache.cacheTrack(track)
+        }
+
+        // Return track without local cover for now (UI will show placeholder)
+        // Next time this track is found, the cover will be cached
+        return track
     }
 
     private fun clearBuffer(pi: Int) {

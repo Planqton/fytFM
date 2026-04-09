@@ -155,4 +155,135 @@
     <string name="stations_found">%d stations found</string>
     <string name="start_scan">Start Scan</string>
     <string name="add_all">Add All</string>
+
+    <!-- EPG -->
+    <string name="epg_title">Program Guide</string>
+    <string name="epg_now">NOW</string>
+    <string name="epg_upcoming">UP NEXT</string>
+    <string name="epg_no_data">No program data available</string>
+    <string name="epg_no_data_desc">This station is not broadcasting EPG information.</string>
+    <string name="epg_updated">Updated: %s</string>
+    <string name="epg_until">until %s</string>
+    <string name="epg_close">Close</string>
+
+    <!-- Settings Dialog - Additional -->
+    <string name="autoplay_at_startup">Autoplay at startup</string>
+    <string name="power_on_startup_short">Turn on at startup</string>
+    <string name="edit_stations">Edit stations</string>
+    <string name="deezer_cover">Deezer Cover</string>
+    <string name="deezer_cover_desc_fm">Load album cover via Deezer</string>
+    <string name="deezer_cover_desc_dab">Album cover via Deezer (instead of slideshow)</string>
+    <string name="audio_visualizer">Audio Visualizer</string>
+    <string name="audio_visualizer_desc">Show FFT visualization</string>
+    <string name="visualizer_style">Visualizer Style</string>
+    <string name="style_bars">Bars</string>
+    <string name="recording_path">Recording Location</string>
+    <string name="not_configured">Not configured</string>
+    <string name="section_general">GENERAL</string>
+    <string name="auto_background_desc">App goes to background after X seconds</string>
+    <string name="seconds_label">Seconds:</string>
+    <string name="station_change_overlay">Overlay on station change</string>
+    <string name="station_change_overlay_desc">Popup on steering wheel buttons</string>
+    <string name="swap_prev_next">Swap Prev/Next</string>
+    <string name="swap_prev_next_desc">Reverse steering wheel button direction</string>
+    <string name="section_radio_logos">RADIO LOGOS</string>
+    <string name="logo_template_manager">Logo Template Manager</string>
+    <string name="no_template">No template</string>
+    <string name="show_logos_in_favorites">Show logos in favorites</string>
+    <string name="now_playing_animation">Now Playing Animation</string>
+    <string name="animation_slide">Slide</string>
+    <string name="correction_helpers">Correction Helpers</string>
+    <string name="correction_helpers_desc">Trash/Refresh in Now Playing</string>
+    <string name="rt_correction_rules">RT Correction Rules</string>
+    <string name="corrections_count_format">%d corrections</string>
+    <string name="local_cache">Local Cache</string>
+    <string name="local_cache_desc">Save tracks locally</string>
+    <string name="cache_tracks_format">Cache: %d Tracks</string>
+    <string name="view">View</string>
+    <string name="export">Export</string>
+    <string name="import_action">Import</string>
+    <string name="create_bug_report">Create Bug Report</string>
+    <string name="save_logs_to_downloads">Save logs to Downloads</string>
+
+    <!-- Scan Dialog -->
+    <string name="station_scan_title">Station Scan</string>
+    <string name="skip">Skip</string>
+    <string name="no_stations_found">No stations found.\nTap Scan to search.</string>
+    <string name="rds_filter">RDS Filter:</string>
+    <string name="ps_name">PS (Name)</string>
+    <string name="pi_id">PI (ID)</string>
+    <string name="both_and">Both (AND)</string>
+    <string name="one_or">One (OR)</string>
+    <string name="rds_wait_time">RDS wait time: %ds</string>
+    <string name="rescan">Rescan</string>
+    <string name="filter">Filter</string>
+    <string name="add">Add</string>
+    <string name="close">Close</string>
+    <string name="scan_method">Scan method:</string>
+    <string name="quick_scan">Quick Scan (add directly)</string>
+    <string name="native_scan">Native (Fast)</string>
+    <string name="experimental_scan">Experimental (Frequency scan)</string>
+    <string name="overwrite_favorites_short">Overwrite favorites</string>
+    <string name="overwrite_favorites_scan_desc">Also updates favorited stations</string>
+    <string name="start">Start</string>
+    <string name="start_filter">Start + Filter</string>
+
+    <!-- Template Editor -->
+    <string name="edit_template">Edit Template</string>
+    <string name="name_label">Name:</string>
+    <string name="template_name_hint">Template Name</string>
+    <string name="stations_count">Stations (%d)</string>
+    <string name="no_stations">No stations</string>
+    <string name="add_station">Add station</string>
+
+    <!-- Deezer Cache Dialog -->
+    <string name="deezer_cache">Deezer Cache</string>
+    <string name="tracks_count">%d Tracks</string>
+    <string name="no_tracks_in_cache">No tracks in cache</string>
+    <string name="search_hint">Search…</string>
+
+    <!-- Corrections Viewer -->
+    <string name="rules">Rules</string>
+    <string name="rules_description">Texts that are replaced/removed before search</string>
+    <string name="no_rules_defined">No rules defined</string>
+    <string name="ignored_rts">Ignored RTs / Skipped Tracks</string>
+    <string name="ignored_rts_description">RTs that are ignored or whose tracks are skipped</string>
+    <string name="no_rt_corrections">No RT corrections</string>
+    <string name="delete_all">Delete all</string>
+    <string name="add_rule">Add rule</string>
+
+    <!-- DAB Scan Dialog -->
+    <string name="dab_scan_title">DAB+ Station Scan…</string>
+    <string name="stations_found_count">Stations found: %d</string>
+
+    <!-- Other Dialogs -->
+    <string name="logo_search">Logo Search</string>
+    <string name="enter_search_and_search">Enter search term and search</string>
+    <string name="search_logo_hint">e.g. BBC Radio Logo</string>
+    <string name="ps_name_rds">PS Name (RDS)</string>
+    <string name="ps_hint">e.g. BBC1, FM4</string>
+    <string name="pi_code_hex">PI Code (hex)</string>
+    <string name="pi_hint">e.g. A3E0</string>
+    <string name="frequencies_mhz">Frequencies (MHz, comma separated)</string>
+    <string name="frequencies_hint">e.g. 88.8, 90.4, 99.5</string>
+    <string name="logo_url">Logo URL *</string>
+    <string name="minimum_ps_pi_freq">At least PS, PI or frequency required.</string>
+    <string name="logo_downloading">Downloading logo…</string>
+    <string name="tuner_edit">Edit Tuner</string>
+    <string name="tuner_name_hint">Tuner Name</string>
+    <string name="name">Name</string>
+    <string name="plugin">Plugin</string>
+    <string name="no_device_detected">No device detected</string>
+    <string name="plugin_manager">Plugin Manager</string>
+    <string name="import_plugin">+ Import Plugin</string>
+    <string name="logo_template_manager_title">Logo Template Manager</string>
+    <string name="region_format">Region: %s</string>
+    <string name="no_templates_for_region">No templates for this region</string>
+    <string name="import_template">Import Template</string>
+    <string name="no_template_use">Don\'t use template</string>
+    <string name="tuner_manager">Tuner Manager</string>
+    <string name="new_tuner">+ New Tuner</string>
+    <string name="bug_reports">Bug Reports</string>
+    <string name="no_bug_reports">No bug reports found</string>
+    <string name="built_in">built-in</string>
 </resources>

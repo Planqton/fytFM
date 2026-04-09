@@ -111,16 +111,32 @@ class DeezerClient {
 
         if (artist.isNullOrBlank() && title.isNullOrBlank()) return@withContext null
 
+        // Check if this looks like classical music and normalize if so
+        val fullText = "${artist ?: ""} ${title ?: ""}"
+        val isClassical = ClassicalMusicNormalizer.isClassicalFormat(fullText)
+
+        val searchArtist: String?
+        val searchTitle: String?
+
+        if (isClassical && !artist.isNullOrBlank()) {
+            searchArtist = ClassicalMusicNormalizer.normalizeArtist(artist)
+            searchTitle = if (!title.isNullOrBlank()) ClassicalMusicNormalizer.normalizeTitle(title) else title
+            Log.d(TAG, "Classical music detected: '$artist - $title' → '$searchArtist - $searchTitle'")
+        } else {
+            searchArtist = artist
+            searchTitle = title
+        }
+
         // Build query with Deezer's search syntax
         val query = buildString {
-            if (!artist.isNullOrBlank()) append("artist:\"$artist\" ")
-            if (!title.isNullOrBlank()) append("track:\"$title\"")
+            if (!searchArtist.isNullOrBlank()) append("artist:\"$searchArtist\" ")
+            if (!searchTitle.isNullOrBlank()) append("track:\"$searchTitle\"")
         }.trim()
 
         if (query.isBlank()) return@withContext null
 
-        // Try original
-        var result = doSearch(query, "original")
+        // Try original/normalized
+        var result = doSearch(query, if (isClassical) "classical_normalized" else "original")
 
         // Try cleaned (handle "x", "&", "feat.", "vs." in artist names)
         if (result == null && !artist.isNullOrBlank() && !title.isNullOrBlank()) {
@@ -150,8 +166,24 @@ class DeezerClient {
 
         // Try combined search without field specifiers (last resort)
         if (result == null && !title.isNullOrBlank() && title.length >= 5) {
-            val combinedQuery = "${artist ?: ""} $title".trim()
+            val combinedQuery = "${searchArtist ?: ""} $searchTitle".trim()
             result = doSearch(combinedQuery, "combined_free")
+        }
+
+        // Classical music: try additional simplified variations
+        if (result == null && isClassical && !artist.isNullOrBlank()) {
+            val variations = ClassicalMusicNormalizer.getSearchVariations(artist, title ?: "")
+            for ((varArtist, varTitle) in variations.drop(1)) { // Skip first (already tried)
+                if (varTitle.isNotBlank()) {
+                    val varQuery = "artist:\"$varArtist\" track:\"$varTitle\""
+                    result = doSearch(varQuery, "classical_variation")
+                    if (result != null) break
+                } else {
+                    // Just artist name - free search
+                    result = doSearch(varArtist, "classical_artist_only")
+                    if (result != null) break
+                }
+            }
         }
 
         result
