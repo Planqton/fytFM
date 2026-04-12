@@ -257,7 +257,7 @@
     <string name="stations_found_count">Stations found: %d</string>
 
     <!-- Other Dialogs -->
-    <string name="logo_search">Logo Search</string>
+    <string name="logo_search">Logo Search (Experimentell)</string>
     <string name="enter_search_and_search">Enter search term and search</string>
     <string name="search_logo_hint">e.g. BBC Radio Logo</string>
     <string name="ps_name_rds">PS Name (RDS)</string>

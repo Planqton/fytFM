@@ -47,6 +47,7 @@ import at.planqton.fytfm.deezer.TrackInfo
 import at.planqton.fytfm.steering.SteeringWheelKeyManager
 import at.planqton.fytfm.steering.SyuToolkitManager
 import at.planqton.fytfm.dab.DabTunerManager
+import at.planqton.fytfm.dab.MockDabTunerManager
 import at.planqton.fytfm.dab.EpgData
 import at.planqton.fytfm.ui.EpgDialog
 import android.widget.AdapterView
@@ -69,6 +70,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var spinnerRadioMode: Spinner
     private lateinit var btnPower: ImageButton
     private val dabTunerManager = DabTunerManager()
+    private val mockDabTunerManager = at.planqton.fytfm.dab.MockDabTunerManager()
     private var isDabOn = false
     private var currentDabServiceId = 0
     private var currentDabEnsembleId = 0
@@ -84,6 +86,13 @@ class MainActivity : AppCompatActivity() {
     private var lastLoggedDls: String? = null  // Cache to avoid duplicate DLS log entries
     private val dlsLogEntries = mutableListOf<String>()  // DLS Log entries
     private var currentDabSlideshow: android.graphics.Bitmap? = null
+
+    // Cover source cycling (tap to switch between available sources)
+    private enum class DabCoverSource { DAB_LOGO, STATION_LOGO, SLIDESHOW, DEEZER }
+    private var selectedCoverSourceIndex: Int = -1  // -1 = auto (best available), 0+ = specific source index
+    private var availableCoverSources: List<DabCoverSource> = emptyList()
+    private var coverSourceLocked: Boolean = false  // Lock current selection as highest priority
+    private var lockedCoverSource: DabCoverSource? = null  // The locked source
     private var suppressSpinnerCallback = false
     private lateinit var controlBar: LinearLayout
     private lateinit var stationBar: LinearLayout
@@ -204,6 +213,16 @@ class MainActivity : AppCompatActivity() {
     // Ignored RT indicators
     private var nowPlayingIgnoredIndicator: View? = null
     private var carouselIgnoredIndicator: View? = null
+
+    // Cover source dot indicators (shows number of available sources)
+    private var nowPlayingCoverDots: LinearLayout? = null
+    private var carouselCoverDots: LinearLayout? = null
+    private var dabListCoverDots: LinearLayout? = null
+
+    // Deezer watermark overlays
+    private var nowPlayingDeezerWatermark: TextView? = null
+    private var carouselDeezerWatermark: TextView? = null
+    private var dabListDeezerWatermark: TextView? = null
 
     // PiP Layout
     private var pipLayout: View? = null
@@ -521,6 +540,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         presetRepository = PresetRepository(this)
+
+        // Cover Source Lock laden
+        coverSourceLocked = presetRepository.isCoverSourceLocked()
+        val savedLockedSource = presetRepository.getLockedCoverSource()
+        lockedCoverSource = if (savedLockedSource != null) {
+            try { DabCoverSource.valueOf(savedLockedSource) } catch (e: Exception) { null }
+        } else null
+
         FmNative.initAudio(this) // Audio-Routing initialisieren
         fmNative = FmNative.getInstance()
         rdsManager = RdsManager(fmNative)
@@ -875,31 +902,100 @@ class MainActivity : AppCompatActivity() {
             deezerCache = deezerCache,
             isCacheEnabled = { presetRepository.isDeezerCacheEnabled() },
             isNetworkAvailable = { isNetworkAvailable() },
-            correctionDao = rtCorrectionDao
-        ) { status, originalRt, strippedRt, query, trackInfo ->
-            runOnUiThread {
-                // Store for bug reports
-                currentDeezerStatus = status
-                currentDeezerOriginalRt = originalRt
-                currentDeezerStrippedRt = strippedRt
-                currentDeezerQuery = query
-                currentDeezerTrackInfo = trackInfo
-                updateDeezerDebugInfo(status, originalRt, strippedRt, query, trackInfo)
+            correctionDao = rtCorrectionDao,
+            onDebugUpdate = { status, originalRt, strippedRt, query, trackInfo ->
+                runOnUiThread {
+                    // Store for bug reports
+                    currentDeezerStatus = status
+                    currentDeezerOriginalRt = originalRt
+                    currentDeezerStrippedRt = strippedRt
+                    currentDeezerQuery = query
+                    currentDeezerTrackInfo = trackInfo
+                    updateDeezerDebugInfo(status, originalRt, strippedRt, query, trackInfo)
 
-                // Bei "Not found" oder "Waiting...": Cover auf Fallback zurücksetzen
-                if (status == "Not found" || status == "Waiting...") {
-                    resetCoverToFallback()
+                    // Bei "Not found" oder "Waiting...": Cover auf Fallback zurücksetzen
+                    if (status == "Not found" || status == "Waiting...") {
+                        resetCoverToFallback()
+                    }
+
+                    // Bei keinem Match: Raw RT parsen und anzeigen
+                    val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
+                    updateNowPlaying(displayInfo)
+                    nowPlayingRawRt?.text = strippedRt ?: ""
+                    carouselNowPlayingRawRt?.text = strippedRt ?: ""
+                    updateIgnoredIndicator(strippedRt)
+                    updatePipDisplay()
                 }
+            },
+            onCoverDownloaded = { trackInfo ->
+                // Cover wurde im Hintergrund heruntergeladen - UI und MediaSession aktualisieren
+                runOnUiThread {
+                    val localCover = trackInfo.coverUrl?.takeIf { it.startsWith("/") }
+                    if (localCover != null) {
+                        android.util.Log.d("fytFM", "Cover downloaded: ${trackInfo.artist} - ${trackInfo.title} -> $localCover")
 
-                // Bei keinem Match: Raw RT parsen und anzeigen
-                val displayInfo = trackInfo ?: strippedRt?.let { parseRawRtToTrackInfo(it) }
-                updateNowPlaying(displayInfo)
-                nowPlayingRawRt?.text = strippedRt ?: ""
-                carouselNowPlayingRawRt?.text = strippedRt ?: ""
-                updateIgnoredIndicator(strippedRt)
-                updatePipDisplay()
+                        val isDabMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB
+
+                        if (isDabMode) {
+                            // DAB Modus - Neues Deezer Cover gefunden
+                            currentDabDeezerCoverPath = localCover
+                            currentDabDeezerCoverDls = currentDabDls
+
+                            // Auto-Modus aktivieren -> höchste Priorität (Deezer) wird gewählt
+                            selectedCoverSourceIndex = -1
+                            updateDabCoverDisplay()
+
+                            // Debug-Fenster Cover
+                            loadCoverImage(localCover)
+
+                            // MediaSession für DAB aktualisieren - mit "Artist - Title"
+                            val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
+                            val displayDls = "${trackInfo.artist} - ${trackInfo.title}"
+                            FytFMMediaService.instance?.updateDabMetadata(
+                                serviceLabel = currentDabServiceLabel,
+                                ensembleLabel = currentDabEnsembleLabel,
+                                dls = displayDls,  // Formatiertes "Artist - Title"
+                                slideshowBitmap = null,  // Deezer hat Vorrang vor Slideshow
+                                radioLogoPath = radioLogoPath,
+                                deezerCoverPath = localCover
+                            )
+                        } else {
+                            // FM/AM Modus - updateMetadata verwenden
+                            currentUiCoverSource = localCover
+
+                            // UI Cover aktualisieren
+                            val placeholderDrawable = R.drawable.ic_cover_placeholder
+                            nowPlayingCover?.load(java.io.File(localCover)) {
+                                crossfade(true)
+                                placeholder(placeholderDrawable)
+                            }
+                            carouselNowPlayingCover?.load(java.io.File(localCover)) {
+                                crossfade(true)
+                                placeholder(placeholderDrawable)
+                            }
+
+                            // Debug-Fenster Cover
+                            loadCoverImage(localCover)
+
+                            // MediaSession aktualisieren
+                            val isAM = frequencyScale.getMode() == FrequencyScaleView.RadioMode.AM
+                            val currentFreq = frequencyScale.getFrequency()
+                            val ps = rdsManager.ps
+                            val radioLogoPath = radioLogoRepository.getLogoForStation(ps, rdsManager.pi, currentFreq)
+                            FytFMMediaService.instance?.updateMetadata(
+                                frequency = currentFreq,
+                                ps = ps,
+                                rt = "${trackInfo.artist} - ${trackInfo.title}",
+                                isAM = isAM,
+                                coverUrl = null,
+                                localCoverPath = localCover,
+                                radioLogoPath = radioLogoPath
+                            )
+                        }
+                    }
+                }
             }
-        }
+        )
         android.util.Log.i("fytFM", "Deezer integration initialized")
     }
 
@@ -1340,12 +1436,34 @@ class MainActivity : AppCompatActivity() {
         nowPlayingIgnoredIndicator = findViewById(R.id.nowPlayingIgnoredIndicator)
         carouselIgnoredIndicator = findViewById(R.id.carouselIgnoredIndicator)
 
+        // Cover source dot indicators
+        nowPlayingCoverDots = findViewById(R.id.nowPlayingCoverDots)
+        carouselCoverDots = findViewById(R.id.carouselCoverDots)
+
+        // Deezer watermarks
+        nowPlayingDeezerWatermark = findViewById(R.id.nowPlayingDeezerWatermark)
+        carouselDeezerWatermark = findViewById(R.id.carouselDeezerWatermark)
+
         // PS triple-tap to rename station
         val psTapListener = View.OnClickListener {
             handlePsTripleTap()
         }
         nowPlayingPs?.setOnClickListener(psTapListener)
         carouselNowPlayingPs?.setOnClickListener(psTapListener)
+
+        // Cover tap to toggle between Deezer and Slideshow (DAB only)
+        val coverTapListener = View.OnClickListener {
+            val isDabMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB
+            if (isDabMode) {
+                toggleDabCover()
+            }
+        }
+        nowPlayingCover?.setOnClickListener(coverTapListener)
+        carouselNowPlayingCover?.setOnClickListener(coverTapListener)
+
+        // Long press (5 seconds) to lock/unlock cover source
+        setupCoverLongPressListener(nowPlayingCover)
+        setupCoverLongPressListener(carouselNowPlayingCover)
 
         // PiP Layout
         pipLayout = findViewById(R.id.pipLayout)
@@ -1654,7 +1772,7 @@ class MainActivity : AppCompatActivity() {
 
         if (isDab) {
             // DAB+ Mode: Station Logo oder DAB+ Icon
-            val radioLogoPath = radioLogoRepository.getLogoForStation(currentDabServiceLabel, null, 0f)
+            val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
             if (currentDabSlideshow != null) {
                 currentUiCoverSource = "slideshow"
                 nowPlayingCover?.setImageBitmap(currentDabSlideshow)
@@ -1763,7 +1881,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateDlsTimestampLabel() {
-        if (frequencyScale.getMode() != FrequencyScaleView.RadioMode.DAB) return
+        val mode = frequencyScale.getMode()
+        if (mode != FrequencyScaleView.RadioMode.DAB && mode != FrequencyScaleView.RadioMode.DAB_DEV) return
         val dlsAgeText = if (lastDlsTimestamp > 0) {
             val ageSeconds = (System.currentTimeMillis() - lastDlsTimestamp) / 1000
             "DLS (${ageSeconds}s):"
@@ -1785,6 +1904,22 @@ class MainActivity : AppCompatActivity() {
         debugTpTa?.text = ""
         debugAfUsing?.text = ""
         debugRtLabel?.text = "DLS:"
+    }
+
+    /**
+     * Reset DLS/Artist/Title beim DAB-Senderwechsel
+     */
+    private fun resetDabNowPlaying() {
+        currentDabDls = null
+        nowPlayingArtist?.text = ""
+        nowPlayingArtist?.visibility = View.GONE
+        nowPlayingTitle?.text = ""
+        nowPlayingTitle?.visibility = View.GONE
+        carouselNowPlayingArtist?.text = ""
+        carouselNowPlayingArtist?.visibility = View.GONE
+        carouselNowPlayingTitle?.text = ""
+        carouselNowPlayingTitle?.visibility = View.GONE
+        updateDabListRadiotext("")
     }
 
     private fun updateTunerDebugInfo() {
@@ -2176,8 +2311,28 @@ class MainActivity : AppCompatActivity() {
             val tabName = if (currentParserTab == at.planqton.fytfm.deezer.ParserLogger.Source.FM) "FM" else "DAB+"
             parserLogText?.text = "(keine $tabName Log-Einträge)"
         } else {
-            // Show most recent entries at top (reverse order)
-            parserLogText?.text = entries.reversed().joinToString("\n") { it.format() }
+            // Show most recent entries at top (reverse order) with color coding
+            val coloredText = android.text.SpannableStringBuilder()
+            val greenColor = android.graphics.Color.parseColor("#4CAF50")
+            val redColor = android.graphics.Color.parseColor("#F44336")
+
+            entries.reversed().forEachIndexed { index, entry ->
+                if (index > 0) coloredText.append("\n")
+
+                val formatted = entry.format()
+                val start = coloredText.length
+                coloredText.append(formatted)
+                val end = coloredText.length
+
+                // Rot wenn fehlgeschlagen (→ X), sonst grün
+                val color = if (entry.parsedResult == null) redColor else greenColor
+                coloredText.setSpan(
+                    android.text.style.ForegroundColorSpan(color),
+                    start, end,
+                    android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            parserLogText?.text = coloredText
         }
         // Auto-scroll to top (most recent)
         parserLogScrollView?.post { parserLogScrollView?.scrollTo(0, 0) }
@@ -2716,6 +2871,603 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Ermittelt die aktuell verfügbaren Cover-Quellen.
+     * Reihenfolge: DAB_LOGO (immer), STATION_LOGO (wenn vorhanden), SLIDESHOW (wenn vorhanden), DEEZER (wenn vorhanden)
+     */
+    private fun getAvailableCoverSources(): List<DabCoverSource> {
+        val sources = mutableListOf<DabCoverSource>()
+        sources.add(DabCoverSource.DAB_LOGO)  // Immer verfügbar
+
+        val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
+        if (radioLogoPath != null) sources.add(DabCoverSource.STATION_LOGO)
+
+        if (currentDabSlideshow != null) sources.add(DabCoverSource.SLIDESHOW)
+
+        // Deezer nur wenn aktiviert UND Cover vorhanden
+        val deezerEnabled = presetRepository.isDeezerEnabledDab()
+        if (deezerEnabled && !currentDabDeezerCoverPath.isNullOrBlank()) sources.add(DabCoverSource.DEEZER)
+
+        return sources
+    }
+
+    /**
+     * Aktualisiert die Cover-Anzeige basierend auf der ausgewählten Quelle.
+     * Bei selectedCoverSourceIndex = -1 wird automatisch die beste verfügbare Quelle gewählt.
+     */
+    private fun updateDabCoverDisplay() {
+        val isDabMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB
+        if (!isDabMode) return
+
+        availableCoverSources = getAvailableCoverSources()
+        val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
+
+        // Bestimme welche Quelle angezeigt werden soll
+        val sourceToShow = when {
+            // Wenn gesperrt und gesperrte Quelle verfügbar -> diese verwenden
+            coverSourceLocked && lockedCoverSource != null && availableCoverSources.contains(lockedCoverSource) -> {
+                lockedCoverSource!!
+            }
+            // Wenn manuell ausgewählt -> diese verwenden
+            selectedCoverSourceIndex >= 0 && selectedCoverSourceIndex < availableCoverSources.size -> {
+                availableCoverSources[selectedCoverSourceIndex]
+            }
+            // Auto-Modus: Beste verfügbare Quelle (Deezer > Slideshow > StationLogo > DAB)
+            else -> when {
+                availableCoverSources.contains(DabCoverSource.DEEZER) -> DabCoverSource.DEEZER
+                availableCoverSources.contains(DabCoverSource.SLIDESHOW) -> DabCoverSource.SLIDESHOW
+                availableCoverSources.contains(DabCoverSource.STATION_LOGO) -> DabCoverSource.STATION_LOGO
+                else -> DabCoverSource.DAB_LOGO
+            }
+        }
+
+        when (sourceToShow) {
+            DabCoverSource.DEEZER -> {
+                val localCover = currentDabDeezerCoverPath!!
+                currentUiCoverSource = localCover
+                nowPlayingCover?.load(java.io.File(localCover)) { crossfade(true) }
+                carouselNowPlayingCover?.load(java.io.File(localCover)) { crossfade(true) }
+                dabListCover?.load(java.io.File(localCover)) { crossfade(true) }
+                loadCoverImage(localCover)
+
+                FytFMMediaService.instance?.updateDabMetadata(
+                    serviceLabel = currentDabServiceLabel,
+                    ensembleLabel = currentDabEnsembleLabel,
+                    dls = currentDabDls,
+                    slideshowBitmap = null,
+                    radioLogoPath = radioLogoPath,
+                    deezerCoverPath = localCover
+                )
+                android.util.Log.d("fytFM", "Cover: Deezer")
+            }
+            DabCoverSource.SLIDESHOW -> {
+                val bitmap = currentDabSlideshow!!
+                currentUiCoverSource = "slideshow"
+                nowPlayingCover?.setImageBitmap(bitmap)
+                carouselNowPlayingCover?.setImageBitmap(bitmap)
+                dabListCover?.setImageBitmap(bitmap)
+
+                FytFMMediaService.instance?.updateDabMetadata(
+                    serviceLabel = currentDabServiceLabel,
+                    ensembleLabel = currentDabEnsembleLabel,
+                    dls = currentDabDls,
+                    slideshowBitmap = bitmap,
+                    radioLogoPath = radioLogoPath,
+                    deezerCoverPath = null
+                )
+                android.util.Log.d("fytFM", "Cover: Slideshow")
+            }
+            DabCoverSource.STATION_LOGO -> {
+                currentUiCoverSource = radioLogoPath!!
+                nowPlayingCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+                carouselNowPlayingCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+                dabListCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+
+                FytFMMediaService.instance?.updateDabMetadata(
+                    serviceLabel = currentDabServiceLabel,
+                    ensembleLabel = currentDabEnsembleLabel,
+                    dls = currentDabDls,
+                    slideshowBitmap = null,
+                    radioLogoPath = radioLogoPath,
+                    deezerCoverPath = null
+                )
+                android.util.Log.d("fytFM", "Cover: Station Logo")
+            }
+            DabCoverSource.DAB_LOGO -> {
+                currentUiCoverSource = "drawable:ic_fytfm_dab_plus_light"
+                nowPlayingCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+                carouselNowPlayingCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+                dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+
+                FytFMMediaService.instance?.updateDabMetadata(
+                    serviceLabel = currentDabServiceLabel,
+                    ensembleLabel = currentDabEnsembleLabel,
+                    dls = currentDabDls,
+                    slideshowBitmap = null,
+                    radioLogoPath = null,
+                    deezerCoverPath = null
+                )
+                android.util.Log.d("fytFM", "Cover: DAB Logo")
+            }
+        }
+
+        // Deezer Wasserzeichen anzeigen/verstecken
+        updateDeezerWatermarks(sourceToShow == DabCoverSource.DEEZER)
+
+        // Zeige Indikator immer im DAB-Modus
+        updateSlideshowIndicators(true)
+    }
+
+    /**
+     * Aktualisiert die Sichtbarkeit der Deezer-Wasserzeichen.
+     */
+    private fun updateDeezerWatermarks(showDeezer: Boolean) {
+        val visibility = if (showDeezer) View.VISIBLE else View.GONE
+        nowPlayingDeezerWatermark?.visibility = visibility
+        carouselDeezerWatermark?.visibility = visibility
+        dabListDeezerWatermark?.visibility = visibility
+    }
+
+    /**
+     * Aktualisiert die Dot-Indikatoren für Cover-Quellen.
+     * Zeigt Punkte an für jede verfügbare Quelle, aktive Quelle ist grün.
+     */
+    private fun updateSlideshowIndicators(canToggle: Boolean) {
+        val containers = listOf(nowPlayingCoverDots, carouselCoverDots, dabListCoverDots)
+
+        // Feste Reihenfolge: DAB_LOGO, STATION_LOGO, SLIDESHOW, DEEZER (nur wenn aktiviert)
+        val deezerEnabled = presetRepository.isDeezerEnabledDab()
+        val allSources = if (deezerEnabled) {
+            listOf(DabCoverSource.DAB_LOGO, DabCoverSource.STATION_LOGO, DabCoverSource.SLIDESHOW, DabCoverSource.DEEZER)
+        } else {
+            listOf(DabCoverSource.DAB_LOGO, DabCoverSource.STATION_LOGO, DabCoverSource.SLIDESHOW)
+        }
+
+        if (!canToggle) {
+            // Nicht im DAB-Modus - verstecken
+            containers.forEach { it?.visibility = View.GONE }
+            return
+        }
+
+        // Farben aus Theme holen (respektiert Day/Night Mode)
+        val accentColor = androidx.core.content.ContextCompat.getColor(this, R.color.radio_accent)
+        val inactiveColor = androidx.core.content.ContextCompat.getColor(this, R.color.radio_text_secondary)
+
+        // Bestimme die aktuell ausgewählte Quelle
+        val selectedSource: DabCoverSource = when {
+            // Wenn gesperrt und gesperrte Quelle verfügbar
+            coverSourceLocked && lockedCoverSource != null && availableCoverSources.contains(lockedCoverSource) -> {
+                lockedCoverSource!!
+            }
+            selectedCoverSourceIndex >= 0 && selectedCoverSourceIndex < availableCoverSources.size -> {
+                availableCoverSources[selectedCoverSourceIndex]
+            }
+            else -> {
+                // Auto-Modus: Beste verfügbare Quelle
+                when {
+                    availableCoverSources.contains(DabCoverSource.DEEZER) -> DabCoverSource.DEEZER
+                    availableCoverSources.contains(DabCoverSource.SLIDESHOW) -> DabCoverSource.SLIDESHOW
+                    availableCoverSources.contains(DabCoverSource.STATION_LOGO) -> DabCoverSource.STATION_LOGO
+                    else -> DabCoverSource.DAB_LOGO
+                }
+            }
+        }
+
+        // Dots für jeden Container aktualisieren
+        containers.forEach { container ->
+            if (container == null) return@forEach
+
+            container.removeAllViews()
+            container.visibility = View.VISIBLE
+
+            val dotSize = (6 * resources.displayMetrics.density).toInt()  // 6dp
+            val ringSize = (10 * resources.displayMetrics.density).toInt()  // 10dp
+            val spacing = (4 * resources.displayMetrics.density).toInt()  // 4dp
+
+            for ((i, source) in allSources.withIndex()) {
+                val isAvailable = availableCoverSources.contains(source)
+                val isSelected = source == selectedSource
+
+                // FrameLayout für Dot + Ring
+                val frame = android.widget.FrameLayout(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(ringSize, ringSize).apply {
+                        marginStart = if (i > 0) spacing else 0
+                    }
+                }
+
+                // Der Dot (Akzentfarbe wenn verfügbar, grau wenn nicht)
+                val dotDrawable = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(if (isAvailable) accentColor else inactiveColor)
+                    setSize(dotSize, dotSize)
+                }
+                val dot = View(this).apply {
+                    val params = android.widget.FrameLayout.LayoutParams(dotSize, dotSize)
+                    params.gravity = android.view.Gravity.CENTER
+                    layoutParams = params
+                    background = dotDrawable
+                }
+                frame.addView(dot)
+
+                // Ring wenn ausgewählt (in Akzentfarbe)
+                if (isSelected) {
+                    val ringDrawable = android.graphics.drawable.GradientDrawable().apply {
+                        shape = android.graphics.drawable.GradientDrawable.OVAL
+                        setStroke((1 * resources.displayMetrics.density).toInt(), accentColor)
+                        setSize(ringSize, ringSize)
+                    }
+                    val ring = View(this).apply {
+                        val params = android.widget.FrameLayout.LayoutParams(ringSize, ringSize)
+                        params.gravity = android.view.Gravity.CENTER
+                        layoutParams = params
+                        background = ringDrawable
+                    }
+                    frame.addView(ring)
+                }
+
+                container.addView(frame)
+            }
+
+            // Lock-Icon hinzufügen wenn gesperrt
+            if (coverSourceLocked) {
+                val lockIcon = android.widget.TextView(this).apply {
+                    text = "🔒"
+                    textSize = 8f
+                    includeFontPadding = false
+                    gravity = android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL
+                    val params = LinearLayout.LayoutParams(
+                        ringSize,
+                        ringSize
+                    )
+                    params.marginStart = spacing
+                    params.topMargin = (-2 * resources.displayMetrics.density).toInt()  // Nach oben verschieben
+                    layoutParams = params
+                }
+                container.addView(lockIcon)
+            }
+        }
+    }
+
+    /**
+     * Wechselt zur nächsten verfügbaren Cover-Quelle.
+     * Wird aufgerufen wenn der User auf das Cover tippt.
+     */
+    private fun toggleDabCover() {
+        // Bei Tap wird Lock aufgehoben
+        if (coverSourceLocked) {
+            coverSourceLocked = false
+            lockedCoverSource = null
+            presetRepository.setCoverSourceLocked(false)
+            presetRepository.setLockedCoverSource(null)
+        }
+
+        availableCoverSources = getAvailableCoverSources()
+
+        if (availableCoverSources.size <= 1) return  // Nur eine Quelle, kein Toggle möglich
+
+        // Zum nächsten Index wechseln (mit wrap-around)
+        selectedCoverSourceIndex = if (selectedCoverSourceIndex < 0) {
+            // War im Auto-Modus, starte bei Index 0
+            0
+        } else {
+            (selectedCoverSourceIndex + 1) % availableCoverSources.size
+        }
+
+        updateDabCoverDisplay()
+
+        // Feste Reihenfolge für Position-Anzeige (ohne Deezer wenn deaktiviert)
+        val deezerEnabled = presetRepository.isDeezerEnabledDab()
+        val allSources = if (deezerEnabled) {
+            listOf(DabCoverSource.DAB_LOGO, DabCoverSource.STATION_LOGO, DabCoverSource.SLIDESHOW, DabCoverSource.DEEZER)
+        } else {
+            listOf(DabCoverSource.DAB_LOGO, DabCoverSource.STATION_LOGO, DabCoverSource.SLIDESHOW)
+        }
+        val currentSource = availableCoverSources[selectedCoverSourceIndex]
+        val fixedPosition = allSources.indexOf(currentSource) + 1  // 1-basiert
+
+        // Toast mit aktuellem Source-Namen und Position in fester Reihenfolge
+        val sourceName = when (currentSource) {
+            DabCoverSource.DAB_LOGO -> "DAB+ Logo"
+            DabCoverSource.STATION_LOGO -> "Sender Logo"
+            DabCoverSource.SLIDESHOW -> "Slideshow"
+            DabCoverSource.DEEZER -> "Deezer Cover"
+        }
+        // android.widget.Toast.makeText(this, "$sourceName ($fixedPosition/${allSources.size})", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    /**
+     * Setzt einen 5-Sekunden Long-Press Listener auf ein Cover-View.
+     * Bei erfolgreichem Long-Press wird die aktuelle Quelle gesperrt/entsperrt.
+     */
+    private fun setupCoverLongPressListener(view: View?) {
+        if (view == null) return
+
+        var pressStartTime = 0L
+        var startY = 0f
+        var startX = 0f
+        val longPressDuration = 2500L  // 2.5 Sekunden
+        val swipeThreshold = 100f  // Minimale Swipe-Distanz in Pixeln
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        var longPressRunnable: Runnable? = null
+        var isSwipe = false
+
+        view.setOnTouchListener { v, event ->
+            val isDabMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB ||
+                           frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB_DEV
+            if (!isDabMode) return@setOnTouchListener false
+
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    pressStartTime = System.currentTimeMillis()
+                    startY = event.y
+                    startX = event.x
+                    isSwipe = false
+                    longPressRunnable = Runnable {
+                        toggleCoverSourceLock()
+                    }
+                    handler.postDelayed(longPressRunnable!!, longPressDuration)
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    val deltaY = event.y - startY
+                    val deltaX = Math.abs(event.x - startX)
+                    // Wenn nach unten gewischt wird (mehr vertikal als horizontal)
+                    if (deltaY > swipeThreshold && deltaY > deltaX) {
+                        longPressRunnable?.let { handler.removeCallbacks(it) }
+                        isSwipe = true
+                    }
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    longPressRunnable?.let { handler.removeCallbacks(it) }
+                    val deltaY = event.y - startY
+                    val deltaX = Math.abs(event.x - startX)
+                    val pressDuration = System.currentTimeMillis() - pressStartTime
+
+                    android.util.Log.d("fytFM", "Touch UP: deltaY=$deltaY, deltaX=$deltaX, threshold=$swipeThreshold")
+
+                    if (deltaY > swipeThreshold && deltaY > deltaX && event.action == android.view.MotionEvent.ACTION_UP) {
+                        // Swipe nach unten erkannt -> Cover als Sender-Logo speichern
+                        android.util.Log.i("fytFM", "Swipe-Down erkannt! Speichere Cover als Logo...")
+                        saveCurrentCoverAsStationLogo(v as ImageView)
+                    } else if (pressDuration < longPressDuration && !isSwipe) {
+                        // Kurzer Tap -> Click-Event durchlassen
+                        if (event.action == android.view.MotionEvent.ACTION_UP) {
+                            v.performClick()
+                        }
+                    }
+                }
+            }
+            true  // Event konsumieren für Long-Press/Swipe Erkennung
+        }
+    }
+
+    /**
+     * Speichert das aktuelle Cover als permanentes Sender-Logo.
+     * Wird durch Swipe-Down auf dem Cover ausgelöst.
+     */
+    private fun saveCurrentCoverAsStationLogo(imageView: ImageView) {
+        android.util.Log.i("fytFM", "saveCurrentCoverAsStationLogo aufgerufen")
+        val stationName = currentDabServiceLabel ?: run {
+            android.util.Log.w("fytFM", "Kein currentDabServiceLabel!")
+            return
+        }
+        val serviceId = currentDabServiceId
+        if (serviceId <= 0) {
+            android.util.Log.w("fytFM", "ServiceID ungültig: $serviceId")
+            return
+        }
+        android.util.Log.i("fytFM", "Speichere Logo für: $stationName (SID=$serviceId), DeezerPath=$currentDabDeezerCoverPath")
+
+        // Animiertes Feedback - Cover nach unten "fallen" lassen
+        imageView.animate()
+            .translationY(imageView.height.toFloat() * 0.3f)
+            .scaleX(0.8f)
+            .scaleY(0.8f)
+            .alpha(0.5f)
+            .setDuration(150)
+            .withEndAction {
+                // Zurück animieren
+                imageView.animate()
+                    .translationY(0f)
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .alpha(1f)
+                    .setDuration(150)
+                    .start()
+            }
+            .start()
+
+        // In separatem Thread speichern - verwende RadioLogoRepository System
+        Thread {
+            try {
+                val templateName = "Custom-DAB"
+
+                // Logo-Verzeichnis für dieses Template
+                val logosDir = java.io.File(filesDir, "logos/$templateName")
+                if (!logosDir.exists()) logosDir.mkdirs()
+
+                // Dateiname basierend auf Stationsnamen (Hash)
+                val hash = java.security.MessageDigest.getInstance("MD5")
+                    .digest(stationName.toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+                val logoFile = java.io.File(logosDir, "$hash.png")
+
+                var saved = false
+
+                // Prüfe welche Cover-Quelle aktuell angezeigt wird
+                val currentSource = if (selectedCoverSourceIndex >= 0 && selectedCoverSourceIndex < availableCoverSources.size) {
+                    availableCoverSources[selectedCoverSourceIndex]
+                } else if (lockedCoverSource != null) {
+                    lockedCoverSource
+                } else {
+                    null // Auto-Modus
+                }
+
+                android.util.Log.i("fytFM", "Current cover source: $currentSource (index=$selectedCoverSourceIndex)")
+
+                // Speichere basierend auf aktueller Quelle
+                when (currentSource) {
+                    DabCoverSource.SLIDESHOW -> {
+                        // Slideshow hat Priorität wenn aktiv angezeigt
+                        if (currentDabSlideshow != null) {
+                            java.io.FileOutputStream(logoFile).use { out ->
+                                currentDabSlideshow!!.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, out)
+                            }
+                            saved = true
+                            android.util.Log.i("fytFM", "Saved slideshow as logo (user selected)")
+                        }
+                    }
+                    DabCoverSource.DEEZER -> {
+                        // Deezer-Cover wenn aktiv angezeigt
+                        val deezerPath = currentDabDeezerCoverPath
+                        if (!deezerPath.isNullOrBlank()) {
+                            val sourceFile = java.io.File(deezerPath)
+                            if (sourceFile.exists()) {
+                                sourceFile.copyTo(logoFile, overwrite = true)
+                                saved = true
+                                android.util.Log.i("fytFM", "Saved Deezer cover as logo (user selected)")
+                            }
+                        }
+                    }
+                    else -> {
+                        // Keine explizite Quelle ausgewählt - Benutzer muss erst Slideshow oder Deezer wählen
+                        android.util.Log.w("fytFM", "Keine Cover-Quelle explizit ausgewählt")
+                        runOnUiThread {
+                            android.widget.Toast.makeText(
+                                this,
+                                "Bitte erst Slideshow oder Deezer auswählen",
+                                android.widget.Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                        return@Thread
+                    }
+                }
+
+                if (saved) {
+                    // Ins aktive RadioLogoRepository-Template eintragen (oder neues erstellen)
+                    val activeTemplateName = radioLogoRepository.getActiveTemplateName()
+                    val targetTemplateName = activeTemplateName ?: templateName
+
+                    val existingTemplate = radioLogoRepository.getTemplates().find { it.name == targetTemplateName }
+                    val existingStations = existingTemplate?.stations?.toMutableList() ?: mutableListOf()
+
+                    // Entferne existierenden Eintrag für diese Station
+                    existingStations.removeAll { it.ps.equals(stationName, ignoreCase = true) }
+
+                    // Neuen Eintrag hinzufügen
+                    val stationLogo = at.planqton.fytfm.data.logo.StationLogo(
+                        ps = stationName,
+                        logoUrl = "local://${logoFile.name}",
+                        localPath = logoFile.absolutePath
+                    )
+                    existingStations.add(stationLogo)
+
+                    // Template speichern
+                    val newTemplate = at.planqton.fytfm.data.logo.RadioLogoTemplate(
+                        name = targetTemplateName,
+                        area = existingTemplate?.area ?: 2,
+                        stations = existingStations
+                    )
+                    radioLogoRepository.saveTemplate(newTemplate)
+
+                    // Falls kein aktives Template, dieses aktivieren
+                    if (activeTemplateName == null) {
+                        radioLogoRepository.setActiveTemplate(targetTemplateName)
+                    }
+
+                    android.util.Log.i("fytFM", "Added logo to template '$targetTemplateName'")
+
+                    android.util.Log.i("fytFM", "Saved custom logo for $stationName to RadioLogoRepository: ${logoFile.absolutePath}")
+
+                    runOnUiThread {
+                        android.widget.Toast.makeText(
+                            this,
+                            "✓ Logo für \"$stationName\" gespeichert",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                        // UI komplett neu laden damit das neue Logo sofort sichtbar ist
+                        // Adapter müssen neu erstellt werden um die Logo-Pfade neu zu laden
+                        loadStationsForCurrentMode()
+                        populateCarousel()
+                        refreshDabStationStrip()
+                        updateDabListModeSelection()
+                        // Indicator und Cover sofort aktualisieren
+                        availableCoverSources = getAvailableCoverSources()
+                        updateSlideshowIndicators(true)
+                        updateDabCoverDisplay()
+                    }
+                } else {
+                    runOnUiThread {
+                        android.widget.Toast.makeText(
+                            this,
+                            "Kein Cover zum Speichern verfügbar",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("fytFM", "Failed to save custom logo: ${e.message}")
+                runOnUiThread {
+                    android.widget.Toast.makeText(
+                        this,
+                        "Fehler beim Speichern des Logos",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }.start()
+    }
+
+    /**
+     * Sperrt/entsperrt die aktuelle Cover-Quelle.
+     */
+    private fun toggleCoverSourceLock() {
+        if (coverSourceLocked) {
+            // Entsperren
+            coverSourceLocked = false
+            lockedCoverSource = null
+            // Speichern
+            presetRepository.setCoverSourceLocked(false)
+            presetRepository.setLockedCoverSource(null)
+            // android.widget.Toast.makeText(this, "🔓 Cover-Auswahl entsperrt", android.widget.Toast.LENGTH_SHORT).show()
+        } else {
+            // Sperren - aktuelle Auswahl merken
+            if (selectedCoverSourceIndex >= 0 && selectedCoverSourceIndex < availableCoverSources.size) {
+                lockedCoverSource = availableCoverSources[selectedCoverSourceIndex]
+            } else {
+                // Auto-Modus - beste verfügbare Quelle sperren
+                lockedCoverSource = when {
+                    availableCoverSources.contains(DabCoverSource.DEEZER) -> DabCoverSource.DEEZER
+                    availableCoverSources.contains(DabCoverSource.SLIDESHOW) -> DabCoverSource.SLIDESHOW
+                    availableCoverSources.contains(DabCoverSource.STATION_LOGO) -> DabCoverSource.STATION_LOGO
+                    else -> DabCoverSource.DAB_LOGO
+                }
+            }
+            coverSourceLocked = true
+            // Speichern
+            presetRepository.setCoverSourceLocked(true)
+            presetRepository.setLockedCoverSource(lockedCoverSource?.name)
+            val sourceName = when (lockedCoverSource) {
+                DabCoverSource.DAB_LOGO -> "DAB+ Logo"
+                DabCoverSource.STATION_LOGO -> "Sender Logo"
+                DabCoverSource.SLIDESHOW -> "Slideshow"
+                DabCoverSource.DEEZER -> "Deezer Cover"
+                null -> "?"
+            }
+            // android.widget.Toast.makeText(this, "🔒 $sourceName gesperrt", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        // Indikatoren aktualisieren (Lock-Symbol anzeigen/verstecken)
+        updateSlideshowIndicators(true)
+    }
+
+    /**
+     * Holt das Logo für einen DAB-Sender.
+     * Holt das Logo für eine DAB-Station aus dem RadioLogoRepository.
+     */
+    private fun getLogoForDabStation(stationName: String?, serviceId: Int): String? {
+        // RadioLogoRepository findet sowohl Custom-DAB als auch Auto-Search-DAB Logos
+        return radioLogoRepository.getLogoForStation(stationName, null, 0f)
+    }
+
     private fun loadCoverImage(coverPath: String?) {
         val coverImageView = findViewById<android.widget.ImageView>(R.id.debugDeezerCoverImage) ?: return
 
@@ -2724,11 +3476,21 @@ class MainActivity : AppCompatActivity() {
             val file = java.io.File(coverPath)
             if (file.exists()) {
                 val bitmap = android.graphics.BitmapFactory.decodeFile(coverPath)
-                coverImageView.setImageBitmap(bitmap)
+                if (bitmap != null) {
+                    coverImageView.setImageBitmap(bitmap)
+                    android.util.Log.d("fytFM", "Debug cover loaded: $coverPath (${bitmap.width}x${bitmap.height})")
+                } else {
+                    android.util.Log.w("fytFM", "Debug cover decode failed: $coverPath")
+                    coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
+                }
             } else {
+                android.util.Log.w("fytFM", "Debug cover file not found: $coverPath")
                 coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
             }
         } else {
+            if (coverPath != null) {
+                android.util.Log.d("fytFM", "Debug cover is URL (waiting for download): $coverPath")
+            }
             coverImageView.setImageResource(android.R.drawable.ic_menu_gallery)
         }
     }
@@ -2920,12 +3682,8 @@ class MainActivity : AppCompatActivity() {
         nowPlayingTitle?.text = dabStation.ensembleLabel ?: ""
         nowPlayingTitle?.visibility = if (dabStation.ensembleLabel.isNullOrBlank()) View.GONE else View.VISIBLE
 
-        // Cover: Versuche Station-Logo zu laden
-        val stationLogo = radioLogoRepository.getLogoForStation(
-            ps = dabStation.serviceLabel,
-            pi = null,
-            frequency = 0f
-        )
+        // Cover: Versuche Custom Logo oder Station-Logo zu laden
+        val stationLogo = getLogoForDabStation(dabStation.serviceLabel, dabStation.serviceId)
         if (stationLogo != null) {
             nowPlayingCover?.load(java.io.File(stationLogo)) {
                 crossfade(true)
@@ -2976,7 +3734,12 @@ class MainActivity : AppCompatActivity() {
 
         if (currentDabServiceId != -1) {
             // Versuche den gespeicherten Sender zu finden
-            val savedStations = presetRepository.loadDabStations()
+            val currentMode = frequencyScale.getMode()
+            val savedStations = if (currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+                presetRepository.loadDabDevStations()
+            } else {
+                presetRepository.loadDabStations()
+            }
             val station = savedStations.find { it.serviceId == currentDabServiceId }
             if (station != null) {
                 // Zeige Sendername statt Frequenz
@@ -2989,12 +3752,8 @@ class MainActivity : AppCompatActivity() {
                 nowPlayingTitle?.text = ""  // DLS wird später per Callback kommen
                 nowPlayingTitle?.visibility = View.GONE
 
-                // Cover: Versuche Station-Logo zu laden
-                val stationLogo = radioLogoRepository.getLogoForStation(
-                    ps = station.name,
-                    pi = null,
-                    frequency = 0f
-                )
+                // Cover: Versuche Custom Logo oder Station-Logo zu laden
+                val stationLogo = getLogoForDabStation(station.name, station.serviceId)
                 if (stationLogo != null) {
                     nowPlayingCover?.load(java.io.File(stationLogo)) {
                         crossfade(true)
@@ -3039,6 +3798,11 @@ class MainActivity : AppCompatActivity() {
      */
     private fun setupDabListMode() {
         dabListCover = findViewById(R.id.dabListCover)
+        dabListCoverDots = findViewById(R.id.dabListCoverDots)
+        dabListDeezerWatermark = findViewById(R.id.dabListDeezerWatermark)
+        // Cover tap to cycle through available sources (DAB only)
+        dabListCover?.setOnClickListener { toggleDabCover() }
+        setupCoverLongPressListener(dabListCover)
         dabListStationName = findViewById(R.id.dabListStationName)
         dabListEnsemble = findViewById(R.id.dabListEnsemble)
         dabListRadiotext = findViewById(R.id.dabListRadiotext)
@@ -3065,10 +3829,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Setup horizontal station strip
-        dabStripAdapter = at.planqton.fytfm.ui.DabStripAdapter { station ->
-            // Station clicked - tune to it
-            tuneToDabStation(station.serviceId, station.ensembleId)
-        }
+        dabStripAdapter = at.planqton.fytfm.ui.DabStripAdapter(
+            onStationClick = { station ->
+                // Station clicked - tune to it
+                tuneToDabStation(station.serviceId, station.ensembleId)
+            },
+            getLogoPath = { name, serviceId -> getLogoForDabStation(name, serviceId) }
+        )
 
         dabListStationStrip?.apply {
             layoutManager = androidx.recyclerview.widget.LinearLayoutManager(
@@ -3118,15 +3885,26 @@ class MainActivity : AppCompatActivity() {
         }
         updateEpgButtonVisibility()
 
-        // Mode spinner
+        // Mode spinner - dynamisch mit DAB Dev wenn aktiviert
         val dabListModeSpinner = findViewById<Spinner>(R.id.dabListModeSpinner)
         dabListModeSpinner?.let { spinner ->
-            val adapter = android.widget.ArrayAdapter.createFromResource(
-                this, R.array.radio_modes, R.layout.item_radio_mode_spinner
-            )
+            val dabDevEnabled = presetRepository.isDabDevModeEnabled()
+            val modes = mutableListOf("FM", "AM", "DAB+")
+            if (dabDevEnabled) {
+                modes.add("DAB Dev")
+            }
+            val adapter = android.widget.ArrayAdapter(this, R.layout.item_radio_mode_spinner, modes)
             adapter.setDropDownViewResource(R.layout.item_radio_mode_dropdown)
             spinner.adapter = adapter
-            spinner.setSelection(2) // DAB is position 2
+
+            // Set correct selection based on current mode
+            val currentModeForSelection = frequencyScale.getMode()
+            val currentSelection = when (currentModeForSelection) {
+                FrequencyScaleView.RadioMode.DAB -> 2
+                FrequencyScaleView.RadioMode.DAB_DEV -> if (dabDevEnabled) 3 else 2
+                else -> 2
+            }
+            spinner.setSelection(currentSelection)
 
             spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 private var isInitialSelection = true
@@ -3141,10 +3919,13 @@ class MainActivity : AppCompatActivity() {
                         0 -> FrequencyScaleView.RadioMode.FM
                         1 -> FrequencyScaleView.RadioMode.AM
                         2 -> FrequencyScaleView.RadioMode.DAB
+                        3 -> FrequencyScaleView.RadioMode.DAB_DEV
                         else -> FrequencyScaleView.RadioMode.FM
                     }
 
-                    if (newMode != FrequencyScaleView.RadioMode.DAB) {
+                    // Allow switching between DAB and DAB_DEV, or to FM/AM
+                    val currentModeNow = frequencyScale.getMode()
+                    if (newMode != currentModeNow) {
                         setRadioMode(newMode)
                     }
                 }
@@ -3264,7 +4045,12 @@ class MainActivity : AppCompatActivity() {
      * Navigate to next/previous DAB station in list mode
      */
     private fun navigateDabListStation(direction: Int) {
-        val stations = presetRepository.loadDabStations()
+        val currentMode = frequencyScale.getMode()
+        val stations = if (currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            presetRepository.loadDabDevStations()
+        } else {
+            presetRepository.loadDabStations()
+        }
         if (stations.isEmpty()) return
 
         val currentIndex = stations.indexOfFirst { it.serviceId == currentDabServiceId }
@@ -3283,7 +4069,12 @@ class MainActivity : AppCompatActivity() {
      * Populate DAB List Mode with stations
      */
     private fun populateDabListMode() {
-        val stations = presetRepository.loadDabStations()
+        val currentMode = frequencyScale.getMode()
+        val stations = if (currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            presetRepository.loadDabDevStations()
+        } else {
+            presetRepository.loadDabStations()
+        }
         dabStripAdapter?.setStations(stations)
     }
 
@@ -3295,13 +4086,21 @@ class MainActivity : AppCompatActivity() {
         val serviceId = currentDabServiceId
 
         // Load fresh data
-        val stations = presetRepository.loadDabStations()
+        val currentMode = frequencyScale.getMode()
+        val stations = if (currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            presetRepository.loadDabDevStations()
+        } else {
+            presetRepository.loadDabStations()
+        }
         android.util.Log.d("fytFM", "refreshDabStationStrip: ${stations.size} stations, current fav count: ${stations.count { it.isFavorite }}")
 
         // Create new adapter with fresh data
-        val newAdapter = at.planqton.fytfm.ui.DabStripAdapter { station ->
-            tuneToDabStation(station.serviceId, station.ensembleId)
-        }
+        val newAdapter = at.planqton.fytfm.ui.DabStripAdapter(
+            onStationClick = { station ->
+                tuneToDabStation(station.serviceId, station.ensembleId)
+            },
+            getLogoPath = { name, serviceId -> getLogoForDabStation(name, serviceId) }
+        )
         newAdapter.setStations(stations)
         newAdapter.setSelectedStation(serviceId)
 
@@ -3322,7 +4121,12 @@ class MainActivity : AppCompatActivity() {
     private fun updateDabListModeSelection() {
         if (dabListContentArea?.visibility != View.VISIBLE) return
 
-        val stations = presetRepository.loadDabStations()
+        val currentMode = frequencyScale.getMode()
+        val stations = if (currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            presetRepository.loadDabDevStations()
+        } else {
+            presetRepository.loadDabStations()
+        }
         val station = stations.find { it.serviceId == currentDabServiceId }
 
         // Update station strip selection
@@ -3342,12 +4146,8 @@ class MainActivity : AppCompatActivity() {
             // Update favorite icon
             updateDabListFavoriteIcon(station.isFavorite)
 
-            // Load cover image: Station logo -> Slideshow -> DAB+ icon fallback (light version for dark bg)
-            val stationLogo = radioLogoRepository.getLogoForStation(
-                ps = station.name,
-                pi = null,
-                frequency = 0f
-            )
+            // Load cover image: Custom Logo -> Station logo -> Slideshow -> DAB+ icon fallback (light version for dark bg)
+            val stationLogo = getLogoForDabStation(station.name, station.serviceId)
             if (stationLogo != null) {
                 dabListCover?.load(java.io.File(stationLogo)) {
                     crossfade(true)
@@ -3457,7 +4257,10 @@ class MainActivity : AppCompatActivity() {
         try {
             currentDabServiceId = serviceId
             currentDabEnsembleId = ensembleId
+            selectedCoverSourceIndex = -1  // Reset to auto mode on station change
             resetDabDebugInfo()
+            resetDabNowPlaying()
+
             val success = dabTunerManager.tuneService(serviceId, ensembleId)
             if (success) {
                 android.util.Log.i("fytFM", "Tuned to DAB service: $serviceId")
@@ -3941,14 +4744,19 @@ class MainActivity : AppCompatActivity() {
             // When user clicks a station in carousel, tune to it
             val currentMode = frequencyScale.getMode()
             android.util.Log.i("fytFM", "=== CAROUSEL CLICK: station=${station.name}, isDab=${station.isDab}, currentMode=$currentMode, serviceId=${station.serviceId} ===")
-            if (station.isDab || currentMode == FrequencyScaleView.RadioMode.DAB) {
-                android.util.Log.i("fytFM", ">>> Using DAB logic")
-                // DAB: tune via DabTunerManager
+            if (station.isDab || currentMode == FrequencyScaleView.RadioMode.DAB || currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+                android.util.Log.i("fytFM", ">>> Using DAB logic (mode=$currentMode)")
+                // DAB/DAB Dev: tune via appropriate TunerManager
                 try {
                     currentDabServiceId = station.serviceId
                     currentDabEnsembleId = station.ensembleId
                     resetDabDebugInfo()
-                    val success = dabTunerManager.tuneService(station.serviceId, station.ensembleId)
+                    resetDabNowPlaying()
+                    val success = if (currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+                        mockDabTunerManager.tuneService(station.serviceId, station.ensembleId)
+                    } else {
+                        dabTunerManager.tuneService(station.serviceId, station.ensembleId)
+                    }
                     if (!success) {
                         android.widget.Toast.makeText(this, "Tuner Error: DAB Sender nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
                     }
@@ -4141,12 +4949,17 @@ class MainActivity : AppCompatActivity() {
             FrequencyScaleView.RadioMode.FM -> presetRepository.loadFmStations()
             FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
             FrequencyScaleView.RadioMode.DAB -> presetRepository.loadDabStations()
+            FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.loadDabDevStations()
         }
 
         android.util.Log.d("fytFM", "populateCarousel: ${stations.size} stations loaded, mode=$mode")
 
         val carouselItems = stations.map { station ->
-            val logoPath = radioLogoRepository.getLogoForStation(station.name, null, station.frequency)
+            val logoPath = if (station.isDab || isDab) {
+                getLogoForDabStation(station.name, station.serviceId)
+            } else {
+                radioLogoRepository.getLogoForStation(station.name, null, station.frequency)
+            }
             at.planqton.fytfm.ui.StationCarouselAdapter.StationItem(
                 frequency = station.frequency,
                 name = station.name,
@@ -4167,11 +4980,16 @@ class MainActivity : AppCompatActivity() {
     private fun updateCarouselSelection() {
         val mode = frequencyScale.getMode()
 
-        if (mode == FrequencyScaleView.RadioMode.DAB) {
-            // DAB: select by serviceId
+        if (mode == FrequencyScaleView.RadioMode.DAB || mode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            // DAB/DAB Dev: select by serviceId
             stationCarouselAdapter?.setCurrentDabService(currentDabServiceId)
-            val dabStation = presetRepository.loadDabStations().find { it.serviceId == currentDabServiceId }
-            carouselFrequencyLabel?.text = dabStation?.name ?: "DAB+"
+            val dabStations = if (mode == FrequencyScaleView.RadioMode.DAB_DEV) {
+                presetRepository.loadDabDevStations()
+            } else {
+                presetRepository.loadDabStations()
+            }
+            val dabStation = dabStations.find { it.serviceId == currentDabServiceId }
+            carouselFrequencyLabel?.text = dabStation?.name ?: if (mode == FrequencyScaleView.RadioMode.DAB_DEV) "DAB Dev" else "DAB+"
             updateCarouselFavoriteIcon()
             val position = stationCarouselAdapter?.getPositionForDabService(currentDabServiceId) ?: -1
             android.util.Log.d("fytFM", "updateCarouselSelection DAB: serviceId=$currentDabServiceId, position=$position")
@@ -4676,6 +5494,7 @@ class MainActivity : AppCompatActivity() {
                         currentDabServiceId = station.serviceId
                         currentDabEnsembleId = station.ensembleId
                         resetDabDebugInfo()
+                        resetDabNowPlaying()
                         val success = dabTunerManager.tuneService(station.serviceId, station.ensembleId)
                         if (!success) {
                             android.widget.Toast.makeText(this, "Tuner Error: DAB Sender nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
@@ -5225,6 +6044,22 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             recordingFolderPickerLauncher.launch(null)
+        }
+
+        // DAB Dev Mode toggle (for UI development without hardware)
+        val switchDabDevMode = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchDabDevMode)
+        android.util.Log.i("fytFM", "DAB Dev Mode switch found: ${switchDabDevMode != null}, current value: ${presetRepository.isDabDevModeEnabled()}")
+        switchDabDevMode?.isChecked = presetRepository.isDabDevModeEnabled()
+        switchDabDevMode?.setOnCheckedChangeListener { _, isChecked ->
+            android.util.Log.i("fytFM", "DAB Dev Mode toggled: $isChecked")
+            presetRepository.setDabDevModeEnabled(isChecked)
+            // Spinner-Adapter aktualisieren (fügt DAB Dev hinzu oder entfernt es)
+            updateRadioModeSpinnerAdapter()
+            android.util.Log.i("fytFM", "Spinner adapter updated, DAB Dev enabled: ${presetRepository.isDabDevModeEnabled()}")
+            // Wenn wir im DAB Dev Mode sind und ihn deaktivieren, wechsle zu FM
+            if (!isChecked && frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB_DEV) {
+                setRadioMode(FrequencyScaleView.RadioMode.FM)
+            }
         }
 
         // === Universal Settings ===
@@ -6783,10 +7618,19 @@ class MainActivity : AppCompatActivity() {
             FrequencyScaleView.RadioMode.FM -> presetRepository.loadFmStations()
             FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
             FrequencyScaleView.RadioMode.DAB -> presetRepository.loadDabStations()
+            FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.loadDabDevStations()
         }
 
         val adapter = at.planqton.fytfm.ui.StationEditorAdapter(
             getLogoPath = { ps, pi, freq -> radioLogoRepository.getLogoForStation(ps, pi, freq) },
+            getLogoPathForDab = { name, serviceId -> getLogoForDabStation(name, serviceId) },
+            onSearchLogo = { station ->
+                showManualLogoSearchDialog(station, targetMode) {
+                    // Nach Logo-Auswahl Dialog aktualisieren
+                    dialog.dismiss()
+                    showRadioEditorDialog(targetMode)
+                }
+            },
             onEdit = { station ->
                 if (targetMode == FrequencyScaleView.RadioMode.DAB) {
                     showEditDabStationDialog(station) { newName ->
@@ -7162,6 +8006,332 @@ class MainActivity : AppCompatActivity() {
     // Helper extension for dp to px conversion
     private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
 
+    /**
+     * Zeigt einen Dialog zur manuellen Bildersuche für einen einzelnen Sender.
+     * Verwendet DuckDuckGo Image Search.
+     */
+    private fun showManualLogoSearchDialog(
+        station: at.planqton.fytfm.data.RadioStation,
+        mode: FrequencyScaleView.RadioMode,
+        onComplete: () -> Unit
+    ) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_manual_logo_search, null)
+        val etSearch = dialogView.findViewById<android.widget.EditText>(R.id.etSearchQuery)
+        val btnSearch = dialogView.findViewById<android.widget.ImageButton>(R.id.btnSearch)
+        val progressBar = dialogView.findViewById<android.widget.ProgressBar>(R.id.progressBar)
+        val tvStatus = dialogView.findViewById<android.widget.TextView>(R.id.tvStatus)
+        val rvImages = dialogView.findViewById<androidx.recyclerview.widget.RecyclerView>(R.id.rvImages)
+
+        // Pre-fill with station name
+        val searchTerm = station.name ?: station.ensembleLabel ?: ""
+        etSearch.setText("$searchTerm logo")
+
+        // Grid layout for images
+        rvImages.layoutManager = androidx.recyclerview.widget.GridLayoutManager(this, 3)
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setNegativeButton("Abbrechen", null)
+            .create()
+
+        val imageAdapter = at.planqton.fytfm.ui.ImageSearchAdapter { imageResult ->
+            // User selected an image - download and save
+            dialog.dismiss()
+            downloadAndSaveLogoForStation(imageResult.url, station, mode, onComplete)
+        }
+        rvImages.adapter = imageAdapter
+
+        btnSearch.setOnClickListener {
+            val query = etSearch.text.toString().trim()
+            if (query.isBlank()) {
+                android.widget.Toast.makeText(this, "Bitte Suchbegriff eingeben", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            progressBar.visibility = View.VISIBLE
+            tvStatus.visibility = View.GONE
+            imageAdapter.setImages(emptyList())
+
+            // Search images using DuckDuckGo
+            searchImagesWithDuckDuckGo(query) { results ->
+                runOnUiThread {
+                    progressBar.visibility = View.GONE
+                    if (results.isEmpty()) {
+                        tvStatus.text = "Keine Bilder gefunden"
+                        tvStatus.visibility = View.VISIBLE
+                    } else {
+                        tvStatus.visibility = View.GONE
+                        imageAdapter.setImages(results)
+                    }
+                }
+            }
+        }
+
+        // Also search on Enter key
+        etSearch.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH) {
+                btnSearch.performClick()
+                true
+            } else false
+        }
+
+        dialog.show()
+    }
+
+    /**
+     * Sucht Bilder mit DuckDuckGo Image Search.
+     */
+    private fun searchImagesWithDuckDuckGo(query: String, callback: (List<at.planqton.fytfm.ui.ImageResult>) -> Unit) {
+        Thread {
+            try {
+                val results = mutableListOf<at.planqton.fytfm.ui.ImageResult>()
+                val encodedQuery = java.net.URLEncoder.encode(query, "UTF-8")
+
+                println("fytFM-Search: DuckDuckGo search for: $query")
+
+                val client = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                    .followRedirects(true)
+                    .build()
+
+                // Step 1: Get vqd token from DuckDuckGo
+                val tokenUrl = "https://duckduckgo.com/?q=$encodedQuery&iax=images&ia=images"
+                println("fytFM-Search: Getting token from: $tokenUrl")
+
+                val tokenRequest = okhttp3.Request.Builder()
+                    .url(tokenUrl)
+                    .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                    .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                    .header("Accept-Language", "en-US,en;q=0.5")
+                    .build()
+
+                val tokenResponse = client.newCall(tokenRequest).execute()
+                val html = tokenResponse.body?.string() ?: ""
+                tokenResponse.close()
+
+                println("fytFM-Search: HTML length: ${html.length}")
+
+                // Extract vqd token - try multiple patterns
+                var vqd: String? = null
+                val patterns = listOf(
+                    Regex("""vqd=["']([^"']+)["']"""),
+                    Regex("""vqd=([0-9]+-[0-9]+)"""),
+                    Regex(""""vqd":"([^"]+)""""),
+                    Regex("""vqd%3D([^&"']+)""")
+                )
+
+                for (pattern in patterns) {
+                    val match = pattern.find(html)
+                    if (match != null) {
+                        vqd = match.groupValues[1]
+                        println("fytFM-Search: Found vqd with pattern: $vqd")
+                        break
+                    }
+                }
+
+                if (vqd == null) {
+                    println("fytFM-Search: No vqd token found, trying direct image extraction")
+
+                    // Fallback: Extract image URLs directly from HTML
+                    val imgPattern = Regex(""""ou":"(https?://[^"]+)"""")
+                    val imgMatches = imgPattern.findAll(html)
+
+                    for (match in imgMatches.take(30)) {
+                        var url = match.groupValues[1]
+                            .replace("\\u002F", "/")
+                            .replace("\\/", "/")
+
+                        if (url.contains(".jpg") || url.contains(".png") || url.contains(".jpeg") || url.contains(".webp")) {
+                            results.add(at.planqton.fytfm.ui.ImageResult(url = url, name = query))
+                        }
+                    }
+
+                    if (results.isNotEmpty()) {
+                        println("fytFM-Search: Found ${results.size} images from HTML")
+                        callback(results)
+                        return@Thread
+                    }
+                }
+
+                if (vqd != null) {
+                    // Step 2: Fetch images using vqd token
+                    val imageUrl = "https://duckduckgo.com/i.js?l=de-de&o=json&q=$encodedQuery&vqd=$vqd&f=,,,,,&p=1"
+                    println("fytFM-Search: Fetching images from: $imageUrl")
+
+                    val imageRequest = okhttp3.Request.Builder()
+                        .url(imageUrl)
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .header("Accept", "application/json")
+                        .header("Referer", "https://duckduckgo.com/")
+                        .build()
+
+                    val imageResponse = client.newCall(imageRequest).execute()
+                    val jsonStr = imageResponse.body?.string() ?: ""
+                    imageResponse.close()
+
+                    println("fytFM-Search: JSON response length: ${jsonStr.length}")
+
+                    if (jsonStr.isNotEmpty()) {
+                        val json = org.json.JSONObject(jsonStr)
+                        val resultsArray = json.optJSONArray("results")
+
+                        if (resultsArray != null) {
+                            println("fytFM-Search: Found ${resultsArray.length()} results in JSON")
+
+                            for (i in 0 until minOf(resultsArray.length(), 30)) {
+                                val item = resultsArray.getJSONObject(i)
+                                val imgUrl = item.optString("image", "")
+                                val thumbnail = item.optString("thumbnail", "")
+                                val title = item.optString("title", query)
+
+                                // Prefer thumbnail (smaller, faster to load)
+                                val finalUrl = if (thumbnail.isNotBlank()) thumbnail else imgUrl
+
+                                if (finalUrl.isNotBlank() && finalUrl.startsWith("http")) {
+                                    results.add(at.planqton.fytfm.ui.ImageResult(
+                                        url = finalUrl,
+                                        name = title
+                                    ))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                println("fytFM-Search: Total results: ${results.size}")
+                callback(results)
+
+            } catch (e: Exception) {
+                println("fytFM-Search: Error: ${e.message}")
+                e.printStackTrace()
+                callback(emptyList())
+            }
+        }.start()
+    }
+
+
+    /**
+     * Lädt ein Bild herunter und speichert es als Logo für den Sender.
+     * Konvertiert webp/gif automatisch zu PNG.
+     */
+    private fun downloadAndSaveLogoForStation(
+        imageUrl: String,
+        station: at.planqton.fytfm.data.RadioStation,
+        mode: FrequencyScaleView.RadioMode,
+        onComplete: () -> Unit
+    ) {
+        val progressDialog = android.app.ProgressDialog(this).apply {
+            setMessage("Logo wird heruntergeladen...")
+            setCancelable(false)
+            show()
+        }
+
+        Thread {
+            try {
+                // Download image
+                val connection = java.net.URL(imageUrl).openConnection() as java.net.HttpURLConnection
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                connection.connectTimeout = 15000
+                connection.readTimeout = 15000
+
+                val inputStream = connection.inputStream
+                var bitmap = android.graphics.BitmapFactory.decodeStream(inputStream)
+                inputStream.close()
+                connection.disconnect()
+
+                if (bitmap == null) {
+                    throw Exception("Bild konnte nicht dekodiert werden")
+                }
+
+                // Convert to software bitmap if it's a hardware bitmap
+                if (bitmap.config == android.graphics.Bitmap.Config.HARDWARE) {
+                    bitmap = bitmap.copy(android.graphics.Bitmap.Config.ARGB_8888, false)
+                }
+
+                // Resize if too large (max 512x512)
+                if (bitmap.width > 512 || bitmap.height > 512) {
+                    val scale = minOf(512f / bitmap.width, 512f / bitmap.height)
+                    val newWidth = (bitmap.width * scale).toInt()
+                    val newHeight = (bitmap.height * scale).toInt()
+                    bitmap = android.graphics.Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+                }
+
+                // Save as PNG
+                val stationName = station.name ?: station.ensembleLabel ?: "Unknown"
+                val templateName = radioLogoRepository.getActiveTemplateName() ?: "Manual-Search"
+
+                val logosDir = java.io.File(filesDir, "logos/$templateName")
+                if (!logosDir.exists()) logosDir.mkdirs()
+
+                val hash = java.security.MessageDigest.getInstance("MD5")
+                    .digest(stationName.toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+                val logoFile = java.io.File(logosDir, "$hash.png")
+
+                java.io.FileOutputStream(logoFile).use { out ->
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 90, out)
+                }
+
+                // Add to RadioLogoRepository
+                var template = radioLogoRepository.getTemplates().find { it.name == templateName }
+                val existingStations = template?.stations?.toMutableList() ?: mutableListOf()
+
+                // Remove existing entry for this station
+                existingStations.removeAll { existing ->
+                    existing.ps.equals(stationName, ignoreCase = true)
+                }
+
+                val stationLogo = at.planqton.fytfm.data.logo.StationLogo(
+                    ps = stationName,
+                    logoUrl = "local://${logoFile.name}",
+                    localPath = logoFile.absolutePath
+                )
+                existingStations.add(stationLogo)
+
+                val newTemplate = at.planqton.fytfm.data.logo.RadioLogoTemplate(
+                    name = templateName,
+                    area = template?.area ?: 2,
+                    stations = existingStations
+                )
+                radioLogoRepository.saveTemplate(newTemplate)
+
+                if (radioLogoRepository.getActiveTemplateName() == null) {
+                    radioLogoRepository.setActiveTemplate(templateName)
+                }
+
+                runOnUiThread {
+                    progressDialog.dismiss()
+                    android.widget.Toast.makeText(
+                        this,
+                        "Logo für \"$stationName\" gespeichert",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    loadStationsForCurrentMode()
+                    // Indicator und Cover sofort aktualisieren falls aktueller Sender
+                    availableCoverSources = getAvailableCoverSources()
+                    updateSlideshowIndicators(true)
+                    if (stationName.equals(currentDabServiceLabel, ignoreCase = true)) {
+                        updateDabCoverDisplay()
+                    }
+                    onComplete()
+                }
+
+            } catch (e: Exception) {
+                android.util.Log.e("fytFM", "Failed to download/save logo: ${e.message}", e)
+                runOnUiThread {
+                    progressDialog.dismiss()
+                    android.widget.Toast.makeText(
+                        this,
+                        "Fehler: ${e.message}",
+                        android.widget.Toast.LENGTH_SHORT
+                    ).show()
+                    onComplete()
+                }
+            }
+        }.start()
+    }
+
     private fun showEditStationDialog(station: at.planqton.fytfm.data.RadioStation, onSave: (String, Boolean) -> Unit) {
         // Create container for name input and toggles
         val container = android.widget.LinearLayout(this).apply {
@@ -7249,6 +8419,11 @@ class MainActivity : AppCompatActivity() {
             showDabScanDialog()
             return
         }
+        // DAB Dev-Modus: Mock-Scan-Dialog
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB_DEV) {
+            showMockDabScanDialog()
+            return
+        }
         val isFmMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM
         val highSensitivity = presetRepository.isAutoScanSensitivity()
 
@@ -7298,11 +8473,79 @@ class MainActivity : AppCompatActivity() {
         }.show()
     }
 
+    /**
+     * Mock DAB+ Sendersuche für UI-Entwicklung.
+     */
+    private fun showMockDabScanDialog() {
+        // Simuliere Scan-Fortschritt
+        val progressDialog = android.app.ProgressDialog(this).apply {
+            setTitle("DAB Dev Scan")
+            setMessage("Simuliere Sendersuche...")
+            setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL)
+            max = 100
+            setCancelable(false)
+        }
+        progressDialog.show()
+
+        // Mock-Scan starten
+        mockDabTunerManager.startScan(object : at.planqton.fytfm.dab.DabScanListener {
+            override fun onScanStarted() {
+                runOnUiThread {
+                    progressDialog.progress = 0
+                }
+            }
+
+            override fun onScanProgress(progress: Int, currentFrequency: String) {
+                runOnUiThread {
+                    progressDialog.progress = progress
+                    progressDialog.setMessage("Scanne: $currentFrequency")
+                }
+            }
+
+            override fun onServiceFound(service: at.planqton.fytfm.dab.DabStation) {
+                // Optional: Fortschritt anzeigen
+            }
+
+            override fun onScanFinished(services: List<at.planqton.fytfm.dab.DabStation>) {
+                runOnUiThread {
+                    progressDialog.dismiss()
+
+                    // Mock-Stationen speichern
+                    val stations = services.map { dabStation ->
+                        at.planqton.fytfm.data.RadioStation(
+                            frequency = dabStation.ensembleFrequencyKHz.toFloat(),
+                            name = dabStation.serviceLabel,
+                            rssi = 0,
+                            isAM = false,
+                            isDab = true,
+                            isFavorite = false,
+                            serviceId = dabStation.serviceId,
+                            ensembleId = dabStation.ensembleId,
+                            ensembleLabel = dabStation.ensembleLabel
+                        )
+                    }
+                    presetRepository.saveDabDevStations(stations)
+                    loadStationsForCurrentMode()
+                    populateCarousel()
+                    android.widget.Toast.makeText(this@MainActivity, "${services.size} Mock-Sender gefunden", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onScanError(error: String) {
+                runOnUiThread {
+                    progressDialog.dismiss()
+                    android.widget.Toast.makeText(this@MainActivity, "Scan Error: $error", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        })
+    }
+
     private fun saveStations(stations: List<at.planqton.fytfm.data.RadioStation>) {
         when (frequencyScale.getMode()) {
             FrequencyScaleView.RadioMode.FM -> presetRepository.saveFmStations(stations)
             FrequencyScaleView.RadioMode.AM -> presetRepository.saveAmStations(stations)
             FrequencyScaleView.RadioMode.DAB -> presetRepository.saveDabStations(stations)
+            FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.saveDabDevStations(stations)
         }
     }
 
@@ -7310,7 +8553,7 @@ class MainActivity : AppCompatActivity() {
         when (mode) {
             FrequencyScaleView.RadioMode.FM -> presetRepository.saveFmStations(stations)
             FrequencyScaleView.RadioMode.AM -> presetRepository.saveAmStations(stations)
-            FrequencyScaleView.RadioMode.DAB -> presetRepository.saveDabStations(stations)
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.saveDabStations(stations)
         }
     }
 
@@ -7322,6 +8565,7 @@ class MainActivity : AppCompatActivity() {
             FrequencyScaleView.RadioMode.FM -> presetRepository.loadFmStations()
             FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
             FrequencyScaleView.RadioMode.DAB -> presetRepository.loadDabStations()
+            FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.loadDabDevStations()
         }
 
         android.util.Log.i("fytFM", "=== loadStationsForCurrentMode: loaded ${allStations.size} stations for $mode ===")
@@ -7364,7 +8608,8 @@ class MainActivity : AppCompatActivity() {
         android.util.Log.d("fytFM", "skipToPreviousStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
 
-        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+        val mode = frequencyScale.getMode()
+        if (mode == FrequencyScaleView.RadioMode.DAB || mode == FrequencyScaleView.RadioMode.DAB_DEV) {
             skipDabStation(forward = false)
             return
         }
@@ -7386,7 +8631,8 @@ class MainActivity : AppCompatActivity() {
         android.util.Log.d("fytFM", "skipToNextStation: ${stations.size} stations available")
         if (stations.isEmpty()) return
 
-        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+        val mode = frequencyScale.getMode()
+        if (mode == FrequencyScaleView.RadioMode.DAB || mode == FrequencyScaleView.RadioMode.DAB_DEV) {
             skipDabStation(forward = true)
             return
         }
@@ -7404,7 +8650,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun skipDabStation(forward: Boolean) {
-        val dabStations = presetRepository.loadDabStations()
+        val currentMode = frequencyScale.getMode()
+        val dabStations = if (currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            presetRepository.loadDabDevStations()
+        } else {
+            presetRepository.loadDabStations()
+        }
         if (dabStations.isEmpty()) return
 
         val oldServiceId = currentDabServiceId
@@ -7416,11 +8667,18 @@ class MainActivity : AppCompatActivity() {
         }
 
         val newStation = dabStations[newIndex]
+        val isDevMode = frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB_DEV
         try {
             currentDabServiceId = newStation.serviceId
             currentDabEnsembleId = newStation.ensembleId
             resetDabDebugInfo()
-            val success = dabTunerManager.tuneService(newStation.serviceId, newStation.ensembleId)
+            resetDabNowPlaying()
+
+            val success = if (isDevMode) {
+                mockDabTunerManager.tuneService(newStation.serviceId, newStation.ensembleId)
+            } else {
+                dabTunerManager.tuneService(newStation.serviceId, newStation.ensembleId)
+            }
             if (!success) {
                 android.widget.Toast.makeText(this, "Tuner Error: DAB Sender nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
             }
@@ -7485,9 +8743,14 @@ class MainActivity : AppCompatActivity() {
         // Build DAB stations JSON
         val stationsJson = try {
             val jsonArray = org.json.JSONArray()
-            val dabStations = presetRepository.loadDabStations()
+            val currentMode = frequencyScale.getMode()
+            val dabStations = if (currentMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+                presetRepository.loadDabDevStations()
+            } else {
+                presetRepository.loadDabStations()
+            }
             dabStations.forEach { station ->
-                val logoPath = radioLogoRepository.getLogoForStation(station.name, null, 0f)
+                val logoPath = getLogoForDabStation(station.name, station.serviceId)
                 val obj = org.json.JSONObject().apply {
                     put("frequency", 0.0)
                     put("name", station.name ?: "")
@@ -7585,19 +8848,20 @@ class MainActivity : AppCompatActivity() {
                 val station = presetRepository.loadDabStations().find { it.serviceId == currentDabServiceId }
                 station?.name ?: "DAB+"
             }
+            FrequencyScaleView.RadioMode.DAB_DEV -> {
+                // Für DAB Dev: Zeige Mock-Sendername
+                val station = presetRepository.loadDabDevStations().find { it.serviceId == currentDabServiceId }
+                station?.name ?: "DAB Dev"
+            }
         }
         // Update debug overlay frequency
-        if (mode != FrequencyScaleView.RadioMode.DAB) {
+        if (mode != FrequencyScaleView.RadioMode.DAB && mode != FrequencyScaleView.RadioMode.DAB_DEV) {
             updateDebugInfo(freq = frequency)
         }
     }
 
     private fun setupRadioModeSpinner() {
-        val adapter = android.widget.ArrayAdapter.createFromResource(
-            this, R.array.radio_modes, R.layout.item_radio_mode_spinner
-        )
-        adapter.setDropDownViewResource(R.layout.item_radio_mode_dropdown)
-        spinnerRadioMode.adapter = adapter
+        updateRadioModeSpinnerAdapter()
 
         spinnerRadioMode.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -7610,10 +8874,12 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
-                val newMode = when (position) {
-                    0 -> FrequencyScaleView.RadioMode.FM
-                    1 -> FrequencyScaleView.RadioMode.AM
-                    2 -> FrequencyScaleView.RadioMode.DAB
+                val dabDevEnabled = presetRepository.isDabDevModeEnabled()
+                val newMode = when {
+                    position == 0 -> FrequencyScaleView.RadioMode.FM
+                    position == 1 -> FrequencyScaleView.RadioMode.AM
+                    position == 2 -> FrequencyScaleView.RadioMode.DAB
+                    position == 3 && dabDevEnabled -> FrequencyScaleView.RadioMode.DAB_DEV
                     else -> FrequencyScaleView.RadioMode.FM
                 }
 
@@ -7631,12 +8897,29 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Updates the radio mode spinner adapter based on DAB Dev Mode setting.
+     */
+    private fun updateRadioModeSpinnerAdapter() {
+        val dabDevEnabled = presetRepository.isDabDevModeEnabled()
+        android.util.Log.i("fytFM", "updateRadioModeSpinnerAdapter: dabDevEnabled=$dabDevEnabled")
+        val modes = mutableListOf("FM", "AM", "DAB+")
+        if (dabDevEnabled) {
+            modes.add("DAB Dev")
+        }
+        android.util.Log.i("fytFM", "updateRadioModeSpinnerAdapter: modes=$modes")
+        val adapter = ArrayAdapter(this, R.layout.item_radio_mode_spinner, modes)
+        adapter.setDropDownViewResource(R.layout.item_radio_mode_dropdown)
+        spinnerRadioMode.adapter = adapter
+    }
+
+    /**
      * Prüft ob ein bestimmter Tuner verfügbar ist.
      */
     private fun isTunerAvailable(mode: FrequencyScaleView.RadioMode): Boolean {
         return when (mode) {
             FrequencyScaleView.RadioMode.FM, FrequencyScaleView.RadioMode.AM -> FmNative.isLibraryLoaded()
             FrequencyScaleView.RadioMode.DAB -> dabTunerManager.isDabAvailable(this)
+            FrequencyScaleView.RadioMode.DAB_DEV -> true  // Mock tuner is always available
         }
     }
 
@@ -7701,6 +8984,22 @@ class MainActivity : AppCompatActivity() {
             }
             // Debug-Overlay zurück auf RDS setzen
             resetDebugToRds()
+        } else if (oldMode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            // Von DAB Dev weg: Mock-Tuner stoppen
+            stopDlsTimestampUpdates()
+            android.util.Log.i("fytFM", "Stopping Mock DAB tuner...")
+            if (isDabOn) {
+                try {
+                    mockDabTunerManager.stopService()
+                    mockDabTunerManager.deinitialize()
+                } catch (e: Exception) {
+                    android.util.Log.e("fytFM", "Mock DAB shutdown error: ${e.message}")
+                }
+                isDabOn = false
+                currentDabServiceId = 0
+                currentDabEnsembleId = 0
+            }
+            resetDebugToRds()
         } else {
             // Von FM/AM weg: FM Radio stoppen
             android.util.Log.i("fytFM", "Stopping FM/AM radio...")
@@ -7758,8 +9057,19 @@ class MainActivity : AppCompatActivity() {
             if (!isDabOn) {
                 toggleDabPower()
             }
+        } else if (mode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            // Zu DAB Dev: Mock-Tuner starten
+            initDabDisplay()
+            startDlsTimestampUpdates()
+
+            android.util.Log.i("fytFM", "Starting Mock DAB tuner...")
+            if (!isDabOn) {
+                toggleMockDabPower()
+            }
         } else {
-            // Zu FM/AM: FM Radio starten
+            // Zu FM/AM: FM Radio starten - Cover-Indikatoren verstecken
+            updateSlideshowIndicators(false)
+            updateDeezerWatermarks(false)
             android.util.Log.i("fytFM", "Starting FM/AM radio...")
             if (!isRadioOn) {
                 try {
@@ -7792,8 +9102,8 @@ class MainActivity : AppCompatActivity() {
             updateCarouselSelection()
             controlBar.visibility = View.VISIBLE
             stationBar.visibility = View.VISIBLE
-        } else if (mode == FrequencyScaleView.RadioMode.DAB) {
-            // DAB List Mode - hide control bar but show station bar
+        } else if (mode == FrequencyScaleView.RadioMode.DAB || mode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            // DAB/DAB Dev List Mode - hide control bar but show station bar
             mainContentArea?.visibility = View.GONE
             dabListContentArea?.visibility = View.VISIBLE
             dabListStationStrip?.visibility = View.GONE  // Hide the DAB strip, use stationBar instead
@@ -7821,6 +9131,7 @@ class MainActivity : AppCompatActivity() {
             FrequencyScaleView.RadioMode.FM -> 0
             FrequencyScaleView.RadioMode.AM -> 1
             FrequencyScaleView.RadioMode.DAB -> 2
+            FrequencyScaleView.RadioMode.DAB_DEV -> 3
         }
         // Nur supprimieren wenn sich die Position wirklich ändert
         if (spinnerRadioMode.selectedItemPosition != position) {
@@ -7859,6 +9170,11 @@ class MainActivity : AppCompatActivity() {
         // DAB-Modus: eigene Power-Steuerung
         if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
             toggleDabPower()
+            return
+        }
+        // DAB Dev-Modus: Mock-Tuner Power-Steuerung
+        if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB_DEV) {
+            toggleMockDabPower()
             return
         }
 
@@ -8123,7 +9439,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun updatePowerButton() {
         // Update power button appearance based on radio state
-        val isOn = if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) isDabOn else isRadioOn
+        val mode = frequencyScale.getMode()
+        val isOn = if (mode == FrequencyScaleView.RadioMode.DAB || mode == FrequencyScaleView.RadioMode.DAB_DEV) isDabOn else isRadioOn
         btnPower.alpha = if (isOn) 1.0f else 0.5f
     }
 
@@ -8206,8 +9523,8 @@ class MainActivity : AppCompatActivity() {
                     // Alle Cover-Ansichten sofort zurücksetzen (muss auf UI-Thread)
                     runOnUiThread {
                         updateDeezerDebugInfo("Waiting...", null, null, null, null)
-                        // dabListCover auf Stationslogo oder Fallback setzen
-                        val stationLogo = radioLogoRepository.getLogoForStation(dabStation.serviceLabel, null, 0f)
+                        // dabListCover auf Stationslogo oder Fallback setzen (Custom Logo prüfen)
+                        val stationLogo = getLogoForDabStation(dabStation.serviceLabel, dabStation.serviceId)
                         if (stationLogo != null) {
                             currentUiCoverSource = stationLogo
                             dabListCover?.load(java.io.File(stationLogo)) { crossfade(true) }
@@ -8219,6 +9536,9 @@ class MainActivity : AppCompatActivity() {
                             nowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
                             carouselNowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
                         }
+                        // Indikator mit verfügbaren Quellen aktualisieren
+                        availableCoverSources = getAvailableCoverSources()
+                        updateSlideshowIndicators(true)
                     }
                     saveLastDabService(dabStation.serviceId, dabStation.ensembleId)
                     updateCarouselSelection()
@@ -8229,8 +9549,8 @@ class MainActivity : AppCompatActivity() {
                     updateDabNowPlaying(dabStation)
                     // Debug Overlay für DAB aktualisieren
                     updateDabDebugInfo(dabStation)
-                    // MediaSession für DAB aktualisieren
-                    val radioLogoPath = radioLogoRepository.getLogoForStation(dabStation.serviceLabel, null, 0f)
+                    // MediaSession für DAB aktualisieren (Custom Logo prüfen)
+                    val radioLogoPath = getLogoForDabStation(dabStation.serviceLabel, dabStation.serviceId)
                     FytFMMediaService.instance?.updateDabMetadata(
                         serviceLabel = dabStation.serviceLabel,
                         ensembleLabel = dabStation.ensembleLabel,
@@ -8364,36 +9684,23 @@ class MainActivity : AppCompatActivity() {
                                     val localCover = deezerCache?.getLocalCoverPath(trackInfo.trackId)
                                         ?: trackInfo.coverUrl?.takeIf { it.startsWith("/") }
 
-                                    val placeholderDrawable = R.drawable.ic_cover_placeholder
-                                    if (!localCover.isNullOrBlank()) {
-                                        currentUiCoverSource = localCover
-                                        nowPlayingCover?.load(java.io.File(localCover)) {
-                                            crossfade(true)
-                                            placeholder(placeholderDrawable)
-                                        }
-                                        carouselNowPlayingCover?.load(java.io.File(localCover)) {
-                                            crossfade(true)
-                                            placeholder(placeholderDrawable)
-                                        }
-                                        // Auch dabListCover (Hauptbild) mit Deezer Cover aktualisieren
-                                        dabListCover?.load(java.io.File(localCover)) {
-                                            crossfade(true)
-                                        }
-                                    }
-                                    // Kein HTTP Fallback - wenn nicht gecacht, bleibt Slideshow/Logo
-                                    // Deezer Debug Info wird bereits vom RtCombiner über onDebugUpdate aktualisiert
-                                    // mit korrektem Status ("Found!" oder "Cached (local)")
+                                    val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
 
-                                    // MediaSession für DAB aktualisieren - NUR mit lokalem Cache, nie HTTP
-                                    val radioLogoPath = radioLogoRepository.getLogoForStation(currentDabServiceLabel, null, 0f)
-                                    // Cover-Pfad und zugehörigen DLS speichern für nachfolgende Updates
+                                    // Cover-Pfad speichern
                                     currentDabDeezerCoverPath = localCover  // Nur lokaler Cache, kein HTTP
                                     currentDabDeezerCoverDls = dls
+
+                                    // Auto-Modus aktivieren -> höchste Priorität wird gewählt
+                                    selectedCoverSourceIndex = -1
+                                    updateDabCoverDisplay()
+
+                                    // MediaSession für DAB aktualisieren - NUR mit lokalem Cache, nie HTTP
+                                    val displayDls = "${trackInfo.artist} - ${trackInfo.title}"
                                     FytFMMediaService.instance?.updateDabMetadata(
                                         serviceLabel = currentDabServiceLabel,
                                         ensembleLabel = currentDabEnsembleLabel,
-                                        dls = dls,
-                                        slideshowBitmap = if (localCover != null) null else currentDabSlideshow, // Slideshow nur wenn kein lokales Deezer Cover
+                                        dls = displayDls,  // Formatiertes "Artist - Title" statt vollem DLS
+                                        slideshowBitmap = if (!localCover.isNullOrBlank()) null else currentDabSlideshow,
                                         radioLogoPath = radioLogoPath,
                                         deezerCoverPath = localCover  // Nur lokaler Cache
                                     )
@@ -8401,33 +9708,12 @@ class MainActivity : AppCompatActivity() {
                                     // Kein Track gefunden - Cover zurücksetzen
                                     currentDabDeezerCoverPath = null
                                     currentDabDeezerCoverDls = null
-                                    val radioLogoPath = radioLogoRepository.getLogoForStation(currentDabServiceLabel, null, 0f)
 
-                                    // dabListCover zurücksetzen auf Stationslogo oder Slideshow
-                                    if (currentDabSlideshow != null) {
-                                        currentUiCoverSource = "slideshow"
-                                        dabListCover?.setImageBitmap(currentDabSlideshow)
-                                    } else if (radioLogoPath != null) {
-                                        currentUiCoverSource = radioLogoPath
-                                        dabListCover?.load(java.io.File(radioLogoPath)) {
-                                            crossfade(true)
-                                        }
-                                    } else {
-                                        currentUiCoverSource = "drawable:ic_fytfm_dab_plus_light"
-                                        dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
-                                    }
+                                    // Auto-Modus aktivieren -> nächste verfügbare Priorität
+                                    selectedCoverSourceIndex = -1
+                                    updateDabCoverDisplay()
 
-                                    // Now Playing Cover auch zurücksetzen
-                                    if (radioLogoPath != null) {
-                                        currentUiCoverSource = radioLogoPath
-                                        nowPlayingCover?.load(java.io.File(radioLogoPath)) {
-                                            crossfade(true)
-                                        }
-                                        carouselNowPlayingCover?.load(java.io.File(radioLogoPath)) {
-                                            crossfade(true)
-                                        }
-                                    }
-
+                                    val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
                                     FytFMMediaService.instance?.updateDabMetadata(
                                         serviceLabel = currentDabServiceLabel,
                                         ensembleLabel = currentDabEnsembleLabel,
@@ -8441,7 +9727,7 @@ class MainActivity : AppCompatActivity() {
                     } else {
                         // DLS hat sich nicht geändert oder Deezer deaktiviert
                         // Verwende gespeichertes Deezer-Cover NUR wenn es zum aktuellen DLS gehört
-                        val radioLogoPath = radioLogoRepository.getLogoForStation(currentDabServiceLabel, null, 0f)
+                        val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
                         val useDeezerCover = deezerEnabledDab &&
                                              currentDabDeezerCoverPath != null &&
                                              currentDabDeezerCoverDls == dls
@@ -8477,19 +9763,27 @@ class MainActivity : AppCompatActivity() {
                     android.util.Log.d("fytFM", "DAB Slideshow received: ${bitmap.width}x${bitmap.height}")
                     currentDabSlideshow = bitmap
 
-                    // Nur UI aktualisieren wenn KEIN Deezer Cover aktiv ist
+                    // Neu berechnen welche Quellen verfügbar sind
+                    availableCoverSources = getAvailableCoverSources()
+                    updateSlideshowIndicators(true)
+
+                    // UI nur aktualisieren wenn:
+                    // - Auto-Modus (-1) und Slideshow ist beste verfügbare Option (kein Deezer)
+                    // - Oder User hat explizit Slideshow ausgewählt
                     val hasDeezerCover = !currentDabDeezerCoverPath.isNullOrBlank()
-                    if (!hasDeezerCover) {
+                    val slideshowSelected = selectedCoverSourceIndex >= 0 &&
+                        selectedCoverSourceIndex < availableCoverSources.size &&
+                        availableCoverSources[selectedCoverSourceIndex] == DabCoverSource.SLIDESHOW
+                    val showSlideshow = slideshowSelected || (selectedCoverSourceIndex < 0 && !hasDeezerCover)
+
+                    if (showSlideshow) {
                         currentUiCoverSource = "slideshow"
-                        // Bild in Now Playing Bar Cover anzeigen
                         nowPlayingCover?.setImageBitmap(bitmap)
                         carouselNowPlayingCover?.setImageBitmap(bitmap)
-                        // DAB List Mode Cover aktualisieren
                         if (dabListContentArea?.visibility == View.VISIBLE) {
                             dabListCover?.setImageBitmap(bitmap)
                         }
-                        // MediaSession für DAB mit Slideshow aktualisieren
-                        val radioLogoPath = radioLogoRepository.getLogoForStation(currentDabServiceLabel, null, 0f)
+                        val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
                         FytFMMediaService.instance?.updateDabMetadata(
                             serviceLabel = currentDabServiceLabel,
                             ensembleLabel = currentDabEnsembleLabel,
@@ -8552,13 +9846,179 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Mock DAB+ Tuner Ein/Aus schalten (für UI-Entwicklung ohne Hardware).
+     */
+    private fun toggleMockDabPower() {
+        android.util.Log.i("fytFM", "======= toggleMockDabPower() =======")
+
+        try {
+            if (isDabOn) {
+                // Mock DAB ausschalten
+                android.util.Log.i("fytFM", "--- Mock DAB Powering OFF ---")
+                mockDabTunerManager.stopService()
+                mockDabTunerManager.deinitialize()
+                isDabOn = false
+                currentDabServiceId = 0
+                currentDabEnsembleId = 0
+            } else {
+                // Mock DAB einschalten
+                android.util.Log.i("fytFM", "--- Mock DAB Powering ON ---")
+
+                // Mock DAB Tuner Manager Callbacks setzen
+                mockDabTunerManager.onTunerReady = {
+                    android.util.Log.i("fytFM", "Mock DAB Tuner ready!")
+
+                    // Mock-Stationen laden
+                    val mockStations = mockDabTunerManager.getServices()
+                    if (mockStations.isNotEmpty()) {
+                        // Stationen als RadioStation speichern für UI
+                        val radioStations = mockStations.map { dabStation ->
+                            at.planqton.fytfm.data.RadioStation(
+                                frequency = dabStation.ensembleFrequencyKHz.toFloat(),
+                                name = dabStation.serviceLabel,
+                                rssi = 0,
+                                isAM = false,
+                                isDab = true,
+                                isFavorite = false,
+                                serviceId = dabStation.serviceId,
+                                ensembleId = dabStation.ensembleId,
+                                ensembleLabel = dabStation.ensembleLabel
+                            )
+                        }
+                        presetRepository.saveDabStations(radioStations)
+                        populateCarousel()
+
+                        // Ersten Sender tunen
+                        val targetStation = mockStations.first()
+                        android.util.Log.i("fytFM", "Mock DAB Tuner ready: tuning to ${targetStation.serviceLabel}")
+
+                        currentDabServiceId = targetStation.serviceId
+                        currentDabEnsembleId = targetStation.ensembleId
+                        mockDabTunerManager.tuneService(targetStation.serviceId, targetStation.ensembleId)
+                        updateCarouselSelection()
+                    }
+                }
+
+                mockDabTunerManager.onServiceStarted = { dabStation ->
+                    android.util.Log.i("fytFM", "Mock DAB Service gestartet: ${dabStation.serviceLabel}")
+
+                    playTickSound()
+
+                    currentDabServiceId = dabStation.serviceId
+                    currentDabEnsembleId = dabStation.ensembleId
+                    currentDabServiceLabel = dabStation.serviceLabel
+                    currentDabEnsembleLabel = dabStation.ensembleLabel
+                    currentDabDls = null
+                    lastDlsTimestamp = 0L
+                    currentDabSlideshow = null
+
+                    runOnUiThread {
+                        currentUiCoverSource = "drawable:ic_fytfm_dab_plus_light"
+                        dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+                        nowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+                        carouselNowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+                        availableCoverSources = getAvailableCoverSources()
+                        updateSlideshowIndicators(true)
+                    }
+
+                    updateCarouselSelection()
+                    updateDabListModeSelection()
+                    stationAdapter.setSelectedDabService(dabStation.serviceId)
+                    updateFavoriteButton()
+                    updateDabNowPlaying(dabStation)
+                    updateDabDebugInfo(dabStation)
+                }
+
+                mockDabTunerManager.onServiceStopped = {
+                    android.util.Log.i("fytFM", "Mock DAB Service gestoppt")
+                }
+
+                mockDabTunerManager.onTunerError = { error ->
+                    android.util.Log.e("fytFM", "Mock DAB Tuner Error: $error")
+                    isDabOn = false
+                    updatePowerButton()
+                    android.widget.Toast.makeText(this, error, android.widget.Toast.LENGTH_LONG).show()
+                }
+
+                mockDabTunerManager.onDynamicLabel = { dls ->
+                    android.util.Log.d("fytFM", "Mock DLS received: $dls")
+                    if (dls != currentDabDls) {
+                        lastDlsTimestamp = System.currentTimeMillis()
+                    }
+                    currentDabDls = dls
+                    nowPlayingTitle?.text = dls
+                    nowPlayingTitle?.visibility = if (dls.isNotBlank()) View.VISIBLE else View.GONE
+                    carouselNowPlayingTitle?.text = dls
+                    carouselNowPlayingTitle?.visibility = if (dls.isNotBlank()) View.VISIBLE else View.GONE
+                    updateDabListRadiotext(dls)
+                    updateDabDebugInfo(dls = dls)
+                }
+
+                mockDabTunerManager.onDlPlus = { artist, title ->
+                    android.util.Log.d("fytFM", "Mock DL+ received: artist=$artist, title=$title")
+                    if (artist != null || title != null) {
+                        nowPlayingArtist?.text = artist ?: ""
+                        nowPlayingArtist?.visibility = if (artist != null) View.VISIBLE else View.GONE
+                        nowPlayingTitle?.text = title ?: ""
+                        nowPlayingTitle?.visibility = if (title != null) View.VISIBLE else View.GONE
+                        carouselNowPlayingArtist?.text = artist ?: ""
+                        carouselNowPlayingArtist?.visibility = if (artist != null) View.VISIBLE else View.GONE
+                        carouselNowPlayingTitle?.text = title ?: ""
+                        carouselNowPlayingTitle?.visibility = if (title != null) View.VISIBLE else View.GONE
+                    }
+                }
+
+                mockDabTunerManager.onSlideshow = { bitmap ->
+                    android.util.Log.d("fytFM", "Mock DAB Slideshow received: ${bitmap.width}x${bitmap.height}")
+                    currentDabSlideshow = bitmap
+
+                    availableCoverSources = getAvailableCoverSources()
+                    updateSlideshowIndicators(true)
+
+                    val slideshowSelected = selectedCoverSourceIndex >= 0 &&
+                        selectedCoverSourceIndex < availableCoverSources.size &&
+                        availableCoverSources[selectedCoverSourceIndex] == DabCoverSource.SLIDESHOW
+                    val showSlideshow = slideshowSelected || selectedCoverSourceIndex < 0
+
+                    if (showSlideshow) {
+                        currentUiCoverSource = "mock_slideshow"
+                        nowPlayingCover?.setImageBitmap(bitmap)
+                        carouselNowPlayingCover?.setImageBitmap(bitmap)
+                        if (dabListContentArea?.visibility == View.VISIBLE) {
+                            dabListCover?.setImageBitmap(bitmap)
+                        }
+                    }
+                }
+
+                mockDabTunerManager.onReceptionStats = { sync, quality, snr ->
+                    updateDabReceptionStats(sync, quality, snr)
+                }
+
+                val success = mockDabTunerManager.initialize(this)
+                isDabOn = success
+
+                if (!success) {
+                    android.widget.Toast.makeText(this, "Mock DAB+ Initialisierung fehlgeschlagen", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("fytFM", "Mock DAB power toggle failed: ${e.message}", e)
+            isDabOn = false
+            android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+        }
+
+        android.util.Log.i("fytFM", "======= toggleMockDabPower() done, isDabOn=$isDabOn =======")
+        updatePowerButton()
+    }
+
+    /**
      * Lädt den Favoriten-Filter-Status für den aktuellen Modus (FM/AM)
      */
     private fun loadFavoritesFilterState() {
         showFavoritesOnly = when (frequencyScale.getMode()) {
             FrequencyScaleView.RadioMode.FM -> presetRepository.isShowFavoritesOnlyFm()
             FrequencyScaleView.RadioMode.AM -> presetRepository.isShowFavoritesOnlyAm()
-            FrequencyScaleView.RadioMode.DAB -> presetRepository.isShowFavoritesOnlyDab()
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.isShowFavoritesOnlyDab()
         }
         updateFolderButton()
     }
@@ -8682,7 +10142,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun updateFavoriteButton() {
         val mode = frequencyScale.getMode()
-        val isFavorite = if (mode == FrequencyScaleView.RadioMode.DAB) {
+        val isFavorite = if (mode == FrequencyScaleView.RadioMode.DAB || mode == FrequencyScaleView.RadioMode.DAB_DEV) {
             if (currentDabServiceId > 0) presetRepository.isDabFavorite(currentDabServiceId) else false
         } else {
             val frequency = frequencyScale.getFrequency()
@@ -8709,7 +10169,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun toggleCurrentStationFavorite() {
         val mode = frequencyScale.getMode()
-        val isFavoriteNow = if (mode == FrequencyScaleView.RadioMode.DAB) {
+        val isFavoriteNow = if (mode == FrequencyScaleView.RadioMode.DAB || mode == FrequencyScaleView.RadioMode.DAB_DEV) {
             if (currentDabServiceId > 0) presetRepository.toggleDabFavorite(currentDabServiceId) else return
         } else {
             val frequency = frequencyScale.getFrequency()
@@ -8740,7 +10200,7 @@ class MainActivity : AppCompatActivity() {
         when (frequencyScale.getMode()) {
             FrequencyScaleView.RadioMode.FM -> presetRepository.setShowFavoritesOnlyFm(showFavoritesOnly)
             FrequencyScaleView.RadioMode.AM -> presetRepository.setShowFavoritesOnlyAm(showFavoritesOnly)
-            FrequencyScaleView.RadioMode.DAB -> presetRepository.setShowFavoritesOnlyDab(showFavoritesOnly)
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.setShowFavoritesOnlyDab(showFavoritesOnly)
         }
 
         // UI aktualisieren
@@ -8839,6 +10299,7 @@ class MainActivity : AppCompatActivity() {
             FrequencyScaleView.RadioMode.FM -> "FM"
             FrequencyScaleView.RadioMode.AM -> "AM"
             FrequencyScaleView.RadioMode.DAB -> "DAB"
+            FrequencyScaleView.RadioMode.DAB_DEV -> "DAB_DEV"
         }
         android.util.Log.i("fytFM", "=== SAVING MODE: $modeString ===")
         prefs.edit().putString("last_radio_mode", modeString).apply()
@@ -8849,6 +10310,7 @@ class MainActivity : AppCompatActivity() {
         return when (prefs.getString("last_radio_mode", "FM")) {
             "AM" -> FrequencyScaleView.RadioMode.AM
             "DAB" -> FrequencyScaleView.RadioMode.DAB
+            "DAB_DEV" -> if (presetRepository.isDabDevModeEnabled()) FrequencyScaleView.RadioMode.DAB_DEV else FrequencyScaleView.RadioMode.FM
             else -> FrequencyScaleView.RadioMode.FM
         }
     }

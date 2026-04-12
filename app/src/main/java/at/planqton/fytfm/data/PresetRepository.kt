@@ -11,6 +11,7 @@ class PresetRepository(private val context: Context) {
         private const val PREFS_FM = "fm_presets"
         private const val PREFS_AM = "am_presets"
         private const val PREFS_DAB = "dab_presets"
+        private const val PREFS_DAB_DEV = "dab_dev_presets"
         private const val PREFS_SETTINGS = "settings"
         private const val KEY_STATIONS = "stations"
         private const val KEY_POWER_ON_STARTUP = "power_on_startup"
@@ -26,6 +27,7 @@ class PresetRepository(private val context: Context) {
     private val fmPrefs: SharedPreferences = context.getSharedPreferences(PREFS_FM, Context.MODE_PRIVATE)
     private val amPrefs: SharedPreferences = context.getSharedPreferences(PREFS_AM, Context.MODE_PRIVATE)
     private val dabPrefs: SharedPreferences = context.getSharedPreferences(PREFS_DAB, Context.MODE_PRIVATE)
+    private val dabDevPrefs: SharedPreferences = context.getSharedPreferences(PREFS_DAB_DEV, Context.MODE_PRIVATE)
     private val settingsPrefs: SharedPreferences = context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
 
     // === Per-Tuner-Instance Storage ===
@@ -181,6 +183,19 @@ class PresetRepository(private val context: Context) {
         dabPrefs.edit().remove(KEY_STATIONS).apply()
     }
 
+    // DAB Dev (Mock) Stationen - separate von echten DAB Stationen
+    fun saveDabDevStations(stations: List<RadioStation>) {
+        saveStations(dabDevPrefs, stations)
+    }
+
+    fun loadDabDevStations(): List<RadioStation> {
+        return loadStations(dabDevPrefs, isAM = false, isDab = true)
+    }
+
+    fun clearDabDevStations() {
+        dabDevPrefs.edit().remove(KEY_STATIONS).apply()
+    }
+
     private fun saveStations(prefs: SharedPreferences, stations: List<RadioStation>) {
         val jsonArray = JSONArray()
         stations.forEach { station ->
@@ -310,6 +325,33 @@ class PresetRepository(private val context: Context) {
 
     fun isDabFavorite(serviceId: Int): Boolean {
         return loadDabStations().find { it.serviceId == serviceId }?.isFavorite ?: false
+    }
+
+    /**
+     * Toggle Favorit für DAB Dev-Sender (identifiziert per serviceId)
+     */
+    fun toggleDabDevFavorite(serviceId: Int): Boolean {
+        val stations = loadDabDevStations()
+        val existingStation = stations.find { it.serviceId == serviceId }
+
+        val updatedStations: List<RadioStation>
+        val isFavoriteNow: Boolean
+
+        if (existingStation != null) {
+            isFavoriteNow = !existingStation.isFavorite
+            updatedStations = stations.map {
+                if (it.serviceId == serviceId) it.copy(isFavorite = isFavoriteNow) else it
+            }
+        } else {
+            return false
+        }
+
+        saveDabDevStations(updatedStations)
+        return isFavoriteNow
+    }
+
+    fun isDabDevFavorite(serviceId: Int): Boolean {
+        return loadDabDevStations().find { it.serviceId == serviceId }?.isFavorite ?: false
     }
 
     // Autoplay at startup (single setting for all modes)
@@ -623,6 +665,44 @@ class PresetRepository(private val context: Context) {
         return mergedStations
     }
 
+    /**
+     * Fügt gescannte DAB Dev-Sender zur Liste hinzu.
+     */
+    fun mergeDabDevScannedStations(scannedStations: List<RadioStation>): List<RadioStation> {
+        val existingStations = loadDabDevStations()
+        val overwriteFavorites = isOverwriteFavorites()
+
+        val favoritesMap = existingStations
+            .filter { it.isFavorite }
+            .associateBy { it.serviceId }
+            .toMutableMap()
+
+        val resultMap = mutableMapOf<Int, RadioStation>()
+
+        for (scanned in scannedStations) {
+            val existingFavorite = favoritesMap[scanned.serviceId]
+
+            if (existingFavorite != null) {
+                if (overwriteFavorites) {
+                    resultMap[scanned.serviceId] = scanned.copy(isFavorite = true)
+                } else {
+                    resultMap[scanned.serviceId] = existingFavorite
+                }
+                favoritesMap.remove(scanned.serviceId)
+            } else {
+                resultMap[scanned.serviceId] = scanned
+            }
+        }
+
+        for ((serviceId, favorite) in favoritesMap) {
+            resultMap[serviceId] = favorite
+        }
+
+        val mergedStations = resultMap.values.sortedBy { it.name ?: it.ensembleLabel ?: "" }
+        saveDabDevStations(mergedStations)
+        return mergedStations
+    }
+
     // Debug Window States
     fun setDebugWindowOpen(windowId: String, isOpen: Boolean) {
         settingsPrefs.edit().putBoolean("debug_window_open_$windowId", isOpen).apply()
@@ -782,5 +862,31 @@ class PresetRepository(private val context: Context) {
 
     fun setTickSoundVolume(volume: Int) {
         settingsPrefs.edit().putInt(KEY_TICK_SOUND_VOLUME, volume.coerceIn(0, 100)).apply()
+    }
+
+    // Cover Source Lock (DAB)
+    fun isCoverSourceLocked(): Boolean {
+        return settingsPrefs.getBoolean("cover_source_locked", false)
+    }
+
+    fun setCoverSourceLocked(locked: Boolean) {
+        settingsPrefs.edit().putBoolean("cover_source_locked", locked).apply()
+    }
+
+    fun getLockedCoverSource(): String? {
+        return settingsPrefs.getString("locked_cover_source", null)
+    }
+
+    fun setLockedCoverSource(source: String?) {
+        settingsPrefs.edit().putString("locked_cover_source", source).apply()
+    }
+
+    // DAB Dev Mode (Mock DAB Tuner for UI development) - DISABLED
+    fun isDabDevModeEnabled(): Boolean {
+        return false // Feature deaktiviert
+    }
+
+    fun setDabDevModeEnabled(enabled: Boolean) {
+        settingsPrefs.edit().putBoolean("dab_dev_mode_enabled", enabled).apply()
     }
 }

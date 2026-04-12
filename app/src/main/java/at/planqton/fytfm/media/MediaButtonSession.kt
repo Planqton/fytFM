@@ -222,15 +222,32 @@ class MediaButtonSession(
                 .putString(MediaMetadata.METADATA_KEY_ALBUM, "fytFM")
 
             // Cover laden wenn vorhanden
+            var coverBitmap: Bitmap? = null
             coverPath?.let { path ->
                 try {
                     val file = File(path)
                     if (file.exists()) {
-                        val bitmap = BitmapFactory.decodeFile(path)
-                        if (bitmap != null) {
+                        // Downsampling für Speichereffizienz
+                        val options = BitmapFactory.Options().apply {
+                            inJustDecodeBounds = true
+                        }
+                        BitmapFactory.decodeFile(path, options)
+
+                        val maxSize = 300
+                        var sampleSize = 1
+                        while (options.outWidth / sampleSize > maxSize || options.outHeight / sampleSize > maxSize) {
+                            sampleSize *= 2
+                        }
+
+                        val decodeOptions = BitmapFactory.Options().apply {
+                            inSampleSize = sampleSize
+                        }
+                        coverBitmap = BitmapFactory.decodeFile(path, decodeOptions)
+
+                        coverBitmap?.let { bitmap ->
                             metadataBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, bitmap)
                             metadataBuilder.putBitmap(MediaMetadata.METADATA_KEY_ART, bitmap)
-                            Log.d(TAG, "Cover loaded from: $path")
+                            Log.d(TAG, "Cover loaded from: $path (${bitmap.width}x${bitmap.height})")
                         }
                     }
                 } catch (e: Exception) {
@@ -239,6 +256,10 @@ class MediaButtonSession(
             }
 
             mediaSession?.setMetadata(metadataBuilder.build())
+
+            // Bitmap recyceln nach setMetadata (Android macht intern eine Kopie)
+            coverBitmap?.recycle()
+
             Log.d(TAG, "Metadata updated: station=$stationName, subtitle=$subtitle")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update metadata", e)

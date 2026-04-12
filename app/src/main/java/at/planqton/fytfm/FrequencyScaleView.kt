@@ -16,7 +16,7 @@ class FrequencyScaleView @JvmOverloads constructor(
 ) : View(context, attrs, defStyleAttr) {
 
     enum class RadioMode {
-        FM, AM, DAB
+        FM, AM, DAB, DAB_DEV
     }
 
     companion object {
@@ -224,9 +224,10 @@ class FrequencyScaleView @JvmOverloads constructor(
                 RadioMode.FM -> 98.4f
                 RadioMode.AM -> 522f
                 RadioMode.DAB -> 0f  // DAB hat keine klassische Frequenz
+                RadioMode.DAB_DEV -> 0f
             }
             onModeChangeListener?.invoke(mode)
-            if (mode != RadioMode.DAB) {
+            if (mode != RadioMode.DAB && mode != RadioMode.DAB_DEV) {
                 onFrequencyChangeListener?.invoke(currentFrequency)
             }
             invalidate()
@@ -238,6 +239,7 @@ class FrequencyScaleView @JvmOverloads constructor(
             RadioMode.FM -> RadioMode.AM
             RadioMode.AM -> RadioMode.DAB
             RadioMode.DAB -> RadioMode.FM
+            RadioMode.DAB_DEV -> RadioMode.FM
         }
         setMode(nextMode)
     }

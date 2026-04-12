@@ -50,9 +50,19 @@
 
         <!-- Action Buttons -->
         <ImageButton
+            android:id="@+id/btnSearchLogo"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/button_icon_background"
+            android:src="@drawable/ic_search"
+            android:scaleType="center"
+            android:contentDescription="Search Logo" />
+
+        <ImageButton
             android:id="@+id/btnEdit"
             android:layout_width="44dp"
             android:layout_height="44dp"
+            android:layout_marginStart="8dp"
             android:background="@drawable/button_icon_background"
             android:src="@drawable/ic_edit"
             android:scaleType="center"

@@ -17,7 +17,9 @@ class StationEditorAdapter(
     private val onEdit: (RadioStation) -> Unit,
     private val onFavorite: (RadioStation) -> Unit,
     private val onDelete: (RadioStation) -> Unit,
-    private val getLogoPath: ((ps: String?, pi: Int?, frequency: Float) -> String?)? = null
+    private val onSearchLogo: ((RadioStation) -> Unit)? = null,
+    private val getLogoPath: ((ps: String?, pi: Int?, frequency: Float) -> String?)? = null,
+    private val getLogoPathForDab: ((name: String?, serviceId: Int) -> String?)? = null
 ) : RecyclerView.Adapter<StationEditorAdapter.ViewHolder>() {
 
     private var stations = listOf<RadioStation>()
@@ -46,6 +48,7 @@ class StationEditorAdapter(
         private val ivLogo: ImageView = itemView.findViewById(R.id.ivStationLogo)
         private val tvFrequency: TextView = itemView.findViewById(R.id.tvFrequency)
         private val tvName: TextView = itemView.findViewById(R.id.tvStationName)
+        private val btnSearchLogo: ImageButton = itemView.findViewById(R.id.btnSearchLogo)
         private val btnEdit: ImageButton = itemView.findViewById(R.id.btnEdit)
         private val btnFavorite: ImageButton = itemView.findViewById(R.id.btnFavorite)
         private val btnDelete: ImageButton = itemView.findViewById(R.id.btnDelete)
@@ -65,8 +68,12 @@ class StationEditorAdapter(
                 station.name
             }
 
-            // Station Logo
-            val logoPath = getLogoPath?.invoke(station.name, null, station.frequency)
+            // Station Logo - für DAB Custom Logo prüfen
+            val logoPath = if (station.isDab && getLogoPathForDab != null) {
+                getLogoPathForDab.invoke(station.name, station.serviceId)
+            } else {
+                getLogoPath?.invoke(station.name, null, station.frequency)
+            }
             if (logoPath != null) {
                 ivLogo.visibility = View.VISIBLE
                 ivLogo.load(File(logoPath)) {
@@ -85,6 +92,7 @@ class StationEditorAdapter(
             )
 
             // Click listeners
+            btnSearchLogo.setOnClickListener { onSearchLogo?.invoke(station) }
             btnEdit.setOnClickListener { onEdit(station) }
             btnFavorite.setOnClickListener { onFavorite(station) }
             btnDelete.setOnClickListener { onDelete(station) }

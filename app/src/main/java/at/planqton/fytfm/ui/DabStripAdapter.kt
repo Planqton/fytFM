@@ -10,12 +10,16 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import at.planqton.fytfm.R
 import at.planqton.fytfm.data.RadioStation
+import coil.dispose
+import coil.load
+import java.io.File
 
 /**
  * Adapter for the horizontal DAB station strip in DAB List Mode.
  */
 class DabStripAdapter(
-    private val onStationClick: (RadioStation) -> Unit
+    private val onStationClick: (RadioStation) -> Unit,
+    private val getLogoPath: ((name: String?, serviceId: Int) -> String?)? = null
 ) : RecyclerView.Adapter<DabStripAdapter.ViewHolder>() {
 
     private var stations: List<RadioStation> = emptyList()
@@ -95,6 +99,18 @@ class DabStripAdapter(
         // Show favorite indicator
         holder.favoriteIcon.visibility = if (station.isFavorite) View.VISIBLE else View.GONE
 
+        // Load station logo if available
+        val logoPath = getLogoPath?.invoke(station.name, station.serviceId)
+        if (logoPath != null) {
+            holder.stationLogo.visibility = View.VISIBLE
+            holder.stationLogo.load(File(logoPath)) {
+                crossfade(true)
+            }
+        } else {
+            holder.stationLogo.dispose()
+            holder.stationLogo.visibility = View.GONE
+        }
+
         holder.itemView.setOnClickListener {
             onStationClick(station)
         }
@@ -104,5 +120,6 @@ class DabStripAdapter(
         val stationName: TextView = view.findViewById(R.id.stripStationName)
         val ensemble: TextView = view.findViewById(R.id.stripEnsemble)
         val favoriteIcon: ImageView = view.findViewById(R.id.stripFavoriteIcon)
+        val stationLogo: ImageView = view.findViewById(R.id.stripStationLogo)
     }
 }

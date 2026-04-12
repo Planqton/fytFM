@@ -66,6 +66,9 @@ class FytFMMediaService : MediaLibraryService() {
     var currentArtworkSource: String = "(none)"
         private set
 
+    // Request counter to prevent race conditions with async URL loading
+    private var artworkRequestCounter = java.util.concurrent.atomic.AtomicInteger(0)
+
     inner class LocalBinder : Binder() {
         fun getService(): FytFMMediaService = this@FytFMMediaService
     }
@@ -265,6 +268,9 @@ class FytFMMediaService : MediaLibraryService() {
                     (deezerCoverPath.startsWith("http://") || deezerCoverPath.startsWith("https://"))
 
         if (isUrl) {
+            // Increment request counter to prevent race conditions
+            val requestId = artworkRequestCounter.incrementAndGet()
+
             // Sofort Fallback-Artwork setzen, damit kein schwarzes Bild erscheint
             val initialArtwork: ByteArray? = when {
                 slideshowBitmap != null -> {
@@ -287,8 +293,13 @@ class FytFMMediaService : MediaLibraryService() {
                 val artworkData = loadImageAsBytes(deezerCoverPath!!)
                 if (artworkData != null) {
                     android.os.Handler(android.os.Looper.getMainLooper()).post {
-                        currentArtworkSource = deezerCoverPath
-                        updateDabMetadataInternal(stationName, displayTitle, ensembleLabel, artworkData, deezerCoverPath, radioLogoPath)
+                        // Only update if this is still the current request (prevent race condition)
+                        if (artworkRequestCounter.get() == requestId) {
+                            currentArtworkSource = deezerCoverPath
+                            updateDabMetadataInternal(stationName, displayTitle, ensembleLabel, artworkData, deezerCoverPath, radioLogoPath)
+                        } else {
+                            Log.d(TAG, "Ignoring stale artwork request $requestId (current: ${artworkRequestCounter.get()})")
+                        }
                     }
                 }
             }.start()
@@ -422,10 +433,27 @@ class FytFMMediaService : MediaLibraryService() {
      */
     private fun loadBitmapFromFile(filePath: String): android.graphics.Bitmap? {
         return try {
+            // Validate file exists and is readable
+            val file = File(filePath)
+            if (!file.exists()) {
+                Log.w(TAG, "Bitmap file does not exist: $filePath")
+                return null
+            }
+            if (!file.canRead()) {
+                Log.w(TAG, "Bitmap file not readable: $filePath")
+                return null
+            }
+
             val options = BitmapFactory.Options().apply {
                 inJustDecodeBounds = true
             }
             BitmapFactory.decodeFile(filePath, options)
+
+            // Validate image dimensions
+            if (options.outWidth <= 0 || options.outHeight <= 0) {
+                Log.w(TAG, "Invalid image dimensions: ${options.outWidth}x${options.outHeight} for $filePath")
+                return null
+            }
 
             val maxSize = 300
             var sampleSize = 1
@@ -436,7 +464,16 @@ class FytFMMediaService : MediaLibraryService() {
             val decodeOptions = BitmapFactory.Options().apply {
                 inSampleSize = sampleSize
             }
-            BitmapFactory.decodeFile(filePath, decodeOptions)
+            val bitmap = BitmapFactory.decodeFile(filePath, decodeOptions)
+
+            if (bitmap == null) {
+                Log.w(TAG, "Failed to decode bitmap (corrupted?): $filePath")
+            }
+
+            bitmap
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OutOfMemory loading bitmap: $filePath", e)
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Error loading bitmap from file: $filePath", e)
             null
@@ -447,23 +484,59 @@ class FytFMMediaService : MediaLibraryService() {
      * Lädt Bitmap von URL (synchron - sollte vom IO-Thread aufgerufen werden)
      */
     private fun loadBitmapFromUrl(url: String): android.graphics.Bitmap? {
+        var connection: java.net.HttpURLConnection? = null
+        var inputStream: java.io.InputStream? = null
+
         return try {
-            val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+            // Validate URL
+            if (url.isBlank()) {
+                Log.w(TAG, "Empty URL provided")
+                return null
+            }
+
+            connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
             connection.doInput = true
+            connection.instanceFollowRedirects = true
             connection.connect()
 
-            val inputStream = connection.inputStream
-            val bitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
-            connection.disconnect()
+            // Check response code
+            val responseCode = connection.responseCode
+            if (responseCode != java.net.HttpURLConnection.HTTP_OK) {
+                Log.w(TAG, "HTTP error $responseCode for URL: $url")
+                return null
+            }
 
-            Log.d(TAG, "Loaded bitmap from URL: $url")
+            inputStream = connection.inputStream
+            val bitmap = BitmapFactory.decodeStream(inputStream)
+
+            if (bitmap == null) {
+                Log.w(TAG, "Failed to decode bitmap from URL (invalid format?): $url")
+            } else {
+                Log.d(TAG, "Loaded bitmap from URL: $url (${bitmap.width}x${bitmap.height})")
+            }
+
             bitmap
+        } catch (e: java.net.SocketTimeoutException) {
+            Log.w(TAG, "Timeout loading bitmap from URL: $url")
+            null
+        } catch (e: java.io.IOException) {
+            Log.w(TAG, "IO error loading bitmap from URL: $url - ${e.message}")
+            null
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OutOfMemory loading bitmap from URL: $url", e)
+            null
         } catch (e: Exception) {
             Log.e(TAG, "Error loading bitmap from URL: $url", e)
             null
+        } finally {
+            try {
+                inputStream?.close()
+            } catch (ignored: Exception) {}
+            try {
+                connection?.disconnect()
+            } catch (ignored: Exception) {}
         }
     }
 

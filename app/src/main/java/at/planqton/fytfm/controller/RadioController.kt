@@ -101,7 +101,7 @@ class RadioController(
                     fmAmController.powerOff()
                 }
             }
-            FrequencyScaleView.RadioMode.DAB -> {
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> {
                 if (dabController.isDabOn) {
                     dabController.powerOff()
                 }
@@ -116,8 +116,8 @@ class RadioController(
             FrequencyScaleView.RadioMode.FM, FrequencyScaleView.RadioMode.AM -> {
                 fmAmController.setMode(mode)
             }
-            FrequencyScaleView.RadioMode.DAB -> {
-                // DAB wird separat eingeschaltet
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> {
+                // DAB/DAB Dev wird separat eingeschaltet
             }
         }
     }
@@ -130,7 +130,7 @@ class RadioController(
             FrequencyScaleView.RadioMode.FM, FrequencyScaleView.RadioMode.AM -> {
                 fmAmController.togglePower()
             }
-            FrequencyScaleView.RadioMode.DAB -> {
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> {
                 dabController.togglePower()
             }
         }
@@ -144,7 +144,7 @@ class RadioController(
             FrequencyScaleView.RadioMode.FM, FrequencyScaleView.RadioMode.AM -> {
                 fmAmController.isRadioOn
             }
-            FrequencyScaleView.RadioMode.DAB -> {
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> {
                 dabController.isDabOn
             }
         }
@@ -158,7 +158,7 @@ class RadioController(
             FrequencyScaleView.RadioMode.FM, FrequencyScaleView.RadioMode.AM -> {
                 fmAmController.skipStation(forward)
             }
-            FrequencyScaleView.RadioMode.DAB -> {
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> {
                 dabController.skipStation(forward)
             }
         }
@@ -237,7 +237,7 @@ class RadioController(
         return when (currentMode) {
             FrequencyScaleView.RadioMode.FM -> presetRepository.loadFmStations()
             FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
-            FrequencyScaleView.RadioMode.DAB -> presetRepository.loadDabStations()
+            FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.loadDabStations()
         }
     }
 }

@@ -23,7 +23,8 @@ class RtCombiner(
     private val isCacheEnabled: (() -> Boolean)? = null,
     private val isNetworkAvailable: (() -> Boolean)? = null,
     private val correctionDao: RtCorrectionDao? = null,
-    private val onDebugUpdate: ((status: String, originalRt: String?, strippedRt: String?, query: String?, trackInfo: TrackInfo?) -> Unit)? = null
+    private val onDebugUpdate: ((status: String, originalRt: String?, strippedRt: String?, query: String?, trackInfo: TrackInfo?) -> Unit)? = null,
+    private val onCoverDownloaded: ((trackInfo: TrackInfo) -> Unit)? = null
 ) {
     companion object {
         private const val TAG = "RtCombiner"
@@ -486,6 +487,13 @@ class RtCombiner(
         // Cover not yet cached - start background download (non-blocking)
         scope.launch {
             cache.cacheTrack(track)
+            // After download, notify caller so MediaSession can be updated
+            val localPath = cache.getLocalCoverPath(track.trackId)
+            if (localPath != null) {
+                val updatedTrack = track.copy(coverUrl = localPath)
+                onCoverDownloaded?.invoke(updatedTrack)
+                Log.d(TAG, "Cover downloaded, notifying: ${track.artist} - ${track.title}")
+            }
         }
 
         // Return track without local cover for now (UI will show placeholder)
