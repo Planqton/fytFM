@@ -76,7 +76,7 @@ class RdsLogAdapter : RecyclerView.Adapter<RdsLogAdapter.ViewHolder>() {
                 tvRt.text = entry.rt
                 tvRt.setTextColor(itemView.context.getColor(android.R.color.black))
             } else {
-                tvRt.text = "(no Radio Text)"
+                tvRt.text = itemView.context.getString(R.string.no_radio_text)
                 tvRt.setTextColor(itemView.context.getColor(android.R.color.darker_gray))
             }
 

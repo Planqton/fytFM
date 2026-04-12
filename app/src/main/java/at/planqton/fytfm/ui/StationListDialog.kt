@@ -189,7 +189,7 @@ class StationListDialog(
         // Timeout Slider
         seekRdsTimeout.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                tvRdsTimeout.text = "RDS-Wartezeit: ${progress}s"
+                tvRdsTimeout.text = context.getString(R.string.rds_wait_time, progress)
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -226,7 +226,7 @@ class StationListDialog(
         // Timeout setzen
         val timeout = if (config.rdsTimeoutSeconds > 0) config.rdsTimeoutSeconds else 8
         seekRdsTimeout.progress = timeout
-        tvRdsTimeout.text = "RDS-Wartezeit: ${timeout}s"
+        tvRdsTimeout.text = context.getString(R.string.rds_wait_time, timeout)
 
         updateFilterLogicVisibility()
     }
@@ -294,11 +294,11 @@ class StationListDialog(
                 // Native Scan - Spinner statt Progressbar
                 scanProgress.visibility = View.GONE
                 scanSpinner.visibility = View.VISIBLE
-                tvScanStatus.text = "Native Scan..."
+                tvScanStatus.text = context.getString(R.string.native_scan_status)
                 radioScanner.scanFMNative(
                     highSensitivity = highSensitivity,
                     onProgress = { _, _, _, _, phase ->
-                        val countStr = " | ${scanResultsLive.size} gefunden"
+                        val countStr = " | ${scanResultsLive.size} ${context.getString(R.string.found_suffix)}"
                         tvScanStatus.text = "$phase$countStr"
                     },
                     onStationFound = { station ->
@@ -321,13 +321,13 @@ class StationListDialog(
                 scanSpinner.visibility = View.GONE
                 scanProgress.visibility = View.VISIBLE
                 scanProgress.isIndeterminate = false
-                tvScanStatus.text = "Signal-Scan..."
+                tvScanStatus.text = context.getString(R.string.signal_scan_status)
                 radioScanner.scanFMSignalOnly(
                     highSensitivity = highSensitivity,
                     onProgress = { progress, frequency, remainingSec, phase ->
                         scanProgress.progress = progress
                         val timeStr = if (remainingSec > 60) "%d:%02d".format(remainingSec / 60, remainingSec % 60) else "%ds".format(remainingSec)
-                        val countStr = " | ${scanResultsLive.size} gefunden"
+                        val countStr = " | ${scanResultsLive.size} ${context.getString(R.string.found_suffix)}"
                         tvScanStatus.text = "$phase: %.1f MHz | ~$timeStr$countStr".format(frequency)
                     },
                     onStationFound = { station ->
@@ -347,12 +347,12 @@ class StationListDialog(
                 )
             }
         } else {
-            tvScanStatus.text = "Scanning AM..."
+            tvScanStatus.text = context.getString(R.string.scanning_am)
             radioScanner.scanAM(
                 onProgress = { progress, frequency, remainingSec, _ ->
                     scanProgress.progress = progress
                     val timeStr = if (remainingSec > 60) "%d:%02d".format(remainingSec / 60, remainingSec % 60) else "%ds".format(remainingSec)
-                    tvScanStatus.text = "AM %d kHz | ~$timeStr".format(frequency.toInt())
+                    tvScanStatus.text = "AM ${frequency.toInt()} kHz | ~$timeStr"
                 },
                 onComplete = { stations ->
                     if (stations.isNotEmpty()) {
@@ -426,7 +426,7 @@ class StationListDialog(
         val filterMode = getSelectedFilterMode()
         val rdsTimeoutMs = seekRdsTimeout.progress * 1000L
 
-        tvScanStatus.text = "RDS-Filter..."
+        tvScanStatus.text = context.getString(R.string.rds_filter_status)
         radioScanner.collectRdsAndFilter(
             stations = fmStations,
             filterMode = filterMode,
@@ -434,8 +434,8 @@ class StationListDialog(
             onProgress = { progress, frequency, remainingSec, filteredCount ->
                 scanProgress.progress = progress
                 val timeStr = if (remainingSec > 60) "%d:%02d".format(remainingSec / 60, remainingSec % 60) else "%ds".format(remainingSec)
-                val filterStr = if (filteredCount > 0) " | $filteredCount gefiltert" else ""
-                val countStr = " | ${scanResultsLive.size} verifiziert"
+                val filterStr = if (filteredCount > 0) " | $filteredCount ${context.getString(R.string.filtered_suffix)}" else ""
+                val countStr = " | ${scanResultsLive.size} ${context.getString(R.string.verified_suffix)}"
                 tvScanStatus.text = "RDS: %.1f MHz | ~$timeStr$filterStr$countStr".format(frequency)
             },
             onStationVerified = { station ->

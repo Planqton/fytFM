@@ -370,12 +370,12 @@ class MainActivity : AppCompatActivity() {
                 contentResolver.openOutputStream(uri)?.use { outputStream ->
                     outputStream.write(pendingBugReportContent!!.toByteArray())
                 }
-                android.widget.Toast.makeText(this, "Report gespeichert", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.report_saved), android.widget.Toast.LENGTH_SHORT).show()
                 if (pendingBugReportIsCrash) {
                     CrashHandler.clearCrashLog(this)
                 }
             } catch (e: Exception) {
-                android.widget.Toast.makeText(this, "Fehler: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(this, getString(R.string.error_prefix, e.message), android.widget.Toast.LENGTH_LONG).show()
             }
         }
         pendingBugReportContent = null
@@ -619,7 +619,7 @@ class MainActivity : AppCompatActivity() {
 
         // Nur Info-Toast wenn Tuner nicht verfügbar (blockiert nicht)
         if (!isTunerAvailable(lastMode)) {
-            android.widget.Toast.makeText(this, "Tuner für $lastMode nicht verfügbar", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.tuner_not_available, lastMode), android.widget.Toast.LENGTH_SHORT).show()
         }
 
         frequencyScale.setMode(lastMode)
@@ -1260,7 +1260,7 @@ class MainActivity : AppCompatActivity() {
                     pendingVisualizerSessionId = 0
                 }
             } else {
-                android.widget.Toast.makeText(this, "Audio-Berechtigung für Visualizer benötigt", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.audio_permission_visualizer), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -1931,30 +1931,30 @@ class MainActivity : AppCompatActivity() {
         // FM availability
         val fmAvailable = FmNative.isLibraryLoaded()
         if (fmAvailable) {
-            debugTunerFm?.text = "Verfügbar"
+            debugTunerFm?.text = getString(R.string.available)
             debugTunerFm?.setTextColor(android.graphics.Color.parseColor("#00FF00"))
         } else {
-            debugTunerFm?.text = "Nicht verfügbar"
+            debugTunerFm?.text = getString(R.string.not_available)
             debugTunerFm?.setTextColor(android.graphics.Color.parseColor("#FF4444"))
         }
 
         // AM availability (same as FM - shares tuner)
         val amAvailable = FmNative.isLibraryLoaded()
         if (amAvailable) {
-            debugTunerAm?.text = "Verfügbar"
+            debugTunerAm?.text = getString(R.string.available)
             debugTunerAm?.setTextColor(android.graphics.Color.parseColor("#00FF00"))
         } else {
-            debugTunerAm?.text = "Nicht verfügbar"
+            debugTunerAm?.text = getString(R.string.not_available)
             debugTunerAm?.setTextColor(android.graphics.Color.parseColor("#FF4444"))
         }
 
         // DAB availability
         val dabAvailable = dabTunerManager.isDabAvailable(this)
         if (dabAvailable) {
-            debugTunerDab?.text = "Verfügbar"
+            debugTunerDab?.text = getString(R.string.available)
             debugTunerDab?.setTextColor(android.graphics.Color.parseColor("#00FF00"))
         } else {
-            debugTunerDab?.text = "Nicht verfügbar"
+            debugTunerDab?.text = getString(R.string.not_available)
             debugTunerDab?.setTextColor(android.graphics.Color.parseColor("#FF4444"))
         }
     }
@@ -2309,7 +2309,7 @@ class MainActivity : AppCompatActivity() {
 
         if (entries.isEmpty()) {
             val tabName = if (currentParserTab == at.planqton.fytfm.deezer.ParserLogger.Source.FM) "FM" else "DAB+"
-            parserLogText?.text = "(keine $tabName Log-Einträge)"
+            parserLogText?.text = getString(R.string.no_log_entries, tabName)
         } else {
             // Show most recent entries at top (reverse order) with color coding
             val coloredText = android.text.SpannableStringBuilder()
@@ -2349,9 +2349,9 @@ class MainActivity : AppCompatActivity() {
                 contentResolver.openOutputStream(saveUri)?.use { out ->
                     out.write(content.toByteArray())
                 }
-                android.widget.Toast.makeText(this, "Parser Log exportiert", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.parser_log_exported), android.widget.Toast.LENGTH_SHORT).show()
             } catch (e: Exception) {
-                android.widget.Toast.makeText(this, "Export fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.export_failed, e.message), android.widget.Toast.LENGTH_SHORT).show()
             } finally {
                 pendingParserLogExport = null
             }
@@ -2449,11 +2449,11 @@ class MainActivity : AppCompatActivity() {
             if (debugInternetDisabled) {
                 btn.text = "App Internet: OFF"
                 btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF666666.toInt())
-                android.widget.Toast.makeText(this, "App Internet disabled (debug)", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.app_internet_disabled), android.widget.Toast.LENGTH_SHORT).show()
             } else {
                 btn.text = "Kill App Internet Connection"
                 btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFCC3333.toInt())
-                android.widget.Toast.makeText(this, "App Internet enabled", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.app_internet_enabled), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -2467,10 +2467,10 @@ class MainActivity : AppCompatActivity() {
             debugDeezerBlocked = isChecked
             if (isChecked) {
                 btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF993333.toInt())
-                android.widget.Toast.makeText(this, "Deezer/Local blocked - RDS only", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.deezer_local_blocked), android.widget.Toast.LENGTH_SHORT).show()
             } else {
                 btn.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFFCC9933.toInt())
-                android.widget.Toast.makeText(this, "Deezer/Local enabled", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.deezer_local_enabled), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -2569,9 +2569,9 @@ class MainActivity : AppCompatActivity() {
 
         val reportPath = bugReportHelper.createBugReport(appState)
         if (reportPath != null) {
-            android.widget.Toast.makeText(this, "Bug report created", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.bug_report_created), android.widget.Toast.LENGTH_SHORT).show()
         } else {
-            android.widget.Toast.makeText(this, "Failed to create bug report", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.bug_report_failed), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -2584,7 +2584,7 @@ class MainActivity : AppCompatActivity() {
     private fun showBugReportTypeDialog() {
         val options = arrayOf("Allgemeiner Bug Report", "Parser Bug Report", "Deezer Bug Report")
         AlertDialog.Builder(this)
-            .setTitle("Bug Report Typ")
+            .setTitle(R.string.bug_report_type_title)
             .setItems(options) { _, which ->
                 when (which) {
                     0 -> showBugReportInputDialog()  // Allgemeiner Bug Report
@@ -2592,7 +2592,7 @@ class MainActivity : AppCompatActivity() {
                     2 -> showDeezerBugReportDialog() // Deezer Bug Report
                 }
             }
-            .setNegativeButton("Abbrechen", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -2600,10 +2600,10 @@ class MainActivity : AppCompatActivity() {
      * Shows dialog for Parser bug report (RT-DLS parsing issues)
      */
     private fun showParserBugReportDialog() {
-        android.widget.Toast.makeText(this, "Sammle Parser-Logs...", android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(this, getString(R.string.collecting_parser_logs), android.widget.Toast.LENGTH_SHORT).show()
 
         val editText = android.widget.EditText(this).apply {
-            hint = "Was wurde falsch geparst? (optional)"
+            hint = getString(R.string.parser_bug_hint)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             minLines = 3
             maxLines = 6
@@ -2612,16 +2612,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Parser Bug Report")
-            .setMessage("RT-DLS Parser Logs werden erfasst.\n\nBeschreibe das Problem (optional):")
+            .setTitle(R.string.parser_bug_report_title)
+            .setMessage(R.string.parser_bug_message)
             .setView(editText)
-            .setPositiveButton("Weiter") { _, _ ->
+            .setPositiveButton(R.string.next) { _, _ ->
                 val userDescription = editText.text.toString()
                 val bugReportHelper = BugReportHelper(this)
                 val reportContent = bugReportHelper.buildParserReportContent(userDescription.ifEmpty { null })
                 showBugReportPreview(reportContent, isCrashReport = false)
             }
-            .setNegativeButton("Abbrechen", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -2630,10 +2630,10 @@ class MainActivity : AppCompatActivity() {
      * Works for both FM RDS and DAB+ DLS
      */
     private fun showDeezerBugReportDialog() {
-        android.widget.Toast.makeText(this, "Sammle Deezer-Daten...", android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(this, getString(R.string.collecting_deezer_data), android.widget.Toast.LENGTH_SHORT).show()
 
         val editText = android.widget.EditText(this).apply {
-            hint = "Was ist das Problem? (z.B. falsches Cover, falscher Track)"
+            hint = getString(R.string.deezer_bug_hint)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             minLines = 3
             maxLines = 6
@@ -2642,10 +2642,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Deezer Bug Report")
-            .setMessage("Deezer-Status wird erfasst.\n\nBeschreibe das Problem (optional):")
+            .setTitle(R.string.deezer_bug_report_title)
+            .setMessage(R.string.deezer_bug_message)
             .setView(editText)
-            .setPositiveButton("Weiter") { _, _ ->
+            .setPositiveButton(R.string.next) { _, _ ->
                 val userDescription = editText.text.toString()
                 val bugReportHelper = BugReportHelper(this)
                 val reportContent = bugReportHelper.buildDeezerReportContent(
@@ -2666,13 +2666,13 @@ class MainActivity : AppCompatActivity() {
                 )
                 showBugReportPreview(reportContent, isCrashReport = false)
             }
-            .setNegativeButton("Abbrechen", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
     private fun showBugReportInputDialog() {
         // ZUERST: Logs und App-State sofort erfassen!
-        android.widget.Toast.makeText(this, "Sammle Logs...", android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(this, getString(R.string.collecting_logs), android.widget.Toast.LENGTH_SHORT).show()
 
         pendingBugReportState = BugReportHelper.AppState(
             rdsPs = rdsManager.ps,
@@ -2696,7 +2696,7 @@ class MainActivity : AppCompatActivity() {
 
         // DANN: User nach Problembeschreibung fragen
         val editText = android.widget.EditText(this).apply {
-            hint = "Was ist das Problem? (optional)"
+            hint = getString(R.string.deezer_bug_hint)
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             minLines = 3
             maxLines = 6
@@ -2705,14 +2705,14 @@ class MainActivity : AppCompatActivity() {
         }
 
         AlertDialog.Builder(this)
-            .setTitle("Bug Report erstellen")
-            .setMessage("App-Status wurde erfasst.\n\nBeschreibe das Problem (optional):")
+            .setTitle(R.string.create_bug_report_title)
+            .setMessage(R.string.bug_report_message)
             .setView(editText)
-            .setPositiveButton("Weiter") { _, _ ->
+            .setPositiveButton(R.string.next) { _, _ ->
                 val userDescription = editText.text.toString()
                 finalizeBugReport(userDescription)
             }
-            .setNegativeButton("Abbrechen") { _, _ ->
+            .setNegativeButton(R.string.cancel) { _, _ ->
                 pendingBugReportState = null
             }
             .show()
@@ -3682,9 +3682,14 @@ class MainActivity : AppCompatActivity() {
         nowPlayingTitle?.text = dabStation.ensembleLabel ?: ""
         nowPlayingTitle?.visibility = if (dabStation.ensembleLabel.isNullOrBlank()) View.GONE else View.VISIBLE
 
-        // Cover: Versuche Custom Logo oder Station-Logo zu laden
+        // Cover: Lock-Status beachten
+        val isLockedToDabLogo = coverSourceLocked && lockedCoverSource == DabCoverSource.DAB_LOGO
         val stationLogo = getLogoForDabStation(dabStation.serviceLabel, dabStation.serviceId)
-        if (stationLogo != null) {
+
+        if (isLockedToDabLogo) {
+            // Gelockt auf DAB+ Logo - Placeholder verwenden
+            nowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+        } else if (stationLogo != null && (!coverSourceLocked || lockedCoverSource == DabCoverSource.STATION_LOGO)) {
             nowPlayingCover?.load(java.io.File(stationLogo)) {
                 crossfade(true)
                 placeholder(R.drawable.placeholder_fm)
@@ -3708,7 +3713,9 @@ class MainActivity : AppCompatActivity() {
         carouselNowPlayingTitle?.text = dabStation.ensembleLabel ?: ""
         carouselNowPlayingTitle?.visibility = if (dabStation.ensembleLabel.isNullOrBlank()) View.GONE else View.VISIBLE
 
-        if (stationLogo != null) {
+        if (isLockedToDabLogo) {
+            carouselNowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+        } else if (stationLogo != null && (!coverSourceLocked || lockedCoverSource == DabCoverSource.STATION_LOGO)) {
             carouselNowPlayingCover?.load(java.io.File(stationLogo)) {
                 crossfade(true)
                 placeholder(R.drawable.placeholder_fm)
@@ -4162,7 +4169,7 @@ class MainActivity : AppCompatActivity() {
                 dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
             }
         } else {
-            dabListStationName?.text = "Kein Sender"
+            dabListStationName?.text = getString(R.string.no_station)
             dabListEnsemble?.text = ""
             dabListRadiotext?.text = ""
             dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
@@ -4362,7 +4369,7 @@ class MainActivity : AppCompatActivity() {
             loadStationsForCurrentMode()
 
             // Show confirmation toast
-            android.widget.Toast.makeText(this, "Sender umbenannt: $ps", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.station_renamed, ps), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -4690,7 +4697,7 @@ class MainActivity : AppCompatActivity() {
             if (newState) {
                 // Spotify enabled - trigger reprocessing of current RT
                 rtCombiner?.forceReprocess()
-                android.widget.Toast.makeText(this, "Deezer aktiviert", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.deezer_enabled), android.widget.Toast.LENGTH_SHORT).show()
             } else {
                 // Spotify disabled - immediately show raw RT with radio icon
                 val currentRt = rdsManager.rt
@@ -4704,7 +4711,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 // Clear carousel cover
                 stationCarouselAdapter?.updateCurrentCover(null, null)
-                android.widget.Toast.makeText(this, "Deezer deaktiviert", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.deezer_disabled), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -4758,12 +4765,12 @@ class MainActivity : AppCompatActivity() {
                         dabTunerManager.tuneService(station.serviceId, station.ensembleId)
                     }
                     if (!success) {
-                        android.widget.Toast.makeText(this, "Tuner Error: DAB Sender nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(this, getString(R.string.tuner_error_dab_not_found), android.widget.Toast.LENGTH_LONG).show()
                     }
                     updateCarouselSelection()
                 } catch (e: Exception) {
                     android.util.Log.e("fytFM", "DAB tune error: ${e.message}")
-                    android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
                 }
             } else {
                 android.util.Log.i("fytFM", ">>> Using FM/AM logic")
@@ -4779,7 +4786,7 @@ class MainActivity : AppCompatActivity() {
                     startCarouselCenterTimer(station.frequency, station.isAM)
                 } catch (e: Exception) {
                     android.util.Log.e("fytFM", "FM tune error: ${e.message}")
-                    android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -5454,18 +5461,18 @@ class MainActivity : AppCompatActivity() {
         // Log anzeigen
         fun updateLogDisplay() {
             if (dlsLogEntries.isEmpty()) {
-                logContent?.text = "Kein DLS empfangen"
-                logCount?.text = "0 Einträge"
+                logContent?.text = getString(R.string.no_dls_received)
+                logCount?.text = getString(R.string.log_entries_count, 0)
             } else {
                 logContent?.text = dlsLogEntries.reversed().joinToString("\n")
-                logCount?.text = "${dlsLogEntries.size} Einträge"
+                logCount?.text = getString(R.string.log_entries_count, dlsLogEntries.size)
             }
         }
         updateLogDisplay()
 
         // Dateipfad anzeigen
         val file = java.io.File(getExternalFilesDir(null), "dls_log.txt")
-        filePath?.text = "Datei: ${file.absolutePath}"
+        filePath?.text = getString(R.string.file_path_format, file.absolutePath)
 
         // Clear Button
         btnClear?.setOnClickListener {
@@ -5497,7 +5504,7 @@ class MainActivity : AppCompatActivity() {
                         resetDabNowPlaying()
                         val success = dabTunerManager.tuneService(station.serviceId, station.ensembleId)
                         if (!success) {
-                            android.widget.Toast.makeText(this, "Tuner Error: DAB Sender nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
+                            android.widget.Toast.makeText(this, getString(R.string.tuner_error_dab_not_found), android.widget.Toast.LENGTH_LONG).show()
                         }
                         updateCarouselSelection()
                         stationAdapter.setSelectedDabService(station.serviceId)
@@ -5517,7 +5524,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("fytFM", "Station tune error: ${e.message}")
-                    android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
                 }
             },
             onStationLongClick = { station ->
@@ -5621,7 +5628,7 @@ class MainActivity : AppCompatActivity() {
         // Long-Press: Seek zum vorherigen Sender mit Signal
         btnPrevStation.setOnLongClickListener {
             android.util.Log.i("fytFM", "Long-Press PREV detected!")
-            android.widget.Toast.makeText(this, "Seek ◀ gestartet...", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.seek_started_prev), android.widget.Toast.LENGTH_SHORT).show()
             if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
                 seekToStation(false)
             }
@@ -5641,7 +5648,7 @@ class MainActivity : AppCompatActivity() {
         // Long-Press: Seek zum nächsten Sender mit Signal
         btnNextStation.setOnLongClickListener {
             android.util.Log.i("fytFM", "Long-Press NEXT detected!")
-            android.widget.Toast.makeText(this, "Seek ▶ gestartet...", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.seek_started_next), android.widget.Toast.LENGTH_SHORT).show()
             if (isRadioOn && frequencyScale.getMode() == FrequencyScaleView.RadioMode.FM) {
                 seekToStation(true)
             }
@@ -5976,6 +5983,10 @@ class MainActivity : AppCompatActivity() {
         switchDeezerDab.isChecked = presetRepository.isDeezerEnabledDab()
         switchDeezerDab.setOnCheckedChangeListener { _, isChecked ->
             presetRepository.setDeezerEnabledDab(isChecked)
+            // Refresh cover display and indicators immediately
+            if (frequencyScale.getMode() == FrequencyScaleView.RadioMode.DAB) {
+                updateDabCoverDisplay()
+            }
         }
 
         // DAB Visualizer toggle
@@ -5993,10 +6004,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         // DAB Visualizer Style selector
-        val visualizerStyleOptions = arrayOf(
-            "Balken", "Waveform", "Kreisförmig", "Spiegel-Balken", "Punkte", "Spektrum",
-            "Blöcke", "Symmetrie", "Puls", "Diamanten", "Wellen-Balken", "Glühwürmchen"
-        )
+        val visualizerStyleOptions = resources.getStringArray(R.array.visualizer_styles)
         val textVisualizerStyleValue = dialogView.findViewById<TextView>(R.id.textDabVisualizerStyleValue)
         val currentStyleIndex = presetRepository.getDabVisualizerStyle().coerceIn(0, visualizerStyleOptions.size - 1)
         textVisualizerStyleValue.text = visualizerStyleOptions[currentStyleIndex]
@@ -6004,14 +6012,14 @@ class MainActivity : AppCompatActivity() {
         dialogView.findViewById<View>(R.id.itemDabVisualizerStyle).setOnClickListener {
             val currentSelection = presetRepository.getDabVisualizerStyle().coerceIn(0, visualizerStyleOptions.size - 1)
             AlertDialog.Builder(this)
-                .setTitle("Visualizer Stil")
+                .setTitle(R.string.visualizer_style_title)
                 .setSingleChoiceItems(visualizerStyleOptions, currentSelection) { styleDialog, which ->
                     presetRepository.setDabVisualizerStyle(which)
                     textVisualizerStyleValue.text = visualizerStyleOptions[which]
                     dabVisualizerView?.setStyle(which)
                     styleDialog.dismiss()
                 }
-                .setNegativeButton("Abbrechen", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show()
         }
 
@@ -6080,14 +6088,14 @@ class MainActivity : AppCompatActivity() {
         darkModeRow.setOnClickListener {
             val currentSelection = presetRepository.getDarkModePreference()
             AlertDialog.Builder(this)
-                .setTitle("Dark Mode")
+                .setTitle(R.string.dark_mode)
                 .setSingleChoiceItems(darkModeOptions, currentSelection) { dialog, which ->
                     presetRepository.setDarkModePreference(which)
                     tvDarkModeValue.text = darkModeOptions[which]
                     applyDarkMode(which)
                     dialog.dismiss()
                 }
-                .setNegativeButton("Abbrechen", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show()
         }
 
@@ -6145,8 +6153,8 @@ class MainActivity : AppCompatActivity() {
                     !android.provider.Settings.canDrawOverlays(this)) {
                     // Permission fehlt - Benutzer zu Settings leiten
                     android.app.AlertDialog.Builder(this)
-                        .setTitle("Overlay-Berechtigung")
-                        .setMessage("fytFM benötigt die Berechtigung \"Über anderen Apps einblenden\" um das Popup anzuzeigen.")
+                        .setTitle(R.string.overlay_permission_title)
+                        .setMessage(R.string.overlay_permission_message)
                         .setPositiveButton("Einstellungen öffnen") { _, _ ->
                             val intent = android.content.Intent(
                                 android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
@@ -6154,7 +6162,7 @@ class MainActivity : AppCompatActivity() {
                             )
                             startActivity(intent)
                         }
-                        .setNegativeButton("Abbrechen") { _, _ ->
+                        .setNegativeButton(R.string.cancel) { _, _ ->
                             switchStationChangeToast.isChecked = false
                         }
                         .show()
@@ -6298,37 +6306,37 @@ class MainActivity : AppCompatActivity() {
                 is UpdateState.Idle -> {
                     progressUpdate.visibility = View.GONE
                     ivVersionChevron.visibility = View.VISIBLE
-                    textVersionValue.text = "v${updateRepository.getCurrentVersion()} - Tippen zum Prüfen"
+                    textVersionValue.text = getString(R.string.version_tap_to_check, updateRepository.getCurrentVersion())
                 }
                 is UpdateState.Checking -> {
                     progressUpdate.visibility = View.VISIBLE
                     ivVersionChevron.visibility = View.GONE
-                    textVersionValue.text = "Prüfe auf Updates..."
+                    textVersionValue.text = getString(R.string.checking_for_updates)
                 }
                 is UpdateState.NoUpdate -> {
                     progressUpdate.visibility = View.GONE
                     ivVersionChevron.visibility = View.VISIBLE
-                    textVersionValue.text = "Aktuell (v${updateRepository.getCurrentVersion()})"
+                    textVersionValue.text = getString(R.string.up_to_date_version, updateRepository.getCurrentVersion())
                 }
                 is UpdateState.UpdateAvailable -> {
                     progressUpdate.visibility = View.GONE
                     ivVersionChevron.visibility = View.VISIBLE
-                    textVersionValue.text = "Update verfügbar: v${state.info.latestVersion}"
+                    textVersionValue.text = getString(R.string.update_available_version, state.info.latestVersion)
                 }
                 is UpdateState.Downloading -> {
                     progressUpdate.visibility = View.VISIBLE
                     ivVersionChevron.visibility = View.GONE
-                    textVersionValue.text = "Wird heruntergeladen..."
+                    textVersionValue.text = getString(R.string.downloading_update)
                 }
                 is UpdateState.DownloadComplete -> {
                     progressUpdate.visibility = View.GONE
                     ivVersionChevron.visibility = View.GONE
-                    textVersionValue.text = "Download fertig - Tippe Benachrichtigung"
+                    textVersionValue.text = getString(R.string.download_complete_tap)
                 }
                 is UpdateState.Error -> {
                     progressUpdate.visibility = View.GONE
                     ivVersionChevron.visibility = View.VISIBLE
-                    textVersionValue.text = "Fehler: ${state.message}"
+                    textVersionValue.text = getString(R.string.error_prefix, state.message)
                 }
             }
         }
@@ -6347,12 +6355,12 @@ class MainActivity : AppCompatActivity() {
                 is UpdateState.UpdateAvailable -> {
                     // Download starten
                     AlertDialog.Builder(this)
-                        .setTitle("Update verfügbar")
-                        .setMessage("Version ${state.info.latestVersion} ist verfügbar.\n\nJetzt herunterladen?")
-                        .setPositiveButton("Herunterladen") { _, _ ->
+                        .setTitle(R.string.update_available_title)
+                        .setMessage(getString(R.string.update_message, state.info.latestVersion))
+                        .setPositiveButton(R.string.download) { _, _ ->
                             updateRepository.downloadUpdate(state.info.downloadUrl, state.info.latestVersion)
                         }
-                        .setNegativeButton("Später", null)
+                        .setNegativeButton(R.string.later, null)
                         .show()
                 }
                 is UpdateState.DownloadComplete -> {
@@ -6424,7 +6432,7 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     "%.1f KB".format(coverSize / 1024.0)
                 }
-                tvDeezerCacheStats?.text = "Cache: $trackCount Tracks ($sizeStr)"
+                tvDeezerCacheStats?.text = getString(R.string.cache_stats, trackCount, sizeStr)
             }
         }
         updateCacheStats()
@@ -6432,14 +6440,14 @@ class MainActivity : AppCompatActivity() {
         // Clear cache button
         btnClearCache?.setOnClickListener {
             AlertDialog.Builder(this)
-                .setTitle("Cache löschen")
-                .setMessage("Alle gecachten Tracks und Cover-Bilder werden gelöscht. Fortfahren?")
-                .setPositiveButton("Löschen") { _, _ ->
+                .setTitle(R.string.clear_cache_title)
+                .setMessage(R.string.clear_cache_message)
+                .setPositiveButton(R.string.delete) { _, _ ->
                     deezerCache?.clearCache()
                     updateCacheStats()
-                    android.widget.Toast.makeText(this, "Cache gelöscht", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(this, getString(R.string.cache_cleared), android.widget.Toast.LENGTH_SHORT).show()
                 }
-                .setNegativeButton("Abbrechen", null)
+                .setNegativeButton(R.string.cancel, null)
                 .show()
         }
 
@@ -6502,7 +6510,7 @@ class MainActivity : AppCompatActivity() {
         CoroutineScope(Dispatchers.IO).launch {
             val count = rtCorrectionDao?.getCount() ?: 0
             withContext(Dispatchers.Main) {
-                textCorrectionsCount.text = "$count Korrekturen"
+                textCorrectionsCount.text = getString(R.string.corrections_count_format, count)
             }
         }
         dialogView.findViewById<View>(R.id.itemViewCorrections).setOnClickListener {
@@ -6665,7 +6673,7 @@ class MainActivity : AppCompatActivity() {
                     val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
                     startActivity(intent)
                 } catch (e: Exception) {
-                    android.widget.Toast.makeText(this, "Kann Deezer nicht öffnen", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(this, getString(R.string.cannot_open_deezer), android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -6675,7 +6683,7 @@ class MainActivity : AppCompatActivity() {
 
         // Load tracks
         val tracks = deezerCache?.getAllCachedTracks() ?: emptyList()
-        tvCount.text = "${tracks.size} Tracks"
+        tvCount.text = getString(R.string.tracks_count, tracks.size)
 
         if (tracks.isEmpty()) {
             rvTracks.visibility = View.GONE
@@ -6752,7 +6760,7 @@ class MainActivity : AppCompatActivity() {
         val currentType = presetRepository.getNowPlayingAnimation()
 
         AlertDialog.Builder(this)
-            .setTitle("Now Playing Animation")
+            .setTitle(R.string.now_playing_animation)
             .setSingleChoiceItems(options, currentType) { dialog, which ->
                 onSelected(which)
                 dialog.dismiss()
@@ -6798,9 +6806,9 @@ class MainActivity : AppCompatActivity() {
         // Clear all button
         btnClearAll.setOnClickListener {
             AlertDialog.Builder(this)
-                .setTitle("Alle löschen?")
-                .setMessage("Alle RT-Korrekturen werden gelöscht.")
-                .setPositiveButton("Löschen") { _, _ ->
+                .setTitle(R.string.delete_all_title)
+                .setMessage(R.string.delete_all_corrections_message)
+                .setPositiveButton(R.string.delete) { _, _ ->
                     CoroutineScope(Dispatchers.IO).launch {
                         rtCorrectionDao?.deleteAll()
                     }
@@ -6938,14 +6946,14 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            .setNegativeButton("Abbrechen", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
     private fun downloadAndActivateTemplate(template: at.planqton.fytfm.data.logo.RadioLogoTemplate, parentDialog: AlertDialog, onComplete: () -> Unit) {
         val progressView = layoutInflater.inflate(android.R.layout.simple_list_item_1, null)
         val progressText = progressView.findViewById<TextView>(android.R.id.text1)
-        progressText.text = "Lade Logos..."
+        progressText.text = getString(R.string.loading_logos)
         progressText.gravity = android.view.Gravity.CENTER
         progressText.setPadding(48, 48, 48, 48)
 
@@ -6958,7 +6966,7 @@ class MainActivity : AppCompatActivity() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
             val (updatedTemplate, failed) = radioLogoRepository.downloadLogos(template) { current, total ->
                 runOnUiThread {
-                    progressText.text = "Lade Logos... ($current/$total)"
+                    progressText.text = getString(R.string.loading_logos_progress, current, total)
                 }
             }
 
@@ -6973,7 +6981,7 @@ class MainActivity : AppCompatActivity() {
                     android.widget.Toast.LENGTH_SHORT).show()
             } else {
                 AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Logos geladen")
+                    .setTitle(R.string.logos_loaded_title)
                     .setMessage("${updatedTemplate.stations.size - failed.size}/${updatedTemplate.stations.size} Logos geladen.\n\nFehlgeschlagen:\n${failed.joinToString("\n")}")
                     .setPositiveButton("OK", null)
                     .show()
@@ -6992,7 +7000,7 @@ class MainActivity : AppCompatActivity() {
 
         val currentArea = presetRepository.getRadioArea()
         val textCurrentArea = dialogView.findViewById<TextView>(R.id.textCurrentArea)
-        textCurrentArea.text = "Region: ${getRadioAreaName(currentArea)}"
+        textCurrentArea.text = getString(R.string.region_format, getRadioAreaName(currentArea))
 
         val recyclerTemplates = dialogView.findViewById<RecyclerView>(R.id.recyclerTemplates)
         val textEmptyTemplates = dialogView.findViewById<TextView>(R.id.textEmptyTemplates)
@@ -7028,9 +7036,9 @@ class MainActivity : AppCompatActivity() {
             },
             onDelete = { template ->
                 AlertDialog.Builder(this)
-                    .setTitle("Template löschen")
-                    .setMessage("Template '${template.name}' wirklich löschen?")
-                    .setPositiveButton("Löschen") { _, _ ->
+                    .setTitle(R.string.delete_template_title)
+                    .setMessage(getString(R.string.delete_template_message, template.name))
+                    .setPositiveButton(R.string.delete) { _, _ ->
                         radioLogoRepository.deleteTemplate(template.name)
                         // Refresh list
                         val newTemplates = radioLogoRepository.getTemplatesForArea(currentArea)
@@ -7038,7 +7046,7 @@ class MainActivity : AppCompatActivity() {
                             ?.updateTemplates(newTemplates, radioLogoRepository.getActiveTemplateName())
                         updateEmptyState(newTemplates, recyclerTemplates, textEmptyTemplates)
                     }
-                    .setNegativeButton("Abbrechen", null)
+                    .setNegativeButton(R.string.cancel, null)
                     .show()
             }
         )
@@ -7083,7 +7091,7 @@ class MainActivity : AppCompatActivity() {
         // Show progress dialog
         val progressView = layoutInflater.inflate(android.R.layout.simple_list_item_1, null)
         val progressText = progressView.findViewById<TextView>(android.R.id.text1)
-        progressText.text = "Lade Logos..."
+        progressText.text = getString(R.string.loading_logos)
         progressText.gravity = android.view.Gravity.CENTER
         progressText.setPadding(48, 48, 48, 48)
 
@@ -7097,7 +7105,7 @@ class MainActivity : AppCompatActivity() {
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
             val (updatedTemplate, failed) = radioLogoRepository.downloadLogos(template) { current, total ->
                 runOnUiThread {
-                    progressText.text = "Lade Logos... ($current/$total)"
+                    progressText.text = getString(R.string.loading_logos_progress, current, total)
                 }
             }
 
@@ -7113,7 +7121,7 @@ class MainActivity : AppCompatActivity() {
                     android.widget.Toast.LENGTH_SHORT).show()
             } else {
                 AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Logos geladen")
+                    .setTitle(R.string.logos_loaded_title)
                     .setMessage("${updatedTemplate.stations.size - failed.size}/${updatedTemplate.stations.size} Logos geladen.\n\nFehlgeschlagen:\n${failed.joinToString("\n")}")
                     .setPositiveButton("OK", null)
                     .show()
@@ -7149,7 +7157,7 @@ class MainActivity : AppCompatActivity() {
             }
             startActivity(android.content.Intent.createChooser(shareIntent, "Template teilen"))
         } catch (e: Exception) {
-            android.widget.Toast.makeText(this, "Export fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.export_failed, e.message), android.widget.Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -7170,14 +7178,14 @@ class MainActivity : AppCompatActivity() {
                 val jsonString = inputStream.bufferedReader().readText()
                 val template = radioLogoRepository.importTemplate(jsonString)
                 radioLogoRepository.saveTemplate(template)
-                android.widget.Toast.makeText(this, "Importiert: ${template.name}", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.imported_template, template.name), android.widget.Toast.LENGTH_SHORT).show()
                 logoTemplateImportCallback?.invoke(true)
             } ?: run {
-                android.widget.Toast.makeText(this, "Datei konnte nicht gelesen werden", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.file_read_error), android.widget.Toast.LENGTH_SHORT).show()
                 logoTemplateImportCallback?.invoke(false)
             }
         } catch (e: Exception) {
-            android.widget.Toast.makeText(this, "Import fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.import_failed, e.message), android.widget.Toast.LENGTH_SHORT).show()
             logoTemplateImportCallback?.invoke(false)
         }
         logoTemplateImportCallback = null
@@ -7205,7 +7213,7 @@ class MainActivity : AppCompatActivity() {
         val stationsList = template.stations.toMutableList()
 
         fun updateStationCount() {
-            textStationCount.text = "Sender (${stationsList.size})"
+            textStationCount.text = getString(R.string.stations_count, stationsList.size)
             if (stationsList.isEmpty()) {
                 recyclerStations.visibility = View.GONE
                 textEmptyStations.visibility = View.VISIBLE
@@ -7226,14 +7234,14 @@ class MainActivity : AppCompatActivity() {
             },
             onDelete = { position, station ->
                 AlertDialog.Builder(this)
-                    .setTitle("Sender löschen")
-                    .setMessage("Eintrag wirklich löschen?")
-                    .setPositiveButton("Löschen") { _, _ ->
+                    .setTitle(R.string.delete_station_title)
+                    .setMessage(R.string.delete_entry_message)
+                    .setPositiveButton(R.string.delete) { _, _ ->
                         stationsList.removeAt(position)
                         (recyclerStations.adapter as? at.planqton.fytfm.data.logo.StationLogoAdapter)?.removeStation(position)
                         updateStationCount()
                     }
-                    .setNegativeButton("Abbrechen", null)
+                    .setNegativeButton(R.string.cancel, null)
                     .show()
             }
         )
@@ -7257,13 +7265,13 @@ class MainActivity : AppCompatActivity() {
         btnSave.setOnClickListener {
             val newName = editTemplateName.text.toString().trim()
             if (newName.isBlank()) {
-                android.widget.Toast.makeText(this, "Name darf nicht leer sein", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.name_cannot_be_empty), android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
             // Check if name changed and new name already exists
             if (newName != template.name && radioLogoRepository.getTemplates().any { it.name == newName }) {
-                android.widget.Toast.makeText(this, "Template mit diesem Namen existiert bereits", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.template_name_exists), android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -7285,7 +7293,7 @@ class MainActivity : AppCompatActivity() {
                 radioLogoRepository.setActiveTemplate(newName)
             }
 
-            android.widget.Toast.makeText(this, "Template gespeichert", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.template_saved), android.widget.Toast.LENGTH_SHORT).show()
             dialog.dismiss()
             onSaved()
         }
@@ -7345,12 +7353,12 @@ class MainActivity : AppCompatActivity() {
 
             // Validate - at least one identifier and logo URL required
             if (ps == null && pi == null && frequencies == null) {
-                android.widget.Toast.makeText(this, "Mindestens PS, PI oder Frequenz angeben", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.provide_ps_pi_or_freq), android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
             if (logoUrl.isBlank()) {
-                android.widget.Toast.makeText(this, "Logo-URL erforderlich", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.logo_url_required), android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -7417,7 +7425,7 @@ class MainActivity : AppCompatActivity() {
 
                         dialog.dismiss()
                         onSave(newStation)
-                        android.widget.Toast.makeText(this@MainActivity, "Logo heruntergeladen", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(this@MainActivity, getString(R.string.logo_downloaded), android.widget.Toast.LENGTH_SHORT).show()
 
                     } catch (e: Exception) {
                         android.util.Log.e("fytFM", "Failed to download logo: ${e.message}")
@@ -7426,7 +7434,7 @@ class MainActivity : AppCompatActivity() {
                         layoutSaveProgress.visibility = View.GONE
                         btnSave.isEnabled = true
                         btnCancel.isEnabled = true
-                        android.widget.Toast.makeText(this@MainActivity, "Logo-Download fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(this@MainActivity, getString(R.string.logo_download_failed, e.message), android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
             } else {
@@ -7474,7 +7482,7 @@ class MainActivity : AppCompatActivity() {
 
         fun performSearch(query: String) {
             if (query.isBlank()) {
-                android.widget.Toast.makeText(this, "Suchbegriff eingeben", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.enter_search_term), android.widget.Toast.LENGTH_SHORT).show()
                 return
             }
 
@@ -7494,7 +7502,7 @@ class MainActivity : AppCompatActivity() {
                     progressLoading.visibility = View.GONE
 
                     if (results.isEmpty()) {
-                        textEmptyResults.text = "Keine Ergebnisse für \"$query\""
+                        textEmptyResults.text = getString(R.string.no_results_for_query, query)
                         textEmptyResults.visibility = View.VISIBLE
                         recyclerImages.visibility = View.GONE
                     } else {
@@ -7505,7 +7513,7 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     if (!dialog.isShowing) return@launch
                     progressLoading.visibility = View.GONE
-                    textEmptyResults.text = "Fehler: ${e.message}"
+                    textEmptyResults.text = getString(R.string.error_prefix, e.message)
                     textEmptyResults.visibility = View.VISIBLE
                     recyclerImages.visibility = View.GONE
                 }
@@ -7686,9 +7694,9 @@ class MainActivity : AppCompatActivity() {
                     station.getDisplayFrequency()
                 }
                 AlertDialog.Builder(this)
-                    .setTitle("Sender löschen")
-                    .setMessage("$stationName wirklich löschen?")
-                    .setPositiveButton("Ja") { _, _ ->
+                    .setTitle(R.string.delete_station_title)
+                    .setMessage(getString(R.string.delete_station_message, stationName))
+                    .setPositiveButton(R.string.yes) { _, _ ->
                         if (targetMode == FrequencyScaleView.RadioMode.DAB) {
                             val updatedStations = stations.filter { it.serviceId != station.serviceId }
                             presetRepository.saveDabStations(updatedStations)
@@ -7700,7 +7708,7 @@ class MainActivity : AppCompatActivity() {
                         dialog.dismiss()
                         showRadioEditorDialog(targetMode) // Reopen with updated list
                     }
-                    .setNegativeButton("Nein", null)
+                    .setNegativeButton(R.string.no, null)
                     .show()
             }
         )
@@ -7721,8 +7729,8 @@ class MainActivity : AppCompatActivity() {
     // EXPERIMENTAL_LOGO_SEARCH: Logo Search Dialog
     private fun showLogoSearchDialog(stations: List<at.planqton.fytfm.data.RadioStation>, mode: FrequencyScaleView.RadioMode) {
         val progressDialog = AlertDialog.Builder(this)
-            .setTitle("Logo Suche")
-            .setMessage("Suche Logos für ${stations.size} Sender...")
+            .setTitle(R.string.logo_search)
+            .setMessage(getString(R.string.searching_logos_for_stations, stations.size))
             .setCancelable(false)
             .create()
         progressDialog.show()
@@ -7744,8 +7752,8 @@ class MainActivity : AppCompatActivity() {
 
                 if (foundLogos.isEmpty()) {
                     AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Keine Logos gefunden")
-                        .setMessage("Für keinen der ${stations.size} Sender konnte ein Logo gefunden werden.")
+                        .setTitle(R.string.no_logos_found_title)
+                        .setMessage(getString(R.string.no_logos_found_for_stations, stations.size))
                         .setPositiveButton("OK") { _, _ ->
                             showRadioEditorDialog(mode)
                         }
@@ -7760,8 +7768,8 @@ class MainActivity : AppCompatActivity() {
                 progressDialog.dismiss()
                 android.util.Log.e("fytFM", "Logo search failed: ${e.message}", e)
                 AlertDialog.Builder(this@MainActivity)
-                    .setTitle("Fehler")
-                    .setMessage("Logo-Suche fehlgeschlagen: ${e.message}")
+                    .setTitle(R.string.error_title)
+                    .setMessage(getString(R.string.logo_search_failed, e.message))
                     .setPositiveButton("OK") { _, _ ->
                         showRadioEditorDialog(mode)
                     }
@@ -7801,7 +7809,7 @@ class MainActivity : AppCompatActivity() {
 
             // Summary
             val summaryText = android.widget.TextView(this).apply {
-                text = "Tippe zum Übernehmen (${remainingLogos.size} übrig, $savedCount gespeichert)"
+                text = getString(R.string.tap_to_apply_remaining, remainingLogos.size, savedCount)
                 textSize = 13f
                 setTextColor(0xFF666666.toInt())
                 setPadding(0, 0, 0, 16)
@@ -7891,7 +7899,7 @@ class MainActivity : AppCompatActivity() {
             container.addView(scrollView)
 
             val dialog = AlertDialog.Builder(this)
-                .setTitle("Logo Suchergebnisse")
+                .setTitle(R.string.logo_search_results)
                 .setView(container)
                 .setNegativeButton("Fertig") { dlg, _ ->
                     dlg.dismiss()
@@ -8031,7 +8039,7 @@ class MainActivity : AppCompatActivity() {
 
         val dialog = AlertDialog.Builder(this)
             .setView(dialogView)
-            .setNegativeButton("Abbrechen", null)
+            .setNegativeButton(R.string.cancel, null)
             .create()
 
         val imageAdapter = at.planqton.fytfm.ui.ImageSearchAdapter { imageResult ->
@@ -8044,7 +8052,7 @@ class MainActivity : AppCompatActivity() {
         btnSearch.setOnClickListener {
             val query = etSearch.text.toString().trim()
             if (query.isBlank()) {
-                android.widget.Toast.makeText(this, "Bitte Suchbegriff eingeben", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.enter_search_please), android.widget.Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -8057,7 +8065,7 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     progressBar.visibility = View.GONE
                     if (results.isEmpty()) {
-                        tvStatus.text = "Keine Bilder gefunden"
+                        tvStatus.text = getString(R.string.no_images_found)
                         tvStatus.visibility = View.VISIBLE
                     } else {
                         tvStatus.visibility = View.GONE
@@ -8222,7 +8230,7 @@ class MainActivity : AppCompatActivity() {
         onComplete: () -> Unit
     ) {
         val progressDialog = android.app.ProgressDialog(this).apply {
-            setMessage("Logo wird heruntergeladen...")
+            setMessage(getString(R.string.logo_downloading_progress))
             setCancelable(false)
             show()
         }
@@ -8342,13 +8350,13 @@ class MainActivity : AppCompatActivity() {
         // Name input
         val input = android.widget.EditText(this).apply {
             setText(station.name ?: "")
-            hint = "Sendername"
+            hint = getString(R.string.station_name_hint)
         }
         container.addView(input)
 
         // Sync Name checkbox
         val syncNameCheckbox = android.widget.CheckBox(this).apply {
-            text = "Sync mit RDS (PS)"
+            text = getString(R.string.sync_with_rds_ps)
             isChecked = station.syncName
             setPadding(0, 24, 0, 0)
         }
@@ -8357,17 +8365,17 @@ class MainActivity : AppCompatActivity() {
         // Spotify toggle
         val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(station.frequency)
         val deezerSwitch = android.widget.Switch(this).apply {
-            text = "Deezer/Lokal Suche"
+            text = getString(R.string.deezer_local_search)
             isChecked = deezerEnabled
             setPadding(0, 16, 0, 0)
         }
         container.addView(deezerSwitch)
 
         AlertDialog.Builder(this)
-            .setTitle("Sender bearbeiten")
+            .setTitle(R.string.edit_station)
             .setMessage(station.getDisplayFrequency())
             .setView(container)
-            .setPositiveButton("Speichern") { _, _ ->
+            .setPositiveButton(R.string.save) { _, _ ->
                 // Save station name and syncName
                 onSave(input.text.toString(), syncNameCheckbox.isChecked)
                 // Save Spotify setting for this frequency
@@ -8377,7 +8385,7 @@ class MainActivity : AppCompatActivity() {
                     updateDeezerToggleForCurrentFrequency()
                 }
             }
-            .setNegativeButton("Abbrechen", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -8390,7 +8398,7 @@ class MainActivity : AppCompatActivity() {
 
         // Info text (Ensemble)
         val infoText = android.widget.TextView(this).apply {
-            text = "Ensemble: ${station.ensembleLabel ?: "Unbekannt"}"
+            text = getString(R.string.ensemble_format, station.ensembleLabel ?: getString(R.string.unknown))
             setTextColor(resources.getColor(android.R.color.darker_gray, theme))
             setPadding(0, 0, 0, 16)
         }
@@ -8399,17 +8407,17 @@ class MainActivity : AppCompatActivity() {
         // Name input
         val input = android.widget.EditText(this).apply {
             setText(station.name ?: "")
-            hint = "Sendername"
+            hint = getString(R.string.station_name_hint)
         }
         container.addView(input)
 
         AlertDialog.Builder(this)
-            .setTitle("DAB Sender bearbeiten")
+            .setTitle(R.string.dab_edit_station)
             .setView(container)
-            .setPositiveButton("Speichern") { _, _ ->
+            .setPositiveButton(R.string.save) { _, _ ->
                 onSave(input.text.toString())
             }
-            .setNegativeButton("Abbrechen", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -8464,12 +8472,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        at.planqton.fytfm.ui.DabScanDialog(this, dabTunerManager) { services ->
+        at.planqton.fytfm.ui.DabScanDialog(this, dabTunerManager, presetRepository) { services ->
             val stations = services.map { it.toRadioStation() }
             presetRepository.mergeDabScannedStations(stations)
             loadStationsForCurrentMode()
             populateCarousel()
-            android.widget.Toast.makeText(this, "${services.size} DAB+ Sender gefunden", android.widget.Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, getString(R.string.dab_stations_found, services.size), android.widget.Toast.LENGTH_SHORT).show()
         }.show()
     }
 
@@ -8498,7 +8506,7 @@ class MainActivity : AppCompatActivity() {
             override fun onScanProgress(progress: Int, currentFrequency: String) {
                 runOnUiThread {
                     progressDialog.progress = progress
-                    progressDialog.setMessage("Scanne: $currentFrequency")
+                    progressDialog.setMessage(getString(R.string.scanning_frequency, currentFrequency))
                 }
             }
 
@@ -8534,7 +8542,7 @@ class MainActivity : AppCompatActivity() {
             override fun onScanError(error: String) {
                 runOnUiThread {
                     progressDialog.dismiss()
-                    android.widget.Toast.makeText(this@MainActivity, "Scan Error: $error", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this@MainActivity, getString(R.string.scan_error, error), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         })
@@ -8680,7 +8688,7 @@ class MainActivity : AppCompatActivity() {
                 dabTunerManager.tuneService(newStation.serviceId, newStation.ensembleId)
             }
             if (!success) {
-                android.widget.Toast.makeText(this, "Tuner Error: DAB Sender nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(this, getString(R.string.tuner_error_dab_not_found), android.widget.Toast.LENGTH_LONG).show()
             }
             updateCarouselSelection()
             updateFavoriteButton()
@@ -8689,7 +8697,7 @@ class MainActivity : AppCompatActivity() {
             android.util.Log.i("fytFM", "skipDabStation: -> ${newStation.name} (SID=${newStation.serviceId})")
         } catch (e: Exception) {
             android.util.Log.e("fytFM", "skipDabStation error: ${e.message}")
-            android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -8887,7 +8895,7 @@ class MainActivity : AppCompatActivity() {
 
                 // Nur Info-Toast wenn Tuner nicht verfügbar (blockiert nicht mehr)
                 if (!isTunerAvailable(newMode)) {
-                    android.widget.Toast.makeText(this@MainActivity, "Tuner für $newMode nicht verfügbar", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(this@MainActivity, getString(R.string.tuner_not_available, newMode), android.widget.Toast.LENGTH_SHORT).show()
                 }
 
                 setRadioMode(newMode)
@@ -8976,7 +8984,7 @@ class MainActivity : AppCompatActivity() {
                     dabTunerManager.deinitialize()
                 } catch (e: Exception) {
                     android.util.Log.e("fytFM", "DAB shutdown error: ${e.message}")
-                    android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
                 }
                 isDabOn = false
                 currentDabServiceId = 0
@@ -9009,7 +9017,7 @@ class MainActivity : AppCompatActivity() {
                     fmNative.powerOff()
                 } catch (e: Exception) {
                     android.util.Log.e("fytFM", "FM powerOff error: ${e.message}")
-                    android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
                 }
                 isRadioOn = false
             }
@@ -9079,11 +9087,11 @@ class MainActivity : AppCompatActivity() {
                         isRadioOn = true
                         frequencyScale.setFrequency(lastFreq)
                     } else {
-                        android.widget.Toast.makeText(this, "Tuner Error: FM Radio konnte nicht gestartet werden", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(this, getString(R.string.tuner_error_fm_start), android.widget.Toast.LENGTH_LONG).show()
                     }
                 } catch (e: Exception) {
                     android.util.Log.e("fytFM", "FM powerOn error: ${e.message}")
-                    android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -9277,13 +9285,13 @@ class MainActivity : AppCompatActivity() {
                     startRdsPolling()
                 } else {
                     android.util.Log.e("fytFM", "RADIO FAILED TO START!")
-                    android.widget.Toast.makeText(this, "Tuner Error: FM Radio konnte nicht gestartet werden", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.tuner_error_fm_start), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         } catch (e: Exception) {
             android.util.Log.e("fytFM", "Radio power toggle failed: ${e.message}", e)
             isRadioOn = false
-            android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
         }
         android.util.Log.i("fytFM", "======= toggleRadioPower() done =======")
         updatePowerButton()
@@ -9357,7 +9365,7 @@ class MainActivity : AppCompatActivity() {
             rdsManager.tune(frequency)
         } catch (e: Throwable) {
             android.util.Log.w("fytFM", "tune failed: ${e.message}")
-            android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -9488,12 +9496,12 @@ class MainActivity : AppCompatActivity() {
                             resetDabDebugInfo()
                             val success = dabTunerManager.tuneService(targetStation.serviceId, targetStation.ensembleId)
                             if (!success) {
-                                android.widget.Toast.makeText(this, "Tuner Error: DAB Sender nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
+                                android.widget.Toast.makeText(this, getString(R.string.tuner_error_dab_not_found), android.widget.Toast.LENGTH_LONG).show()
                             }
                             updateCarouselSelection()
                         } catch (e: Exception) {
                             android.util.Log.e("fytFM", "DAB initial tune error: ${e.message}")
-                            android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                            android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
                         }
                     }
                 }
@@ -9523,22 +9531,33 @@ class MainActivity : AppCompatActivity() {
                     // Alle Cover-Ansichten sofort zurücksetzen (muss auf UI-Thread)
                     runOnUiThread {
                         updateDeezerDebugInfo("Waiting...", null, null, null, null)
-                        // dabListCover auf Stationslogo oder Fallback setzen (Custom Logo prüfen)
+                        // Indikator mit verfügbaren Quellen aktualisieren
+                        availableCoverSources = getAvailableCoverSources()
+                        updateSlideshowIndicators(true)
+
+                        // Cover basierend auf Lock-Status setzen
+                        val isLockedToDabLogo = coverSourceLocked && lockedCoverSource == DabCoverSource.DAB_LOGO
                         val stationLogo = getLogoForDabStation(dabStation.serviceLabel, dabStation.serviceId)
-                        if (stationLogo != null) {
+
+                        if (isLockedToDabLogo) {
+                            // Locked auf DAB+ Logo - immer DAB+ Icon zeigen
+                            currentUiCoverSource = "drawable:ic_fytfm_dab_plus_light"
+                            dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+                            nowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+                            carouselNowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+                        } else if (stationLogo != null && (!coverSourceLocked || lockedCoverSource == DabCoverSource.STATION_LOGO)) {
+                            // Station Logo zeigen wenn verfügbar und nicht auf andere Quelle gelockt
                             currentUiCoverSource = stationLogo
                             dabListCover?.load(java.io.File(stationLogo)) { crossfade(true) }
                             nowPlayingCover?.load(java.io.File(stationLogo)) { crossfade(true) }
                             carouselNowPlayingCover?.load(java.io.File(stationLogo)) { crossfade(true) }
                         } else {
+                            // Fallback auf DAB+ Icon
                             currentUiCoverSource = "drawable:ic_fytfm_dab_plus_light"
                             dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
                             nowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
                             carouselNowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
                         }
-                        // Indikator mit verfügbaren Quellen aktualisieren
-                        availableCoverSources = getAvailableCoverSources()
-                        updateSlideshowIndicators(true)
                     }
                     saveLastDabService(dabStation.serviceId, dabStation.ensembleId)
                     updateCarouselSelection()
@@ -9770,11 +9789,16 @@ class MainActivity : AppCompatActivity() {
                     // UI nur aktualisieren wenn:
                     // - Auto-Modus (-1) und Slideshow ist beste verfügbare Option (kein Deezer)
                     // - Oder User hat explizit Slideshow ausgewählt
+                    // - NICHT wenn auf eine andere Quelle gelockt ist
+                    val isLockedToOtherSource = coverSourceLocked &&
+                        lockedCoverSource != null &&
+                        lockedCoverSource != DabCoverSource.SLIDESHOW
                     val hasDeezerCover = !currentDabDeezerCoverPath.isNullOrBlank()
                     val slideshowSelected = selectedCoverSourceIndex >= 0 &&
                         selectedCoverSourceIndex < availableCoverSources.size &&
                         availableCoverSources[selectedCoverSourceIndex] == DabCoverSource.SLIDESHOW
-                    val showSlideshow = slideshowSelected || (selectedCoverSourceIndex < 0 && !hasDeezerCover)
+                    val showSlideshow = !isLockedToOtherSource &&
+                        (slideshowSelected || (selectedCoverSourceIndex < 0 && !hasDeezerCover))
 
                     if (showSlideshow) {
                         currentUiCoverSource = "slideshow"
@@ -9803,21 +9827,21 @@ class MainActivity : AppCompatActivity() {
                 dabTunerManager.onRecordingStarted = {
                     runOnUiThread {
                         updateRecordingButton(true)
-                        android.widget.Toast.makeText(this, "Aufnahme gestartet", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(this, getString(R.string.recording_started), android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }
 
                 dabTunerManager.onRecordingStopped = { file ->
                     runOnUiThread {
                         updateRecordingButton(false)
-                        android.widget.Toast.makeText(this, "Aufnahme gespeichert: ${file.name}", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(this, getString(R.string.recording_saved, file.name), android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
 
                 dabTunerManager.onRecordingError = { error ->
                     runOnUiThread {
                         updateRecordingButton(false)
-                        android.widget.Toast.makeText(this, "Aufnahmefehler: $error", android.widget.Toast.LENGTH_LONG).show()
+                        android.widget.Toast.makeText(this, getString(R.string.recording_error, error), android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
 
@@ -9832,13 +9856,13 @@ class MainActivity : AppCompatActivity() {
                 isDabOn = success  // Button aktivieren, Tuner-Check passiert bei Sendersuche
 
                 if (!success) {
-                    android.widget.Toast.makeText(this, "DAB+ Initialisierung fehlgeschlagen", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.dab_init_failed), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         } catch (e: Exception) {
             android.util.Log.e("fytFM", "DAB power toggle failed: ${e.message}", e)
             isDabOn = false
-            android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
         }
 
         android.util.Log.i("fytFM", "======= toggleDabPower() done, isDabOn=$isDabOn =======")
@@ -9975,10 +9999,14 @@ class MainActivity : AppCompatActivity() {
                     availableCoverSources = getAvailableCoverSources()
                     updateSlideshowIndicators(true)
 
+                    val isLockedToOtherSource = coverSourceLocked &&
+                        lockedCoverSource != null &&
+                        lockedCoverSource != DabCoverSource.SLIDESHOW
                     val slideshowSelected = selectedCoverSourceIndex >= 0 &&
                         selectedCoverSourceIndex < availableCoverSources.size &&
                         availableCoverSources[selectedCoverSourceIndex] == DabCoverSource.SLIDESHOW
-                    val showSlideshow = slideshowSelected || selectedCoverSourceIndex < 0
+                    val showSlideshow = !isLockedToOtherSource &&
+                        (slideshowSelected || selectedCoverSourceIndex < 0)
 
                     if (showSlideshow) {
                         currentUiCoverSource = "mock_slideshow"
@@ -9998,13 +10026,13 @@ class MainActivity : AppCompatActivity() {
                 isDabOn = success
 
                 if (!success) {
-                    android.widget.Toast.makeText(this, "Mock DAB+ Initialisierung fehlgeschlagen", android.widget.Toast.LENGTH_LONG).show()
+                    android.widget.Toast.makeText(this, getString(R.string.mock_dab_init_failed), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
         } catch (e: Exception) {
             android.util.Log.e("fytFM", "Mock DAB power toggle failed: ${e.message}", e)
             isDabOn = false
-            android.widget.Toast.makeText(this, "Tuner Error: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, getString(R.string.tuner_error, e.message), android.widget.Toast.LENGTH_LONG).show()
         }
 
         android.util.Log.i("fytFM", "======= toggleMockDabPower() done, isDabOn=$isDabOn =======")
@@ -10032,12 +10060,12 @@ class MainActivity : AppCompatActivity() {
         } else {
             val recordingPath = presetRepository.getDabRecordingPath()
             if (recordingPath == null) {
-                android.widget.Toast.makeText(this, "Bitte zuerst Speicherort in Einstellungen wählen", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.select_storage_first), android.widget.Toast.LENGTH_SHORT).show()
                 return
             }
             val success = dabTunerManager.startRecording(this, recordingPath)
             if (!success) {
-                android.widget.Toast.makeText(this, "Aufnahme konnte nicht gestartet werden", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(this, getString(R.string.recording_could_not_start), android.widget.Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -10355,15 +10383,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun showImportStationsDialog() {
         android.app.AlertDialog.Builder(this)
-            .setTitle("Sender importieren?")
-            .setMessage("Die Senderliste ist leer.\n\nMöchtest du die Sender von der Original-Radio-App importieren?")
-            .setPositiveButton("Ja") { _, _ ->
+            .setTitle(R.string.import_stations_title)
+            .setMessage(R.string.import_stations_message)
+            .setPositiveButton(R.string.yes) { _, _ ->
                 presetRepository.setAskedAboutImport(true)
                 importStationsFromOriginalApp()
             }
-            .setNegativeButton("Nein") { _, _ ->
+            .setNegativeButton(R.string.no) { _, _ ->
                 presetRepository.setAskedAboutImport(true)
-                android.widget.Toast.makeText(this, "Du kannst später Sender scannen oder manuell hinzufügen", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(this, getString(R.string.skip_stations_hint), android.widget.Toast.LENGTH_LONG).show()
             }
             .setCancelable(false)
             .show()
@@ -10375,7 +10403,7 @@ class MainActivity : AppCompatActivity() {
      */
     private fun importStationsFromOriginalApp() {
         android.util.Log.i("fytFM", "Import: Starte Preset-Sammlung via SYU Callbacks...")
-        android.widget.Toast.makeText(this, "Sammle Sender vom SYU Service...", android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(this, getString(R.string.collecting_syu_stations), android.widget.Toast.LENGTH_SHORT).show()
 
         // Clear previous data and start collecting
         collectedPresets.clear()
@@ -10412,7 +10440,7 @@ class MainActivity : AppCompatActivity() {
         android.util.Log.i("fytFM", "Import: Sammlung beendet, ${collectedPresets.size} Presets empfangen")
 
         if (collectedPresets.isEmpty()) {
-            android.widget.Toast.makeText(this, "Keine Sender von der Original-App empfangen", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, getString(R.string.no_stations_from_original), android.widget.Toast.LENGTH_LONG).show()
             return
         }
 
@@ -10432,7 +10460,7 @@ class MainActivity : AppCompatActivity() {
             .distinctBy { (it.frequency * 10).toInt() }
 
         if (stations.isEmpty()) {
-            android.widget.Toast.makeText(this, "Keine gültigen Sender gefunden", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(this, getString(R.string.no_valid_stations_found), android.widget.Toast.LENGTH_LONG).show()
             return
         }
 
@@ -10440,7 +10468,7 @@ class MainActivity : AppCompatActivity() {
         presetRepository.saveFmStations(stations)
         loadStationsForCurrentMode()
 
-        android.widget.Toast.makeText(this, "${stations.size} Sender importiert!", android.widget.Toast.LENGTH_SHORT).show()
+        android.widget.Toast.makeText(this, getString(R.string.stations_imported, stations.size), android.widget.Toast.LENGTH_SHORT).show()
         android.util.Log.i("fytFM", "Import: ${stations.size} Sender gespeichert")
 
         // Log imported stations
@@ -10457,8 +10485,8 @@ class MainActivity : AppCompatActivity() {
         val crashLog = CrashHandler.getCrashLog(this) ?: return
 
         android.app.AlertDialog.Builder(this)
-            .setTitle("App wurde nicht richtig beendet")
-            .setMessage("Die App ist beim letzten Mal abgestürzt.\n\nMöchtest du einen Bug Report erstellen?")
+            .setTitle(R.string.app_crashed_title)
+            .setMessage(R.string.app_crashed_message)
             .setPositiveButton("Bug Report") { _, _ ->
                 showCrashBugReportDialog(crashLog)
             }
@@ -10475,20 +10503,20 @@ class MainActivity : AppCompatActivity() {
     private fun showCrashBugReportDialog(crashLog: String) {
         // Optional: Problem beschreiben
         val editText = android.widget.EditText(this).apply {
-            hint = "Was hast du gemacht als die App abgestürzt ist? (optional)"
+            hint = getString(R.string.crash_hint)
             setPadding(48, 24, 48, 24)
             minLines = 2
         }
 
         android.app.AlertDialog.Builder(this)
-            .setTitle("Bug Report erstellen")
-            .setMessage("Beschreibe optional was du gemacht hast:")
+            .setTitle(R.string.create_bug_report_title)
+            .setMessage(R.string.bug_report_describe)
             .setView(editText)
-            .setPositiveButton("Weiter") { _, _ ->
+            .setPositiveButton(R.string.next) { _, _ ->
                 val description = editText.text.toString()
                 createCrashBugReport(crashLog, description)
             }
-            .setNegativeButton("Abbrechen") { _, _ ->
+            .setNegativeButton(R.string.cancel) { _, _ ->
                 CrashHandler.clearCrashLog(this)
             }
             .show()
@@ -10536,12 +10564,12 @@ class MainActivity : AppCompatActivity() {
         scrollView.addView(textView)
 
         android.app.AlertDialog.Builder(this)
-            .setTitle("Report Vorschau")
+            .setTitle(R.string.report_preview_title)
             .setView(scrollView)
-            .setPositiveButton("Speichern") { _, _ ->
+            .setPositiveButton(R.string.save) { _, _ ->
                 saveBugReportWithPicker(content, isCrashReport)
             }
-            .setNegativeButton("Abbrechen") { _, _ ->
+            .setNegativeButton(R.string.cancel) { _, _ ->
                 if (isCrashReport) CrashHandler.clearCrashLog(this)
             }
             .show()

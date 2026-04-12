@@ -21,14 +21,14 @@ class BugReportDetailActivity : AppCompatActivity() {
 
         val filePath = intent.getStringExtra("file_path")
         if (filePath == null) {
-            Toast.makeText(this, "No file specified", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.no_file_specified), Toast.LENGTH_SHORT).show()
             finish()
             return
         }
 
         val file = File(filePath)
         if (!file.exists()) {
-            Toast.makeText(this, "File not found", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.file_not_found), Toast.LENGTH_SHORT).show()
             finish()
             return
         }
@@ -42,7 +42,7 @@ class BugReportDetailActivity : AppCompatActivity() {
             val content = file.readText()
             contentView.text = content
         } catch (e: Exception) {
-            contentView.text = "Error reading file: ${e.message}"
+            contentView.text = getString(R.string.error_reading_file, e.message)
         }
 
         findViewById<View>(R.id.btnBack)?.setOnClickListener {
@@ -65,7 +65,7 @@ class BugReportDetailActivity : AppCompatActivity() {
             }
             startActivity(android.content.Intent.createChooser(intent, "Share Bug Report"))
         } catch (e: Exception) {
-            Toast.makeText(this, "Failed to share report", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.failed_to_share_report), Toast.LENGTH_SHORT).show()
         }
     }
 }

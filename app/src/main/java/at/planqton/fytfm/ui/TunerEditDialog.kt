@@ -33,7 +33,7 @@ class TunerEditDialog(
         val isNew = instance == null
 
         view.findViewById<TextView>(R.id.tvEditTitle).text =
-            if (isNew) "Neuer Tuner" else "Tuner bearbeiten"
+            if (isNew) context.getString(R.string.new_tuner_title) else context.getString(R.string.edit_tuner_title)
 
         val etName = view.findViewById<EditText>(R.id.etTunerName)
         etName.setText(instance?.name ?: "")
@@ -70,7 +70,7 @@ class TunerEditDialog(
             })
 
             val titleView = TextView(context).apply {
-                text = "Plugin Settings"
+                text = context.getString(R.string.plugin_settings)
                 setTextColor(0xFF333333.toInt())
                 textSize = 14f
                 setPadding(0, 8, 0, 12)
@@ -122,7 +122,7 @@ class TunerEditDialog(
         view.findViewById<TextView>(R.id.btnSaveTuner).setOnClickListener {
             val name = etName.text.toString().trim()
             if (name.isEmpty()) {
-                etName.error = "Name eingeben"
+                etName.error = context.getString(R.string.enter_name)
                 return@setOnClickListener
             }
             if (availablePlugins.isEmpty()) return@setOnClickListener
@@ -270,7 +270,7 @@ class TunerEditDialog(
 
         if (pluginId == null) {
             statusIndicator.setBackgroundResource(R.drawable.status_indicator_red)
-            tvDeviceStatus.text = "Noch nicht konfiguriert"
+            tvDeviceStatus.text = context.getString(R.string.not_configured_yet)
             tvDeviceStatus.setTextColor(0xFF999999.toInt())
             return
         }
@@ -278,19 +278,19 @@ class TunerEditDialog(
         val plugin = TunerPluginRegistry.get(pluginId)
         if (plugin == null) {
             statusIndicator.setBackgroundResource(R.drawable.status_indicator_red)
-            tvDeviceStatus.text = "Plugin nicht verfügbar"
+            tvDeviceStatus.text = context.getString(R.string.plugin_not_available)
             tvDeviceStatus.setTextColor(0xFFC52322.toInt())
         } else if (!plugin.isHardwareAvailable()) {
             statusIndicator.setBackgroundResource(R.drawable.status_indicator_red)
-            tvDeviceStatus.text = "Kein Gerät erkannt"
+            tvDeviceStatus.text = context.getString(R.string.no_device_detected)
             tvDeviceStatus.setTextColor(0xFFC52322.toInt())
         } else if (plugin.isPoweredOn) {
             statusIndicator.setBackgroundResource(R.drawable.status_indicator_green)
-            tvDeviceStatus.text = "Gerät verbunden"
+            tvDeviceStatus.text = context.getString(R.string.device_connected)
             tvDeviceStatus.setTextColor(0xFF2E7D32.toInt())
         } else {
             statusIndicator.setBackgroundResource(R.drawable.status_indicator_green)
-            tvDeviceStatus.text = "Gerät erkannt"
+            tvDeviceStatus.text = context.getString(R.string.device_detected)
             tvDeviceStatus.setTextColor(0xFF666666.toInt())
         }
     }

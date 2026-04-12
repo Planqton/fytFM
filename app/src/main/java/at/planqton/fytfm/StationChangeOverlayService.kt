@@ -464,16 +464,16 @@ class StationChangeOverlayService : Service() {
     private fun createNotification(): Notification {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
-                .setContentTitle("fytFM")
-                .setContentText("Lenkradtasten aktiv")
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(getString(R.string.steering_wheel_active))
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setOngoing(true)
                 .build()
         } else {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
-                .setContentTitle("fytFM")
-                .setContentText("Lenkradtasten aktiv")
+                .setContentTitle(getString(R.string.app_name))
+                .setContentText(getString(R.string.steering_wheel_active))
                 .setSmallIcon(R.drawable.ic_launcher_foreground)
                 .setOngoing(true)
                 .build()

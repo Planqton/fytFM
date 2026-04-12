@@ -176,6 +176,20 @@
     <string name="audio_visualizer">Audio Visualizer</string>
     <string name="audio_visualizer_desc">Show FFT visualization</string>
     <string name="visualizer_style">Visualizer Style</string>
+    <string-array name="visualizer_styles">
+        <item>Bars</item>
+        <item>Waveform</item>
+        <item>Circular</item>
+        <item>Mirror-Bars</item>
+        <item>Dots</item>
+        <item>Spectrum</item>
+        <item>Blocks</item>
+        <item>Symmetry</item>
+        <item>Pulse</item>
+        <item>Diamonds</item>
+        <item>Wave-Bars</item>
+        <item>Fireflies</item>
+    </string-array>
     <string name="style_bars">Bars</string>
     <string name="recording_path">Recording Location</string>
     <string name="not_configured">Not configured</string>
@@ -254,7 +268,74 @@
 
     <!-- DAB Scan Dialog -->
     <string name="dab_scan_title">DAB+ Station Scan…</string>
+    <string name="dab_scan_dialog_title">DAB+ Station Scan</string>
+    <string name="dab_scan_press_start">Press \'Start Scan\' to begin</string>
+    <string name="dab_scan_running">DAB+ station scan in progress…</string>
+    <string name="dab_scanning_progress">Scanning… %d%%</string>
     <string name="stations_found_count">Stations found: %d</string>
+    <string name="no_dab_stations_found">No DAB+ stations found</string>
+    <string name="check_antenna_retry">Please check the antenna and try again.</string>
+    <string name="dab_scan_completed">Station scan completed</string>
+    <string name="accept">Apply</string>
+
+    <!-- Bug Report Dialog -->
+    <string name="bug_report_type_title">Bug Report Type</string>
+    <string name="collecting_parser_logs">Collecting parser logs…</string>
+    <string name="parser_bug_hint">What was parsed incorrectly? (optional)</string>
+    <string name="parser_bug_report_title">Parser Bug Report</string>
+    <string name="parser_bug_message">RT-DLS Parser logs are being captured.\n\nDescribe the problem (optional):</string>
+    <string name="next">Next</string>
+    <string name="collecting_deezer_data">Collecting Deezer data…</string>
+    <string name="deezer_bug_hint">What is the problem? (e.g. wrong cover, wrong track)</string>
+    <string name="deezer_bug_report_title">Deezer Bug Report</string>
+    <string name="deezer_bug_message">Deezer status is being captured.\n\nDescribe the problem (optional):</string>
+    <string name="collecting_logs">Collecting logs…</string>
+    <string name="create_bug_report_title">Create Bug Report</string>
+    <string name="bug_report_message">App status has been captured.\n\nDescribe the problem (optional):</string>
+    <string name="parser_log_exported">Parser log exported</string>
+
+    <!-- Permissions -->
+    <string name="audio_permission_visualizer">Audio permission required for visualizer</string>
+    <string name="overlay_permission_title">Overlay Permission</string>
+    <string name="overlay_permission_message">fytFM requires the \"Display over other apps\" permission to show the popup.</string>
+    <string name="open_settings">Open Settings</string>
+
+    <!-- Cache Dialog -->
+    <string name="clear_cache_title">Clear Cache</string>
+    <string name="clear_cache_message">All cached tracks and cover images will be deleted. Continue?</string>
+
+    <!-- Delete Confirmations -->
+    <string name="delete_all_title">Delete all?</string>
+    <string name="delete_all_corrections_message">All RT corrections will be deleted.</string>
+
+    <!-- Template Selection -->
+    <string name="template_selection_title">%s - Template</string>
+    <string name="loading_logos">Loading logos…</string>
+    <string name="loading_logos_progress">Loading logos… (%1$d/%2$d)</string>
+    <string name="logos_loaded_count">%d logos loaded</string>
+    <string name="logos_loaded_title">Logos loaded</string>
+    <string name="logos_loaded_with_failures">%1$d/%2$d logos loaded.\n\nFailed:\n%3$s</string>
+
+    <!-- Station Editor -->
+    <string name="add_station_title">Add station</string>
+    <string name="edit_station_title">Edit station</string>
+    <string name="no_results_for_query">No results for \"%s\"</string>
+    <string name="no_images_found">No images found</string>
+
+    <!-- Version/Update -->
+    <string name="version_tap_to_check">v%s - Tap to check</string>
+    <string name="update_title">fytFM Update v%s</string>
+    <string name="tap_to_install_after_download">Tap after download to install</string>
+    <string name="no_apk_in_release">No APK found in release</string>
+    <string name="download_failed">Download failed</string>
+    <string name="download_failed_prefix">Download failed: %s</string>
+
+    <!-- Misc -->
+    <string name="not_available">Not available</string>
+    <string name="available">Available</string>
+    <string name="no_station">No station</string>
+    <string name="template_station_count">%d stations</string>
+    <string name="plugin_not_available">Plugin not available</string>
 
     <!-- Other Dialogs -->
     <string name="logo_search">Logo Search (Experimentell)</string>
@@ -286,4 +367,111 @@
     <string name="bug_reports">Bug Reports</string>
     <string name="no_bug_reports">No bug reports found</string>
     <string name="built_in">built-in</string>
+
+    <!-- Tuner Edit Dialog -->
+    <string name="new_tuner_title">New Tuner</string>
+    <string name="edit_tuner_title">Edit Tuner</string>
+    <string name="enter_name">Enter name</string>
+    <string name="not_configured_yet">Not yet configured</string>
+    <string name="device_connected">Device connected</string>
+    <string name="device_detected">Device detected</string>
+    <string name="plugin_settings">Plugin Settings</string>
+
+    <!-- Corrections -->
+    <string name="type_ignored">Ignored</string>
+    <string name="type_track_skipped">Track skipped</string>
+
+    <!-- MainActivity Toasts & Dialogs -->
+    <string name="report_saved">Report saved</string>
+    <string name="bug_report_created">Bug report created</string>
+    <string name="bug_report_failed">Failed to create bug report</string>
+    <string name="app_internet_disabled">App Internet disabled (debug)</string>
+    <string name="app_internet_enabled">App Internet enabled</string>
+    <string name="deezer_local_blocked">Deezer/Local blocked - RDS only</string>
+    <string name="deezer_local_enabled">Deezer/Local enabled</string>
+    <string name="scan_error">Scan Error: %s</string>
+    <string name="recording_started">Recording started</string>
+    <string name="recording_saved">Recording saved: %s</string>
+    <string name="recording_error">Recording error: %s</string>
+    <string name="mock_dab_init_failed">Mock DAB+ initialization failed</string>
+    <string name="select_storage_first">Please select storage location in settings first</string>
+    <string name="recording_could_not_start">Recording could not be started</string>
+    <string name="skip_stations_hint">You can scan or add stations manually later</string>
+    <string name="collecting_syu_stations">Collecting stations from SYU Service…</string>
+    <string name="no_stations_from_original">No stations received from original app</string>
+    <string name="no_valid_stations_found">No valid stations found</string>
+    <string name="visualizer_style_title">Visualizer Style</string>
+    <string name="delete_template_title">Delete Template</string>
+    <string name="delete_template_message">Really delete template \'%s\'?</string>
+    <string name="delete_entry_message">Really delete entry?</string>
+    <string name="searching_logos_for_stations">Searching logos for %d stations…</string>
+    <string name="no_logos_found_title">No logos found</string>
+    <string name="no_logos_found_for_stations">No logo could be found for any of the %d stations.</string>
+    <string name="error_title">Error</string>
+    <string name="logo_search_failed">Logo search failed: %s</string>
+    <string name="logo_search_results">Logo Search Results</string>
+    <string name="scanning_frequency">Scanning: %s</string>
+    <string name="import_stations_title">Import stations?</string>
+    <string name="import_stations_message">The station list is empty.\n\nWould you like to import stations from the original radio app?</string>
+    <string name="app_crashed_title">App did not close properly</string>
+    <string name="app_crashed_message">The app crashed last time.\n\nWould you like to create a bug report?</string>
+    <string name="bug_report_describe">Optionally describe what you were doing:</string>
+    <string name="report_preview_title">Report Preview</string>
+    <string name="enter_search_please">Please enter a search term</string>
+    <string name="dab_edit_station">Edit DAB Station</string>
+
+    <!-- Additional MainActivity strings -->
+    <string name="select_slideshow_or_deezer">Please select Slideshow or Deezer first</string>
+    <string name="error_saving_logo">Error saving logo</string>
+    <string name="searching_other_track">Searching for another track…</string>
+    <string name="checking_for_updates">Checking for updates…</string>
+    <string name="update_available_version">Update available: v%s</string>
+    <string name="downloading_update">Downloading…</string>
+    <string name="download_complete_tap">Download complete - Tap notification</string>
+    <string name="logo_downloading_progress">Downloading logo…</string>
+    <string name="image_decode_failed">Image could not be decoded</string>
+    <string name="logo_saved_for_station">Logo for \"%s\" saved</string>
+    <string name="sync_with_rds_ps">Sync with RDS (PS)</string>
+    <string name="tap_to_apply_remaining">Tap to apply (%1$d remaining, %2$d saved)</string>
+    <string name="crash_hint">What were you doing when the app crashed? (optional)</string>
+    <string name="steering_wheel_active">Steering wheel buttons active</string>
+    <string name="scan_already_running">Scan already running</string>
+    <string name="radio_could_not_start">Radio could not be started</string>
+    <string name="file_could_not_be_created">File could not be created</string>
+    <string name="output_stream_error">Output stream could not be opened</string>
+    <string name="recording_start_error">Recording could not be started: %s</string>
+    <string name="recording_stop_error">Error stopping: %s</string>
+    <string name="tap_after_download">Tap after download to install</string>
+    <string name="failed_to_read_report">Failed to read report</string>
+    <string name="delete_bug_report_question">Delete this bug report?</string>
+    <string name="report_deleted">Report deleted</string>
+    <string name="failed_to_delete_report">Failed to delete report</string>
+    <string name="no_file_specified">No file specified</string>
+    <string name="file_not_found">File not found</string>
+    <string name="error_reading_file">Error reading file: %s</string>
+    <string name="failed_to_share_report">Failed to share report</string>
+    <string name="no_dls_received">No DLS received</string>
+    <string name="file_path_format">File: %s</string>
+    <string name="up_to_date_version">Up to date (v%s)</string>
+    <string name="deezer_local_search">Deezer/Local Search</string>
+    <string name="ensemble_format">Ensemble: %s</string>
+    <string name="unknown">Unknown</string>
+
+    <!-- Scan Status Messages -->
+    <string name="native_scan_status">Native Scan…</string>
+    <string name="signal_scan_status">Signal Scan…</string>
+    <string name="scanning_am">Scanning AM…</string>
+    <string name="rds_filter_status">RDS Filter…</string>
+    <string name="found_suffix">found</string>
+    <string name="filtered_suffix">filtered</string>
+    <string name="verified_suffix">verified</string>
+    <string name="scan_status_native">%1$s | %2$d found</string>
+    <string name="scan_status_signal">%1$s: %.1f MHz | ~%2$s | %3$d found</string>
+    <string name="scan_status_am">AM %1$d kHz | ~%2$s</string>
+    <string name="scan_status_rds">RDS: %.1f MHz | ~%1$s%2$s | %3$d verified</string>
+    <string name="no_log_entries">No %s log entries</string>
+    <string name="log_entries_count">%d entries</string>
+    <string name="stations_imported">%d stations imported!</string>
+    <string name="cache_stats">Cache: %1$d Tracks (%2$s)</string>
+    <string name="bug_report_title">Bug Report</string>
 </resources>

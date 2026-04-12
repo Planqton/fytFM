@@ -37,7 +37,7 @@ class LogoTemplateAdapter(
         val template = templates[position]
 
         holder.textTemplateName.text = template.name
-        holder.textTemplateInfo.text = "${template.stations.size} Sender"
+        holder.textTemplateInfo.text = holder.itemView.context.getString(R.string.template_station_count, template.stations.size)
         holder.radioTemplate.isChecked = template.name == selectedName
 
         holder.itemView.setOnClickListener {

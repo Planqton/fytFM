@@ -5,7 +5,7 @@
     android:layout_height="wrap_content"
     android:gravity="center"
     android:textSize="14sp"
-    android:textColor="@color/radio_text_primary"
+    android:textColor="#757575"
     android:textStyle="bold"
     android:padding="8dp"
     android:background="@android:color/transparent" />

@@ -174,7 +174,7 @@ class ScanOptionsDialog(
     }
 
     private fun updateTimeoutLabel(seconds: Int) {
-        tvRdsTimeout.text = "RDS-Wartezeit: ${seconds}s"
+        tvRdsTimeout.text = context.getString(R.string.rds_wait_time, seconds)
     }
 
     private fun getFilterMode(): RadioScanner.FilterMode {

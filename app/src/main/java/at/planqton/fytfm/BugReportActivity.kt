@@ -69,23 +69,23 @@ class BugReportActivity : AppCompatActivity() {
             intent.putExtra("file_path", file.absolutePath)
             startActivity(intent)
         } else {
-            Toast.makeText(this, "Failed to read report", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.failed_to_read_report), Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun showDeleteDialog(file: File) {
         AlertDialog.Builder(this)
-            .setTitle("Delete Report")
-            .setMessage("Delete this bug report?")
-            .setPositiveButton("Delete") { _, _ ->
+            .setTitle(R.string.delete)
+            .setMessage(R.string.delete_bug_report_question)
+            .setPositiveButton(R.string.delete) { _, _ ->
                 if (bugReportHelper.deleteBugReport(file)) {
-                    Toast.makeText(this, "Report deleted", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.report_deleted), Toast.LENGTH_SHORT).show()
                     loadReports()
                 } else {
-                    Toast.makeText(this, "Failed to delete report", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, getString(R.string.failed_to_delete_report), Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("Cancel", null)
+            .setNegativeButton(R.string.cancel, null)
             .show()
     }
 
@@ -130,7 +130,7 @@ class BugReportActivity : AppCompatActivity() {
                     dateStr
                 }
 
-                titleText.text = "Bug Report"
+                titleText.text = itemView.context.getString(R.string.bug_report_title)
                 dateText.text = displayDate
                 sizeText.text = formatFileSize(file.length())
 

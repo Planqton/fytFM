@@ -39,12 +39,12 @@ class CorrectionsAdapter(
             when (correction.type) {
                 RtCorrection.TYPE_IGNORED -> {
                     iconType.setImageResource(R.drawable.ic_trash)
-                    textType.text = "Ignoriert"
+                    textType.text = itemView.context.getString(R.string.type_ignored)
                     textSkippedTrack.visibility = View.GONE
                 }
                 RtCorrection.TYPE_SKIP_TRACK -> {
                     iconType.setImageResource(R.drawable.ic_refresh)
-                    textType.text = "Track übersprungen"
+                    textType.text = itemView.context.getString(R.string.type_track_skipped)
                     if (correction.skipTrackArtist != null && correction.skipTrackTitle != null) {
                         textSkippedTrack.text = "${correction.skipTrackArtist} - ${correction.skipTrackTitle}"
                         textSkippedTrack.visibility = View.VISIBLE
