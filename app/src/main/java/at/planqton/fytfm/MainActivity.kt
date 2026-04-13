@@ -1771,23 +1771,55 @@ class MainActivity : AppCompatActivity() {
         val isDab = currentMode == FrequencyScaleView.RadioMode.DAB
 
         if (isDab) {
-            // DAB+ Mode: Station Logo oder DAB+ Icon
+            // DAB+ Mode: Lock-Status beachten
+            val isLockedToDabLogo = coverSourceLocked && lockedCoverSource == DabCoverSource.DAB_LOGO
+            val isLockedToSlideshow = coverSourceLocked && lockedCoverSource == DabCoverSource.SLIDESHOW
+            val isLockedToStationLogo = coverSourceLocked && lockedCoverSource == DabCoverSource.STATION_LOGO
             val radioLogoPath = getLogoForDabStation(currentDabServiceLabel, currentDabServiceId)
-            if (currentDabSlideshow != null) {
-                currentUiCoverSource = "slideshow"
-                nowPlayingCover?.setImageBitmap(currentDabSlideshow)
-                carouselNowPlayingCover?.setImageBitmap(currentDabSlideshow)
-                dabListCover?.setImageBitmap(currentDabSlideshow)
-            } else if (radioLogoPath != null) {
-                currentUiCoverSource = radioLogoPath
-                nowPlayingCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
-                carouselNowPlayingCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
-                dabListCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
-            } else {
-                currentUiCoverSource = "drawable:ic_fytfm_dab_plus_light"
-                nowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
-                carouselNowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
-                dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+
+            when {
+                isLockedToDabLogo -> {
+                    // Gelockt auf DAB+ Logo
+                    currentUiCoverSource = "drawable:ic_fytfm_dab_plus_light"
+                    nowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+                    carouselNowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+                    dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+                }
+                isLockedToSlideshow && currentDabSlideshow != null -> {
+                    // Gelockt auf Slideshow
+                    currentUiCoverSource = "slideshow"
+                    nowPlayingCover?.setImageBitmap(currentDabSlideshow)
+                    carouselNowPlayingCover?.setImageBitmap(currentDabSlideshow)
+                    dabListCover?.setImageBitmap(currentDabSlideshow)
+                }
+                isLockedToStationLogo && radioLogoPath != null -> {
+                    // Gelockt auf Station Logo
+                    currentUiCoverSource = radioLogoPath
+                    nowPlayingCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+                    carouselNowPlayingCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+                    dabListCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+                }
+                !coverSourceLocked && currentDabSlideshow != null -> {
+                    // Nicht gelockt - Slideshow wenn verfügbar
+                    currentUiCoverSource = "slideshow"
+                    nowPlayingCover?.setImageBitmap(currentDabSlideshow)
+                    carouselNowPlayingCover?.setImageBitmap(currentDabSlideshow)
+                    dabListCover?.setImageBitmap(currentDabSlideshow)
+                }
+                !coverSourceLocked && radioLogoPath != null -> {
+                    // Nicht gelockt - Station Logo wenn verfügbar
+                    currentUiCoverSource = radioLogoPath
+                    nowPlayingCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+                    carouselNowPlayingCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+                    dabListCover?.load(java.io.File(radioLogoPath)) { crossfade(true) }
+                }
+                else -> {
+                    // Fallback auf DAB+ Icon
+                    currentUiCoverSource = "drawable:ic_fytfm_dab_plus_light"
+                    nowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+                    carouselNowPlayingCover?.setImageResource(R.drawable.ic_cover_placeholder)
+                    dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+                }
             }
             // Carousel auch zurücksetzen
             stationCarouselAdapter?.updateCurrentCover(null, null)
@@ -4153,20 +4185,39 @@ class MainActivity : AppCompatActivity() {
             // Update favorite icon
             updateDabListFavoriteIcon(station.isFavorite)
 
-            // Load cover image: Custom Logo -> Station logo -> Slideshow -> DAB+ icon fallback (light version for dark bg)
+            // Load cover image: Lock-Status beachten
+            val isLockedToDabLogo = coverSourceLocked && lockedCoverSource == DabCoverSource.DAB_LOGO
+            val isLockedToSlideshow = coverSourceLocked && lockedCoverSource == DabCoverSource.SLIDESHOW
+            val isLockedToStationLogo = coverSourceLocked && lockedCoverSource == DabCoverSource.STATION_LOGO
             val stationLogo = getLogoForDabStation(station.name, station.serviceId)
-            if (stationLogo != null) {
-                dabListCover?.load(java.io.File(stationLogo)) {
-                    crossfade(true)
-                    placeholder(R.drawable.ic_fytfm_dab_plus_light)
-                    error(R.drawable.ic_fytfm_dab_plus_light)
+
+            when {
+                isLockedToDabLogo -> {
+                    dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
                 }
-            } else if (currentDabSlideshow != null) {
-                // Use current slideshow if available
-                dabListCover?.setImageBitmap(currentDabSlideshow)
-            } else {
-                // Fallback to DAB+ icon (light version for dark background)
-                dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+                isLockedToStationLogo && stationLogo != null -> {
+                    dabListCover?.load(java.io.File(stationLogo)) {
+                        crossfade(true)
+                        placeholder(R.drawable.ic_fytfm_dab_plus_light)
+                        error(R.drawable.ic_fytfm_dab_plus_light)
+                    }
+                }
+                isLockedToSlideshow && currentDabSlideshow != null -> {
+                    dabListCover?.setImageBitmap(currentDabSlideshow)
+                }
+                !coverSourceLocked && stationLogo != null -> {
+                    dabListCover?.load(java.io.File(stationLogo)) {
+                        crossfade(true)
+                        placeholder(R.drawable.ic_fytfm_dab_plus_light)
+                        error(R.drawable.ic_fytfm_dab_plus_light)
+                    }
+                }
+                !coverSourceLocked && currentDabSlideshow != null -> {
+                    dabListCover?.setImageBitmap(currentDabSlideshow)
+                }
+                else -> {
+                    dabListCover?.setImageResource(R.drawable.ic_fytfm_dab_plus_light)
+                }
             }
         } else {
             dabListStationName?.text = getString(R.string.no_station)
