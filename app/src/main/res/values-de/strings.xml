@@ -25,6 +25,8 @@
 
     <!-- Settings Dialog -->
     <string name="settings_title">Radio Einstellungen</string>
+    <string name="search_settings">Einstellungen suchen…</string>
+    <string name="no_search_results">Keine Einstellungen gefunden</string>
     <string name="radio_editor">Radio Editor</string>
     <string name="power_on_startup">Radio beim Start einschalten</string>
     <string name="show_debug_infos">Debug Infos anzeigen</string>

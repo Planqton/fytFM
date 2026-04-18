@@ -6000,6 +6000,130 @@ class MainActivity : AppCompatActivity() {
             .setView(dialogView)
             .create()
 
+        // === Search Functionality ===
+        val searchSettings = dialogView.findViewById<android.widget.EditText>(R.id.searchSettings)
+        val btnClearSearch = dialogView.findViewById<ImageView>(R.id.btnClearSearch)
+        val textNoSearchResults = dialogView.findViewById<TextView>(R.id.textNoSearchResults)
+        val contentContainer = dialogView.findViewById<LinearLayout>(R.id.settingsContentContainer)
+
+        // Helper function to find the row container (direct child of contentContainer)
+        fun findRowContainer(view: View?): View? {
+            if (view == null || contentContainer == null) return null
+            var current: View? = view
+            while (current != null && current.parent != contentContainer) {
+                current = current.parent as? View
+            }
+            return current
+        }
+
+        // Define searchable items with their keywords (German and English)
+        data class SearchableItem(val viewId: Int, val keywords: List<String>)
+        val searchableItems = listOf(
+            // FM Section
+            SearchableItem(R.id.itemRadioEditorFm, listOf("fm", "radio", "editor", "sender", "bearbeiten", "edit", "stations")),
+            SearchableItem(R.id.switchLocalMode, listOf("loc", "local", "lokal", "signal", "empfang")),
+            SearchableItem(R.id.switchMonoMode, listOf("mono", "noise", "rauschen", "stereo", "audio")),
+            SearchableItem(R.id.itemRadioArea, listOf("area", "region", "gebiet", "europa", "usa", "japan")),
+            SearchableItem(R.id.switchAutoScanSensitivity, listOf("scan", "sensitivity", "empfindlichkeit", "auto")),
+            SearchableItem(R.id.switchDeezerFm, listOf("deezer", "cover", "fm", "artwork", "album")),
+            // AM Section
+            SearchableItem(R.id.itemRadioEditorAm, listOf("am", "radio", "editor", "sender", "bearbeiten", "edit", "stations")),
+            // DAB Section
+            SearchableItem(R.id.itemRadioEditorDab, listOf("dab", "radio", "editor", "sender", "bearbeiten", "edit", "stations")),
+            SearchableItem(R.id.switchDeezerDab, listOf("deezer", "cover", "dab", "artwork", "album")),
+            SearchableItem(R.id.switchDabVisualizer, listOf("visualizer", "audio", "spektrum", "anzeige", "dab")),
+            SearchableItem(R.id.itemDabVisualizerStyle, listOf("visualizer", "style", "stil", "bars", "wave", "dab")),
+            SearchableItem(R.id.itemDabRecordingPath, listOf("recording", "aufnahme", "pfad", "path", "speichern", "dab")),
+            // General Section
+            SearchableItem(R.id.switchAutoplayAtStartup, listOf("autoplay", "startup", "start", "automatisch", "einschalten")),
+            SearchableItem(R.id.switchShowDebug, listOf("debug", "info", "entwickler", "developer", "rds")),
+            SearchableItem(R.id.darkModeRow, listOf("dark", "mode", "dunkel", "hell", "theme", "design", "nacht")),
+            SearchableItem(R.id.switchAutoStart, listOf("autostart", "boot", "system", "start")),
+            SearchableItem(R.id.switchAutoBackground, listOf("background", "hintergrund", "auto", "minimieren")),
+            SearchableItem(R.id.switchStationChangeToast, listOf("toast", "overlay", "popup", "sender", "wechsel", "anzeige")),
+            SearchableItem(R.id.switchTickSound, listOf("tick", "sound", "ton", "klick", "audio")),
+            SearchableItem(R.id.switchRevertPrevNext, listOf("revert", "swap", "tauschen", "prev", "next", "vor", "zurück")),
+            // Radio Logos Section
+            SearchableItem(R.id.itemLogoTemplate, listOf("logo", "template", "vorlage", "bild", "sender")),
+            SearchableItem(R.id.switchShowLogosInFavorites, listOf("logo", "favoriten", "favorites", "anzeigen", "show")),
+            // App Section
+            SearchableItem(R.id.itemAppVersion, listOf("version", "update", "app", "aktualisieren")),
+            SearchableItem(R.id.itemLanguage, listOf("language", "sprache", "deutsch", "english")),
+            SearchableItem(R.id.itemNowPlayingAnimation, listOf("animation", "now playing", "aktuell", "slide", "fade")),
+            SearchableItem(R.id.switchCorrectionHelpers, listOf("correction", "korrektur", "helper", "hilfe", "rt", "radiotext")),
+            SearchableItem(R.id.itemViewCorrections, listOf("correction", "korrektur", "rules", "regeln", "anzeigen")),
+            // RDS Archive Section
+            SearchableItem(R.id.switchRdsLogging, listOf("rds", "logging", "archiv", "speichern", "log")),
+            SearchableItem(R.id.itemRdsRetention, listOf("retention", "aufbewahrung", "tage", "days", "rds")),
+            SearchableItem(R.id.itemClearArchive, listOf("clear", "löschen", "archiv", "delete", "rds")),
+            // Deezer Section
+            SearchableItem(R.id.switchDeezerCache, listOf("deezer", "cache", "speicher", "lokal")),
+            SearchableItem(R.id.btnViewDeezerCache, listOf("deezer", "cache", "anzeigen", "view")),
+            SearchableItem(R.id.btnClearDeezerCache, listOf("deezer", "cache", "löschen", "clear", "delete")),
+            // Other
+            SearchableItem(R.id.itemBugReport, listOf("bug", "report", "fehler", "melden", "log")),
+            SearchableItem(R.id.btnCloseApp, listOf("close", "beenden", "schließen", "app", "exit"))
+        )
+
+        // Store original visibility states
+        val originalVisibility = mutableMapOf<View, Int>()
+        contentContainer?.let { container ->
+            for (i in 0 until container.childCount) {
+                val child = container.getChildAt(i)
+                originalVisibility[child] = child.visibility
+            }
+        }
+
+        fun filterSettings(query: String) {
+            val trimmedQuery = query.trim().lowercase()
+
+            if (trimmedQuery.isEmpty()) {
+                // Restore all items to original state
+                originalVisibility.forEach { (view, visibility) ->
+                    view.visibility = visibility
+                }
+                textNoSearchResults.visibility = View.GONE
+                btnClearSearch.visibility = View.GONE
+                return
+            }
+
+            btnClearSearch.visibility = View.VISIBLE
+
+            // First: hide all items in content container
+            contentContainer?.let { container ->
+                for (i in 0 until container.childCount) {
+                    container.getChildAt(i).visibility = View.GONE
+                }
+            }
+
+            // Find and show matching items
+            var matchCount = 0
+            for (item in searchableItems) {
+                val view = dialogView.findViewById<View>(item.viewId)
+                val matches = item.keywords.any { it.contains(trimmedQuery) }
+                if (matches) {
+                    matchCount++
+                    // Find and show the row container
+                    val rowContainer = findRowContainer(view)
+                    rowContainer?.visibility = View.VISIBLE
+                }
+            }
+
+            textNoSearchResults.visibility = if (matchCount == 0) View.VISIBLE else View.GONE
+        }
+
+        searchSettings.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                filterSettings(s?.toString() ?: "")
+            }
+        })
+
+        btnClearSearch.setOnClickListener {
+            searchSettings.text.clear()
+        }
+
         // === General Settings ===
         // Autoplay at startup toggle
         val switchAutoplay = dialogView.findViewById<androidx.appcompat.widget.SwitchCompat>(R.id.switchAutoplayAtStartup)

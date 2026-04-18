@@ -13,20 +13,78 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:paddingTop="24dp"
-        android:paddingBottom="20dp"
+        android:paddingBottom="12dp"
         android:text="@string/settings_title"
         android:textColor="@color/dialog_text"
         android:textSize="20sp"
         android:textStyle="bold" />
 
+    <!-- Search Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="12dp"
+        android:gravity="center_vertical">
+
+        <EditText
+            android:id="@+id/searchSettings"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/search_background"
+            android:drawableStart="@drawable/ic_search"
+            android:drawablePadding="8dp"
+            android:drawableTint="#757575"
+            android:hint="@string/search_settings"
+            android:textColorHint="#999999"
+            android:textColor="@color/dialog_text"
+            android:textSize="14sp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:inputType="text"
+            android:imeOptions="actionSearch"
+            android:maxLines="1"
+            android:singleLine="true" />
+
+        <ImageView
+            android:id="@+id/btnClearSearch"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="8dp"
+            android:src="@drawable/ic_close"
+            android:tint="#757575"
+            android:padding="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:visibility="gone"
+            android:contentDescription="@string/clear" />
+
+    </LinearLayout>
+
+    <!-- No Results Message -->
+    <TextView
+        android:id="@+id/textNoSearchResults"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:padding="24dp"
+        android:text="@string/no_search_results"
+        android:textColor="@color/radio_text_secondary"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
     <!-- Scrollable Content -->
     <ScrollView
+        android:id="@+id/settingsScrollView"
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:fillViewport="true">
 
         <LinearLayout
+            android:id="@+id/settingsContentContainer"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
