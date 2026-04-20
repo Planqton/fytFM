@@ -6,10 +6,15 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
 
 /**
  * Unit tests for RtCombiner
  */
+@RunWith(RobolectricTestRunner::class)
+@Config(manifest = Config.NONE, sdk = [33])
 class RtCombinerTest {
 
     private lateinit var mockDeezerClient: DeezerClient
@@ -18,12 +23,6 @@ class RtCombinerTest {
 
     @Before
     fun setup() {
-        // Mock Android Log
-        mockkStatic(android.util.Log::class)
-        every { android.util.Log.d(any(), any()) } returns 0
-        every { android.util.Log.i(any(), any()) } returns 0
-        every { android.util.Log.e(any(), any()) } returns 0
-
         mockDeezerClient = mockk(relaxed = true)
         mockDeezerCache = mockk(relaxed = true)
     }
@@ -45,9 +44,9 @@ class RtCombinerTest {
     @Test
     fun `RtCombiner caches result for same RT`() = runTest {
         val trackInfo = TrackInfo(
-            trackId = 123,
             artist = "TestArtist",
             title = "TestTitle",
+            trackId = "123",
             album = "TestAlbum",
             coverUrl = "http://test.com/cover.jpg",
             popularity = 80
@@ -71,9 +70,9 @@ class RtCombinerTest {
     @Test
     fun `RtCombiner searches cache first`() = runTest {
         val cachedTrack = TrackInfo(
-            trackId = 456,
             artist = "CachedArtist",
             title = "CachedTitle",
+            trackId = "456",
             album = "CachedAlbum",
             coverUrl = "http://test.com/cached.jpg",
             popularity = 90
@@ -106,9 +105,9 @@ class RtCombinerTest {
     @Test
     fun `RtCombiner clears station-specific data on clearStation`() = runTest {
         val trackInfo = TrackInfo(
-            trackId = 789,
             artist = "Artist",
             title = "Title",
+            trackId = "789",
             album = "Album",
             coverUrl = "http://test.com/cover.jpg",
             popularity = 70
@@ -133,14 +132,16 @@ class RtCombinerTest {
     @Test
     fun `RtCombiner handles offline mode with cache only`() = runTest {
         val cachedTrack = TrackInfo(
-            trackId = 111,
             artist = "OfflineArtist",
             title = "OfflineTitle",
+            trackId = "111",
             album = "OfflineAlbum",
             coverUrl = null,
             popularity = 50
         )
 
+        // searchInCache calls searchLocalByParts first for "Artist - Title" format
+        every { mockDeezerCache.searchLocalByParts("OfflineArtist", "OfflineTitle") } returns cachedTrack
         every { mockDeezerCache.searchLocal(any()) } returns cachedTrack
 
         // No Deezer client = offline mode

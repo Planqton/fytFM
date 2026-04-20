@@ -80,6 +80,12 @@ dependencies {
     // Lifecycle
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
+    // Fragment KTX (for viewModels delegate)
+    implementation(libs.androidx.fragment.ktx)
+
+    // ViewModel (replaces Hilt for now due to AGP compatibility issues)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
+
     // DocumentFile for SAF (Storage Access Framework)
     implementation("androidx.documentfile:documentfile:1.0.1")
 
@@ -107,6 +113,7 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.mockk)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

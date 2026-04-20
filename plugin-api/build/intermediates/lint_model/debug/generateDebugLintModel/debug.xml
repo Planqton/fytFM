@@ -27,6 +27,6 @@
       applicationId="at.planqton.fytfm.plugin.api"
       generatedSourceFolders="build/generated/ap_generated_sources/debug/out"
       generatedResourceFolders="build/generated/res/resValues/debug"
-      desugaredMethodsFiles="/home/planqton/.gradle/caches/8.13/transforms/de29ba1e7d45099372dc3c1039be342d/transformed/D8BackportedDesugaredMethods.txt">
+      desugaredMethodsFiles="/home/planqton/.gradle/caches/8.13/transforms/79ce10d2d36d0527aef959309015f5dc/transformed/D8BackportedDesugaredMethods.txt">
   </artifact>
 </variant>

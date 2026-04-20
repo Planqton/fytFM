@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.util.Log
 import at.planqton.fytfm.FrequencyScaleView
 import at.planqton.fytfm.RdsManager
+import at.planqton.fytfm.TWUtilHelper
 import at.planqton.fytfm.dab.DabStation
 import at.planqton.fytfm.dab.DabTunerManager
 import at.planqton.fytfm.data.PresetRepository
@@ -14,19 +15,21 @@ import com.android.fmradio.FmNative
 /**
  * Haupt-Controller der FM/AM und DAB koordiniert.
  * Bietet eine einheitliche Schnittstelle für die MainActivity.
+ * Integriert TWUtil für FYT Head Unit MCU-Kommunikation.
  */
 class RadioController(
     private val context: Context,
     fmNative: FmNative,
     rdsManager: RdsManager,
     dabTunerManager: DabTunerManager,
-    private val presetRepository: PresetRepository
+    private val presetRepository: PresetRepository,
+    twUtil: TWUtilHelper? = null
 ) {
     companion object {
         private const val TAG = "RadioController"
     }
 
-    val fmAmController = FmAmController(context, fmNative, rdsManager, presetRepository)
+    val fmAmController = FmAmController(context, fmNative, rdsManager, presetRepository, twUtil)
     val dabController = DabController(context, dabTunerManager, presetRepository)
 
     var currentMode = FrequencyScaleView.RadioMode.FM
@@ -38,6 +41,7 @@ class RadioController(
     var onFrequencyChanged: ((frequency: Float) -> Unit)? = null
     var onStationChanged: ((RadioStation?) -> Unit)? = null
     var onRdsUpdate: ((ps: String, rt: String, rssi: Int, pi: Int, pty: Int) -> Unit)? = null
+    var onDabTunerReady: (() -> Unit)? = null
     var onDabServiceStarted: ((DabStation) -> Unit)? = null
     var onDabDynamicLabel: ((String) -> Unit)? = null
     var onDabSlideshow: ((Bitmap) -> Unit)? = null
@@ -70,6 +74,7 @@ class RadioController(
 
         // DAB Callbacks
         dabController.onTunerReady = {
+            onDabTunerReady?.invoke()
             dabController.tuneToLastOrFirst()
         }
         dabController.onServiceStarted = { station ->
@@ -239,5 +244,151 @@ class RadioController(
             FrequencyScaleView.RadioMode.AM -> presetRepository.loadAmStations()
             FrequencyScaleView.RadioMode.DAB, FrequencyScaleView.RadioMode.DAB_DEV -> presetRepository.loadDabStations()
         }
+    }
+
+    // ========== FM/AM Specific ==========
+
+    /**
+     * Setzt den Mute-Status (FM/AM).
+     * @return int result from native (0 = success)
+     */
+    fun setMute(mute: Boolean): Int {
+        return fmAmController.setMute(mute)
+    }
+
+    /**
+     * Gibt den RSSI zurück (FM/AM).
+     */
+    fun getRssi(): Int = fmAmController.getRssi()
+
+    /**
+     * Tuner-Settings anwenden.
+     */
+    fun setMonoMode(enabled: Boolean) = fmAmController.setMonoMode(enabled)
+    fun setLocalMode(enabled: Boolean) = fmAmController.setLocalMode(enabled)
+    fun setRadioArea(area: Int) = fmAmController.setRadioArea(area)
+
+    /**
+     * Power On mit detaillierten Schritten (für Legacy-Kompatibilität).
+     */
+    fun powerOnFmAmWithSteps(frequency: Float): Triple<Boolean, Boolean, Boolean> {
+        val result = fmAmController.powerOnWithSteps(frequency)
+        if (result.first && result.second) {
+            onRadioStateChanged?.invoke(true)
+        }
+        return result
+    }
+
+    /**
+     * Vollständige Power-On Sequenz für FYT Head Units.
+     * Beinhaltet TWUtil MCU-Kommunikation, FmService, und FM-Chip.
+     */
+    fun powerOnFmAmFull(frequency: Float): Boolean {
+        val success = fmAmController.powerOnFull(frequency)
+        if (success) {
+            onRadioStateChanged?.invoke(true)
+        }
+        return success
+    }
+
+    /**
+     * Vollständige Power-Off Sequenz für FYT Head Units.
+     */
+    fun powerOffFmAmFull() {
+        fmAmController.powerOffFull()
+        onRadioStateChanged?.invoke(false)
+    }
+
+    /**
+     * Power Off für FM/AM.
+     */
+    fun powerOffFmAm() {
+        fmAmController.powerOff()
+        onRadioStateChanged?.invoke(false)
+    }
+
+    // ========== DAB Specific ==========
+
+    /**
+     * DAB Audio Session ID.
+     */
+    fun getDabAudioSessionId(): Int = dabController.getAudioSessionId()
+
+    /**
+     * DAB Service direkt tunen.
+     */
+    fun tuneDabService(serviceId: Int, ensembleId: Int): Boolean {
+        return dabController.tuneService(serviceId, ensembleId)
+    }
+
+    /**
+     * DAB Recording.
+     */
+    fun isDabRecording(): Boolean = dabController.isRecording()
+    fun startDabRecording(context: Context, path: String): Boolean = dabController.startRecording(context, path)
+    fun stopDabRecording() = dabController.stopRecording()
+
+    /**
+     * DAB EPG.
+     */
+    fun getDabEpgData(): at.planqton.fytfm.dab.EpgData? = dabController.getCurrentEpgData() as? at.planqton.fytfm.dab.EpgData
+
+    /**
+     * DAB verfügbar?
+     */
+    fun isDabAvailable(): Boolean = dabController.isDabAvailable()
+
+    /**
+     * Prüft ob DAB eingeschaltet ist.
+     */
+    fun isDabOn(): Boolean = dabController.isDabOn
+
+    /**
+     * Prüft ob ein DAB-Tuner vorhanden ist.
+     */
+    fun hasDabTuner(): Boolean = dabController.hasTuner()
+
+    /**
+     * Power Off für DAB.
+     */
+    fun powerOffDab() {
+        dabController.powerOff()
+        onRadioStateChanged?.invoke(false)
+    }
+
+    /**
+     * Power On für DAB.
+     */
+    fun powerOnDab(): Boolean {
+        val success = dabController.powerOn()
+        if (success) {
+            onRadioStateChanged?.invoke(true)
+        }
+        return success
+    }
+
+    // ========== Extended Callbacks ==========
+
+    var onDabServiceStopped: (() -> Unit)? = null
+    var onDabAudioStarted: ((Int) -> Unit)? = null
+    var onDabDlPlus: ((artist: String?, title: String?) -> Unit)? = null
+    var onDabReceptionStats: ((sync: Boolean, quality: String, snr: Int) -> Unit)? = null
+    var onDabRecordingStarted: (() -> Unit)? = null
+    var onDabRecordingStopped: ((java.io.File?) -> Unit)? = null
+    var onDabRecordingError: ((String) -> Unit)? = null
+    var onDabEpgReceived: ((Any?) -> Unit)? = null
+
+    /**
+     * Erweiterte DAB-Callbacks setzen.
+     */
+    fun setupExtendedDabCallbacks() {
+        dabController.onServiceStopped = { onDabServiceStopped?.invoke() }
+        dabController.onAudioStarted = { sessionId -> onDabAudioStarted?.invoke(sessionId) }
+        dabController.onDlPlus = { artist, title -> onDabDlPlus?.invoke(artist, title) }
+        dabController.onReceptionStats = { sync, quality, snr -> onDabReceptionStats?.invoke(sync, quality, snr) }
+        dabController.onRecordingStarted = { onDabRecordingStarted?.invoke() }
+        dabController.onRecordingStopped = { file -> onDabRecordingStopped?.invoke(file) }
+        dabController.onRecordingError = { error -> onDabRecordingError?.invoke(error) }
+        dabController.onEpgDataReceived = { data -> onDabEpgReceived?.invoke(data) }
     }
 }

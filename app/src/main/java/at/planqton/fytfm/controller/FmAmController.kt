@@ -1,9 +1,11 @@
 package at.planqton.fytfm.controller
 
 import android.content.Context
+import android.content.Intent
 import android.util.Log
 import at.planqton.fytfm.FrequencyScaleView
 import at.planqton.fytfm.RdsManager
+import at.planqton.fytfm.TWUtilHelper
 import at.planqton.fytfm.data.PresetRepository
 import at.planqton.fytfm.data.RadioStation
 import com.android.fmradio.FmNative
@@ -11,12 +13,14 @@ import com.android.fmradio.FmNative
 /**
  * Controller für FM/AM Radio Logik.
  * Kapselt FM/AM-State und Tuner-Operationen aus MainActivity.
+ * Integriert TWUtil für FYT Head Unit MCU-Kommunikation.
  */
 class FmAmController(
     private val context: Context,
     private val fmNative: FmNative,
     private val rdsManager: RdsManager,
-    private val presetRepository: PresetRepository
+    private val presetRepository: PresetRepository,
+    private val twUtil: TWUtilHelper? = null
 ) {
     companion object {
         private const val TAG = "FmAmController"
@@ -141,6 +145,148 @@ class FmAmController(
             onRadioStateChanged?.invoke(false)
         } catch (e: Exception) {
             Log.e(TAG, "powerOff error: ${e.message}", e)
+        }
+    }
+
+    // ========== Full Power Sequence (with TWUtil/MCU) ==========
+
+    /**
+     * Vollständige Power-On Sequenz für FYT Head Units.
+     * Beinhaltet TWUtil MCU-Kommunikation, FmService, und FM-Chip.
+     *
+     * @param frequency Die Frequenz zum Starten
+     * @return true wenn erfolgreich
+     */
+    fun powerOnFull(frequency: Float): Boolean {
+        Log.i(TAG, "======= powerOnFull($frequency) =======")
+
+        try {
+            currentFrequency = frequency
+
+            // Step 0: FmService für Audio-Routing starten
+            Log.i(TAG, "Step 0: Starting FmService for audio routing")
+            try {
+                val serviceIntent = Intent()
+                serviceIntent.setClassName("com.syu.music", "com.android.fmradio.FmService")
+                context.startService(serviceIntent)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not start FmService: ${e.message}")
+            }
+
+            // Step 0b: ACTION_OPEN_RADIO Broadcast
+            Log.i(TAG, "Step 0b: Sending ACTION_OPEN_RADIO broadcast")
+            context.sendBroadcast(Intent("com.action.ACTION_OPEN_RADIO"))
+
+            // Step 1+2: TWUtil MCU Initialisierung
+            if (twUtil?.isAvailable == true) {
+                Log.i(TAG, "Step 1: TWUtil.initRadioSequence()")
+                twUtil.initRadioSequence()
+
+                Log.i(TAG, "Step 2: TWUtil.radioOn()")
+                twUtil.radioOn()
+
+                Log.i(TAG, "Step 2b: TWUtil.unmute()")
+                twUtil.unmute()
+
+                // Kurze Pause für MCU
+                Thread.sleep(100)
+            } else {
+                Log.w(TAG, "TWUtil NOT available - skipping MCU init!")
+            }
+
+            // Step 3: FM-Chip einschalten
+            Log.i(TAG, "Step 3: FmNative.openDev()")
+            val openResult = fmNative.openDev()
+            Log.i(TAG, "openDev result: $openResult")
+
+            Log.i(TAG, "Step 4: FmNative.powerUp($frequency)")
+            val powerResult = fmNative.powerUp(frequency)
+            Log.i(TAG, "powerUp result: $powerResult")
+
+            Log.i(TAG, "Step 5: FmNative.tune($frequency)")
+            val tuneResult = fmNative.tune(frequency)
+            Log.i(TAG, "tune result: $tuneResult")
+
+            // Step 5b: Unmute FM-Chip
+            Log.i(TAG, "Step 5b: FmNative.setMute(false)")
+            val muteResult = fmNative.setMute(false)
+            Log.i(TAG, "setMute(false) result: $muteResult")
+
+            // Step 5c: Audio-Source nochmal setzen
+            if (twUtil?.isAvailable == true) {
+                Log.i(TAG, "Step 5c: TWUtil.setAudioSourceFm() (repeat)")
+                twUtil.setAudioSourceFm()
+            }
+
+            isRadioOn = openResult && powerResult
+            Log.i(TAG, "isRadioOn = $isRadioOn")
+
+            if (isRadioOn) {
+                // Step 6: RDS aktivieren
+                Log.i(TAG, "Step 6: RdsManager.enableRds()")
+                rdsManager.enableRds()
+
+                // Step 6b: Tuner Settings anwenden
+                Log.i(TAG, "Step 6b: Apply tuner settings")
+                applyTunerSettings()
+
+                // Step 7: RDS-Polling starten
+                Log.i(TAG, "Step 7: startPolling()")
+                rdsManager.startPolling(rdsCallback)
+
+                onRadioStateChanged?.invoke(true)
+            } else {
+                Log.e(TAG, "RADIO FAILED TO START!")
+                onError?.invoke("Radio konnte nicht gestartet werden")
+            }
+
+            Log.i(TAG, "======= powerOnFull() done =======")
+            return isRadioOn
+
+        } catch (e: Exception) {
+            Log.e(TAG, "powerOnFull error: ${e.message}", e)
+            isRadioOn = false
+            onError?.invoke("Tuner Error: ${e.message}")
+            return false
+        }
+    }
+
+    /**
+     * Vollständige Power-Off Sequenz für FYT Head Units.
+     */
+    fun powerOffFull() {
+        Log.i(TAG, "======= powerOffFull() =======")
+
+        try {
+            rdsManager.stopPolling()
+            fmNative.powerOff()
+            twUtil?.radioOff()
+            isRadioOn = false
+            onRadioStateChanged?.invoke(false)
+            Log.i(TAG, "======= powerOffFull() done =======")
+        } catch (e: Exception) {
+            Log.e(TAG, "powerOffFull error: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Wendet Tuner-Settings an (LOC, Mono, Area).
+     */
+    private fun applyTunerSettings() {
+        try {
+            val localMode = presetRepository.isLocalMode()
+            fmNative.setLocalMode(localMode)
+            Log.d(TAG, "Applied LOC mode: $localMode")
+
+            val monoMode = presetRepository.isMonoMode()
+            fmNative.setMonoMode(monoMode)
+            Log.d(TAG, "Applied Mono mode: $monoMode")
+
+            val area = presetRepository.getRadioArea()
+            fmNative.setRadioArea(area)
+            Log.d(TAG, "Applied Radio Area: $area")
+        } catch (e: Exception) {
+            Log.e(TAG, "applyTunerSettings error: ${e.message}")
         }
     }
 
@@ -295,6 +441,60 @@ class FmAmController(
         } catch (e: Exception) {
             Log.e(TAG, "setRadioArea error: ${e.message}")
         }
+    }
+
+    /**
+     * Setzt den Mute-Status.
+     * @return int result from native (0 = success)
+     */
+    fun setMute(mute: Boolean): Int {
+        return try {
+            fmNative.setMute(mute)
+        } catch (e: Exception) {
+            Log.e(TAG, "setMute error: ${e.message}")
+            -1
+        }
+    }
+
+    /**
+     * Gibt den aktuellen RSSI-Wert zurück.
+     */
+    fun getRssi(): Int {
+        return try {
+            fmNative.getrssi()
+        } catch (e: Exception) {
+            Log.e(TAG, "getRssi error: ${e.message}")
+            0
+        }
+    }
+
+    /**
+     * Öffnet das FM-Device.
+     */
+    fun openDev(): Boolean {
+        return try {
+            fmNative.openDev()
+        } catch (e: Exception) {
+            Log.e(TAG, "openDev error: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Erweiterte Power-On Methode mit separaten Schritten.
+     */
+    fun powerOnWithSteps(frequency: Float): Triple<Boolean, Boolean, Boolean> {
+        val openResult = openDev()
+        val powerResult = try { fmNative.powerUp(frequency) } catch (e: Exception) { false }
+        val tuneResult = try { fmNative.tune(frequency) } catch (e: Exception) { false }
+
+        if (openResult && powerResult) {
+            isRadioOn = true
+            currentFrequency = frequency
+            onRadioStateChanged?.invoke(true)
+        }
+
+        return Triple(openResult, powerResult, tuneResult)
     }
 
     // Helper

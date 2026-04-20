@@ -219,6 +219,38 @@ class DabController(
         return dabTunerManager.isDabAvailable(context)
     }
 
+    /**
+     * Gibt die Audio Session ID zurück.
+     */
+    fun getAudioSessionId(): Int = dabTunerManager.getAudioSessionId()
+
+    // ========== Recording ==========
+
+    var onRecordingStarted: (() -> Unit)? = null
+    var onRecordingStopped: ((java.io.File?) -> Unit)? = null
+    var onRecordingError: ((String) -> Unit)? = null
+
+    fun isRecording(): Boolean = dabTunerManager.isRecording()
+
+    fun startRecording(context: Context, path: String): Boolean {
+        dabTunerManager.onRecordingStarted = { onRecordingStarted?.invoke() }
+        dabTunerManager.onRecordingStopped = { file -> onRecordingStopped?.invoke(file) }
+        dabTunerManager.onRecordingError = { error -> onRecordingError?.invoke(error) }
+        return dabTunerManager.startRecording(context, path)
+    }
+
+    fun stopRecording() = dabTunerManager.stopRecording()
+
+    // ========== EPG ==========
+
+    var onEpgDataReceived: ((at.planqton.fytfm.dab.EpgData?) -> Unit)? = null
+
+    fun getCurrentEpgData(): at.planqton.fytfm.dab.EpgData? = dabTunerManager.getCurrentEpgData()
+
+    // ========== Audio ==========
+
+    var onAudioStarted: ((Int) -> Unit)? = null
+
     // Persistence
     fun saveLastService(serviceId: Int, ensembleId: Int) {
         prefs.edit()

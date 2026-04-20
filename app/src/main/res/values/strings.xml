@@ -282,6 +282,9 @@
 
     <!-- Bug Report Dialog -->
     <string name="bug_report_type_title">Bug Report Type</string>
+    <string name="general_bug_report">General Bug Report</string>
+    <string name="parser_bug_report">Parser Bug Report</string>
+    <string name="deezer_bug_report">Deezer Bug Report</string>
     <string name="collecting_parser_logs">Collecting parser logs…</string>
     <string name="parser_bug_hint">What was parsed incorrectly? (optional)</string>
     <string name="parser_bug_report_title">Parser Bug Report</string>
