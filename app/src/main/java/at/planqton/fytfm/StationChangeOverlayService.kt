@@ -31,6 +31,7 @@ import java.io.File
 class StationChangeOverlayService : Service() {
 
     companion object {
+        private const val TAG = "fytFM"
         const val ACTION_SHOW_OVERLAY = "at.planqton.fytfm.SHOW_STATION_OVERLAY"
         const val ACTION_SHOW_PERMANENT = "at.planqton.fytfm.SHOW_PERMANENT_OVERLAY"
         const val ACTION_HIDE_OVERLAY = "at.planqton.fytfm.HIDE_OVERLAY"
@@ -102,7 +103,7 @@ class StationChangeOverlayService : Service() {
             registerReceiver(stationChangeReceiver, filter)
         }
 
-        android.util.Log.i("fytFM", "StationChangeOverlayService started")
+        android.util.Log.i(TAG, "StationChangeOverlayService started")
     }
 
     override fun onDestroy() {
@@ -111,7 +112,7 @@ class StationChangeOverlayService : Service() {
         try {
             unregisterReceiver(stationChangeReceiver)
         } catch (e: Exception) {}
-        android.util.Log.i("fytFM", "StationChangeOverlayService stopped")
+        android.util.Log.i(TAG, "StationChangeOverlayService stopped")
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -187,7 +188,7 @@ class StationChangeOverlayService : Service() {
             }
             currentStations = stations
         } catch (e: Exception) {
-            android.util.Log.e("fytFM", "Error parsing stations: ${e.message}")
+            android.util.Log.e(TAG, "Error parsing stations: ${e.message}")
         }
     }
 
@@ -294,7 +295,7 @@ class StationChangeOverlayService : Service() {
                 }
 
             } catch (e: Exception) {
-                android.util.Log.e("fytFM", "Error showing overlay: ${e.message}")
+                android.util.Log.e(TAG, "Error showing overlay: ${e.message}")
             }
         }
     }
@@ -378,7 +379,7 @@ class StationChangeOverlayService : Service() {
                 }
 
             } catch (e: Exception) {
-                android.util.Log.e("fytFM", "Error showing DAB overlay: ${e.message}")
+                android.util.Log.e(TAG, "Error showing DAB overlay: ${e.message}")
             }
         }
     }
@@ -422,9 +423,9 @@ class StationChangeOverlayService : Service() {
         try {
             windowManager?.addView(overlayView, params)
             isOverlayVisible = true
-            android.util.Log.d("fytFM", "Carousel overlay shown")
+            android.util.Log.d(TAG, "Carousel overlay shown")
         } catch (e: Exception) {
-            android.util.Log.e("fytFM", "Failed to add overlay: ${e.message}")
+            android.util.Log.e(TAG, "Failed to add overlay: ${e.message}")
         }
     }
 
@@ -438,9 +439,9 @@ class StationChangeOverlayService : Service() {
                     carouselAdapter = null
                     isOverlayVisible = false
                     anchorPosition = -1  // Anker zurücksetzen
-                    android.util.Log.d("fytFM", "Carousel overlay hidden")
+                    android.util.Log.d(TAG, "Carousel overlay hidden")
                 } catch (e: Exception) {
-                    android.util.Log.e("fytFM", "Failed to remove overlay: ${e.message}")
+                    android.util.Log.e(TAG, "Failed to remove overlay: ${e.message}")
                 }
             }
         }

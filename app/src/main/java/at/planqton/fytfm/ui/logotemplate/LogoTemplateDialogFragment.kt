@@ -441,7 +441,7 @@ class LogoTemplateDialogFragment : DialogFragment() {
                         Toast.makeText(context, getString(R.string.logo_downloaded), Toast.LENGTH_SHORT).show()
 
                     } catch (e: Exception) {
-                        android.util.Log.e("fytFM", "Failed to download logo: ${e.message}")
+                        android.util.Log.e(TAG, "Failed to download logo: ${e.message}")
                         if (!dialog.isShowing) return@launch
 
                         layoutSaveProgress.visibility = View.GONE

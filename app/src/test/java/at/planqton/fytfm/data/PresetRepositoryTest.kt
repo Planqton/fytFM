@@ -248,4 +248,60 @@ class PresetRepositoryTest {
         verify { mockEditor.putInt("auto_background_delay", 30) }
         verify { mockEditor.apply() }
     }
+
+    @Test
+    fun `fmStations flow emits list after saveFmStations`() {
+        val stations = listOf(
+            RadioStation(frequency = 99.9f, name = "Test", rssi = 50, isFavorite = true)
+        )
+        val captured = slot<String>()
+        every { mockEditor.putString("stations", capture(captured)) } answers {
+            every { mockFmPrefs.getString("stations", null) } returns captured.captured
+            mockEditor
+        }
+
+        repository.saveFmStations(stations)
+
+        assertEquals(1, repository.fmStations.value.size)
+        assertEquals("Test", repository.fmStations.value[0].name)
+        assertEquals(99.9f, repository.fmStations.value[0].frequency, 0.01f)
+    }
+
+    @Test
+    fun `fmStations flow resets to empty after clearFmStations`() {
+        val stations = listOf(
+            RadioStation(frequency = 101.1f, name = "X", rssi = 50, isFavorite = false)
+        )
+        val captured = slot<String>()
+        every { mockEditor.putString("stations", capture(captured)) } answers {
+            every { mockFmPrefs.getString("stations", null) } returns captured.captured
+            mockEditor
+        }
+        repository.saveFmStations(stations)
+        assertEquals(1, repository.fmStations.value.size)
+
+        repository.clearFmStations()
+
+        assertTrue(repository.fmStations.value.isEmpty())
+    }
+
+    @Test
+    fun `dabStations flow emits after saveDabStations`() {
+        val stations = listOf(
+            RadioStation(
+                frequency = 178.352f, name = "Radio Dab", rssi = 0,
+                isFavorite = false, isDab = true, serviceId = 42, ensembleId = 7, ensembleLabel = "E"
+            )
+        )
+        val captured = slot<String>()
+        every { mockEditor.putString("stations", capture(captured)) } answers {
+            every { mockDabPrefs.getString("stations", null) } returns captured.captured
+            mockEditor
+        }
+
+        repository.saveDabStations(stations)
+
+        assertEquals(1, repository.dabStations.value.size)
+        assertEquals(42, repository.dabStations.value[0].serviceId)
+    }
 }

@@ -2390,9 +2390,17 @@
     </LinearLayout>
 
     <!-- PiP Layout (Picture-in-Picture mode) -->
-    <include layout="@layout/pip_layout" />
+    <include
+        android:id="@+id/pipLayout"
+        layout="@layout/pip_layout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
     <!-- Archive Overlay -->
-    <include layout="@layout/overlay_archive" />
+    <include
+        android:id="@+id/archiveOverlay"
+        layout="@layout/overlay_archive"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
 </FrameLayout>

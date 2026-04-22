@@ -272,7 +272,7 @@ class FmAmController(
     /**
      * Wendet Tuner-Settings an (LOC, Mono, Area).
      */
-    private fun applyTunerSettings() {
+    fun applyTunerSettings() {
         try {
             val localMode = presetRepository.isLocalMode()
             fmNative.setLocalMode(localMode)
@@ -465,6 +465,18 @@ class FmAmController(
         } catch (e: Exception) {
             Log.e(TAG, "getRssi error: ${e.message}")
             0
+        }
+    }
+
+    /**
+     * Tuned zu einer Frequenz ohne Speicherung (für Seek-Operationen).
+     */
+    fun tuneRaw(frequency: Float): Boolean {
+        return try {
+            fmNative.tune(frequency)
+        } catch (e: Exception) {
+            Log.e(TAG, "tuneRaw error: ${e.message}")
+            false
         }
     }
 

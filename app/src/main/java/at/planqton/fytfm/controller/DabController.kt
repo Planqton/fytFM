@@ -111,6 +111,20 @@ class DabController(
         dabTunerManager.onReceptionStats = { sync, quality, snr ->
             onReceptionStats?.invoke(sync, quality, snr)
         }
+
+        dabTunerManager.onAudioStarted = { audioSessionId ->
+            Log.d(TAG, "Audio started with session ID: $audioSessionId")
+            onAudioStarted?.invoke(audioSessionId)
+        }
+
+        dabTunerManager.onRecordingStarted = { onRecordingStarted?.invoke() }
+        dabTunerManager.onRecordingStopped = { file -> onRecordingStopped?.invoke(file) }
+        dabTunerManager.onRecordingError = { error -> onRecordingError?.invoke(error) }
+
+        dabTunerManager.onEpgDataReceived = { epgData ->
+            Log.d(TAG, "EPG data received")
+            onEpgDataReceived?.invoke(epgData)
+        }
     }
 
     /**

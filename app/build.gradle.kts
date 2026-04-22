@@ -31,6 +31,7 @@ android {
     buildFeatures {
         buildConfig = true
         aidl = true
+        viewBinding = true
     }
 
     buildTypes {

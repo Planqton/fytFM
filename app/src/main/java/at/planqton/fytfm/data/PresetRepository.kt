@@ -2,6 +2,9 @@ package at.planqton.fytfm.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -29,6 +32,22 @@ class PresetRepository(private val context: Context) {
     private val dabPrefs: SharedPreferences = context.getSharedPreferences(PREFS_DAB, Context.MODE_PRIVATE)
     private val dabDevPrefs: SharedPreferences = context.getSharedPreferences(PREFS_DAB_DEV, Context.MODE_PRIVATE)
     private val settingsPrefs: SharedPreferences = context.getSharedPreferences(PREFS_SETTINGS, Context.MODE_PRIVATE)
+
+    // === Reactive state for the primary station lists ===
+    // load*Stations() continue to read from SharedPreferences (authoritative).
+    // These flows mirror that state; every save*/clear*/merge*/toggle* path that
+    // goes through save*Stations()/clear*Stations() emits the new list.
+    private val _fmStations = MutableStateFlow(loadStations(fmPrefs, isAM = false))
+    val fmStations: StateFlow<List<RadioStation>> = _fmStations.asStateFlow()
+
+    private val _amStations = MutableStateFlow(loadStations(amPrefs, isAM = true))
+    val amStations: StateFlow<List<RadioStation>> = _amStations.asStateFlow()
+
+    private val _dabStations = MutableStateFlow(loadStations(dabPrefs, isAM = false, isDab = true))
+    val dabStations: StateFlow<List<RadioStation>> = _dabStations.asStateFlow()
+
+    private val _dabDevStations = MutableStateFlow(loadStations(dabDevPrefs, isAM = false, isDab = true))
+    val dabDevStations: StateFlow<List<RadioStation>> = _dabDevStations.asStateFlow()
 
     // === Per-Tuner-Instance Storage ===
 
@@ -157,10 +176,12 @@ class PresetRepository(private val context: Context) {
 
     fun saveFmStations(stations: List<RadioStation>) {
         saveStations(fmPrefs, stations)
+        _fmStations.value = loadStations(fmPrefs, isAM = false)
     }
 
     fun saveAmStations(stations: List<RadioStation>) {
         saveStations(amPrefs, stations)
+        _amStations.value = loadStations(amPrefs, isAM = true)
     }
 
     fun loadFmStations(): List<RadioStation> {
@@ -173,6 +194,7 @@ class PresetRepository(private val context: Context) {
 
     fun saveDabStations(stations: List<RadioStation>) {
         saveStations(dabPrefs, stations)
+        _dabStations.value = loadStations(dabPrefs, isAM = false, isDab = true)
     }
 
     fun loadDabStations(): List<RadioStation> {
@@ -181,11 +203,13 @@ class PresetRepository(private val context: Context) {
 
     fun clearDabStations() {
         dabPrefs.edit().remove(KEY_STATIONS).apply()
+        _dabStations.value = emptyList()
     }
 
     // DAB Dev (Mock) Stationen - separate von echten DAB Stationen
     fun saveDabDevStations(stations: List<RadioStation>) {
         saveStations(dabDevPrefs, stations)
+        _dabDevStations.value = loadStations(dabDevPrefs, isAM = false, isDab = true)
     }
 
     fun loadDabDevStations(): List<RadioStation> {
@@ -194,6 +218,7 @@ class PresetRepository(private val context: Context) {
 
     fun clearDabDevStations() {
         dabDevPrefs.edit().remove(KEY_STATIONS).apply()
+        _dabDevStations.value = emptyList()
     }
 
     private fun saveStations(prefs: SharedPreferences, stations: List<RadioStation>) {
@@ -247,10 +272,12 @@ class PresetRepository(private val context: Context) {
 
     fun clearFmStations() {
         fmPrefs.edit().remove(KEY_STATIONS).apply()
+        _fmStations.value = emptyList()
     }
 
     fun clearAmStations() {
         amPrefs.edit().remove(KEY_STATIONS).apply()
+        _amStations.value = emptyList()
     }
 
     /**

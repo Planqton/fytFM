@@ -11,6 +11,9 @@ import at.planqton.fytfm.dab.DabTunerManager
 import at.planqton.fytfm.data.PresetRepository
 import at.planqton.fytfm.data.RadioStation
 import com.android.fmradio.FmNative
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Haupt-Controller der FM/AM und DAB koordiniert.
@@ -47,6 +50,12 @@ class RadioController(
     var onDabSlideshow: ((Bitmap) -> Unit)? = null
     var onError: ((String) -> Unit)? = null
 
+    // Multi-Listener event stream (parallel zu den Lambda-Properties oben).
+    // Bestehende Callbacks bleiben funktionsfähig; ViewModels koennen
+    // unabhaengig per collect{} mithoeren ohne Callbacks zu ueberschreiben.
+    private val _events = MutableSharedFlow<RadioEvent>(extraBufferCapacity = 64)
+    val events: SharedFlow<RadioEvent> = _events.asSharedFlow()
+
     /**
      * Initialisiert beide Controller.
      */
@@ -54,6 +63,7 @@ class RadioController(
         fmAmController.initialize()
         dabController.initialize()
         setupCallbacks()
+        setupExtendedDabCallbacks()
         currentMode = fmAmController.getLastMode()
     }
 
@@ -61,33 +71,42 @@ class RadioController(
         // FM/AM Callbacks
         fmAmController.onRadioStateChanged = { isOn ->
             onRadioStateChanged?.invoke(isOn)
+            _events.tryEmit(RadioEvent.RadioStateChanged(isOn))
         }
         fmAmController.onFrequencyChanged = { freq ->
             onFrequencyChanged?.invoke(freq)
+            _events.tryEmit(RadioEvent.FrequencyChanged(freq))
         }
         fmAmController.onRdsUpdate = { ps, rt, rssi, pi, pty ->
             onRdsUpdate?.invoke(ps, rt, rssi, pi, pty)
+            _events.tryEmit(RadioEvent.RdsUpdate(ps, rt, rssi, pi, pty))
         }
         fmAmController.onError = { msg ->
             onError?.invoke(msg)
+            _events.tryEmit(RadioEvent.ErrorEvent(msg))
         }
 
         // DAB Callbacks
         dabController.onTunerReady = {
             onDabTunerReady?.invoke()
+            _events.tryEmit(RadioEvent.DabTunerReady)
             dabController.tuneToLastOrFirst()
         }
         dabController.onServiceStarted = { station ->
             onDabServiceStarted?.invoke(station)
+            _events.tryEmit(RadioEvent.DabServiceStarted(station))
         }
         dabController.onDynamicLabel = { dls ->
             onDabDynamicLabel?.invoke(dls)
+            _events.tryEmit(RadioEvent.DabDynamicLabel(dls))
         }
         dabController.onSlideshow = { bitmap ->
             onDabSlideshow?.invoke(bitmap)
+            _events.tryEmit(RadioEvent.DabSlideshow(bitmap))
         }
         dabController.onTunerError = { msg ->
             onError?.invoke(msg)
+            _events.tryEmit(RadioEvent.ErrorEvent(msg))
         }
     }
 
@@ -115,6 +134,7 @@ class RadioController(
 
         currentMode = mode
         onModeChanged?.invoke(mode)
+        _events.tryEmit(RadioEvent.ModeChanged(mode))
 
         // Neuen Modus vorbereiten
         when (mode) {
@@ -267,6 +287,12 @@ class RadioController(
     fun setMonoMode(enabled: Boolean) = fmAmController.setMonoMode(enabled)
     fun setLocalMode(enabled: Boolean) = fmAmController.setLocalMode(enabled)
     fun setRadioArea(area: Int) = fmAmController.setRadioArea(area)
+    fun applyTunerSettings() = fmAmController.applyTunerSettings()
+
+    /**
+     * Tuned zu einer Frequenz ohne Speicherung (für Seek-Operationen).
+     */
+    fun tuneRaw(frequency: Float): Boolean = fmAmController.tuneRaw(frequency)
 
     /**
      * Power On mit detaillierten Schritten (für Legacy-Kompatibilität).
@@ -382,13 +408,37 @@ class RadioController(
      * Erweiterte DAB-Callbacks setzen.
      */
     fun setupExtendedDabCallbacks() {
-        dabController.onServiceStopped = { onDabServiceStopped?.invoke() }
-        dabController.onAudioStarted = { sessionId -> onDabAudioStarted?.invoke(sessionId) }
-        dabController.onDlPlus = { artist, title -> onDabDlPlus?.invoke(artist, title) }
-        dabController.onReceptionStats = { sync, quality, snr -> onDabReceptionStats?.invoke(sync, quality, snr) }
-        dabController.onRecordingStarted = { onDabRecordingStarted?.invoke() }
-        dabController.onRecordingStopped = { file -> onDabRecordingStopped?.invoke(file) }
-        dabController.onRecordingError = { error -> onDabRecordingError?.invoke(error) }
-        dabController.onEpgDataReceived = { data -> onDabEpgReceived?.invoke(data) }
+        dabController.onServiceStopped = {
+            onDabServiceStopped?.invoke()
+            _events.tryEmit(RadioEvent.DabServiceStopped)
+        }
+        dabController.onAudioStarted = { sessionId ->
+            onDabAudioStarted?.invoke(sessionId)
+            _events.tryEmit(RadioEvent.DabAudioStarted(sessionId))
+        }
+        dabController.onDlPlus = { artist, title ->
+            onDabDlPlus?.invoke(artist, title)
+            _events.tryEmit(RadioEvent.DabDlPlus(artist, title))
+        }
+        dabController.onReceptionStats = { sync, quality, snr ->
+            onDabReceptionStats?.invoke(sync, quality, snr)
+            _events.tryEmit(RadioEvent.DabReceptionStats(sync, quality, snr))
+        }
+        dabController.onRecordingStarted = {
+            onDabRecordingStarted?.invoke()
+            _events.tryEmit(RadioEvent.DabRecordingStarted)
+        }
+        dabController.onRecordingStopped = { file ->
+            onDabRecordingStopped?.invoke(file)
+            _events.tryEmit(RadioEvent.DabRecordingStopped(file))
+        }
+        dabController.onRecordingError = { error ->
+            onDabRecordingError?.invoke(error)
+            _events.tryEmit(RadioEvent.DabRecordingError(error))
+        }
+        dabController.onEpgDataReceived = { data ->
+            onDabEpgReceived?.invoke(data)
+            _events.tryEmit(RadioEvent.DabEpgReceived(data))
+        }
     }
 }
