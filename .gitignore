@@ -1,0 +1,38 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+# Upload folder (credentials, keys, scripts)
+upload/
+
+# App Flavor & Claude Code Dokumentation
+appflavor.md
+
+# Alt Ordner
+/alt
+
+# Other APKs for analysis
+/otherapps
+
+# Interne Dokumentation
+/doku
+
+# Working/scratch folders + notes
+/umstrukturierung
+/debugscreenshots
+last.md
+fm.md
+
+# Sammelordner für verschobene/archivierte Dateien
+/Weiteres

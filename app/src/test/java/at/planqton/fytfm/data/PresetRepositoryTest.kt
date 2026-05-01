@@ -1,0 +1,257 @@
+package at.planqton.fytfm.data
+
+import android.content.Context
+import android.content.SharedPreferences
+import io.mockk.*
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+/**
+ * Unit tests for PresetRepository
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(manifest = Config.NONE, sdk = [33])
+class PresetRepositoryTest {
+
+    private lateinit var mockContext: Context
+    private lateinit var mockFmPrefs: SharedPreferences
+    private lateinit var mockAmPrefs: SharedPreferences
+    private lateinit var mockDabPrefs: SharedPreferences
+    private lateinit var mockSettingsPrefs: SharedPreferences
+    private lateinit var mockEditor: SharedPreferences.Editor
+    private lateinit var repository: PresetRepository
+
+    @Before
+    fun setup() {
+        mockContext = mockk(relaxed = true)
+        mockFmPrefs = mockk(relaxed = true)
+        mockAmPrefs = mockk(relaxed = true)
+        mockDabPrefs = mockk(relaxed = true)
+        mockSettingsPrefs = mockk(relaxed = true)
+        mockEditor = mockk(relaxed = true)
+
+        every { mockFmPrefs.edit() } returns mockEditor
+        every { mockAmPrefs.edit() } returns mockEditor
+        every { mockDabPrefs.edit() } returns mockEditor
+        every { mockSettingsPrefs.edit() } returns mockEditor
+        every { mockEditor.putString(any(), any()) } returns mockEditor
+        every { mockEditor.putBoolean(any(), any()) } returns mockEditor
+        every { mockEditor.putInt(any(), any()) } returns mockEditor
+        every { mockEditor.remove(any()) } returns mockEditor
+        every { mockEditor.apply() } just Runs
+
+        every { mockContext.getSharedPreferences("fm_presets", Context.MODE_PRIVATE) } returns mockFmPrefs
+        every { mockContext.getSharedPreferences("am_presets", Context.MODE_PRIVATE) } returns mockAmPrefs
+        every { mockContext.getSharedPreferences("dab_presets", Context.MODE_PRIVATE) } returns mockDabPrefs
+        every { mockContext.getSharedPreferences("settings", Context.MODE_PRIVATE) } returns mockSettingsPrefs
+
+        repository = PresetRepository(mockContext)
+    }
+
+    @After
+    fun tearDown() {
+        unmockkAll()
+    }
+
+    @Test
+    fun `loadFmStations returns empty list when no stations saved`() {
+        every { mockFmPrefs.getString("stations", null) } returns null
+
+        val stations = repository.loadFmStations()
+
+        assertTrue(stations.isEmpty())
+    }
+
+    @Test
+    fun `loadFmStations parses JSON correctly`() {
+        val json = """[
+            {"frequency": 101.5, "name": "Test FM", "rssi": 50, "isFavorite": true, "syncName": false, "isDab": false, "serviceId": 0, "ensembleId": 0, "ensembleLabel": ""}
+        ]"""
+        every { mockFmPrefs.getString("stations", null) } returns json
+
+        val stations = repository.loadFmStations()
+
+        assertEquals(1, stations.size)
+        assertEquals(101.5f, stations[0].frequency, 0.01f)
+        assertEquals("Test FM", stations[0].name)
+        assertTrue(stations[0].isFavorite)
+    }
+
+    @Test
+    fun `loadAmStations returns empty list when no stations saved`() {
+        every { mockAmPrefs.getString("stations", null) } returns null
+
+        val stations = repository.loadAmStations()
+
+        assertTrue(stations.isEmpty())
+    }
+
+    @Test
+    fun `loadDabStations returns empty list when no stations saved`() {
+        every { mockDabPrefs.getString("stations", null) } returns null
+
+        val stations = repository.loadDabStations()
+
+        assertTrue(stations.isEmpty())
+    }
+
+    @Test
+    fun `loadDabStations parses DAB station correctly`() {
+        val json = """[
+            {"frequency": 178.352, "name": "Radio 1", "rssi": 0, "isFavorite": false, "syncName": false, "isDab": true, "serviceId": 12345, "ensembleId": 6789, "ensembleLabel": "DAB Wien"}
+        ]"""
+        every { mockDabPrefs.getString("stations", null) } returns json
+
+        val stations = repository.loadDabStations()
+
+        assertEquals(1, stations.size)
+        assertTrue(stations[0].isDab)
+        assertEquals(12345, stations[0].serviceId)
+        assertEquals(6789, stations[0].ensembleId)
+        assertEquals("DAB Wien", stations[0].ensembleLabel)
+    }
+
+    @Test
+    fun `saveFmStations calls editor with correct JSON`() {
+        val stations = listOf(
+            RadioStation(
+                frequency = 99.9f,
+                name = "Test Station",
+                rssi = 45,
+                isFavorite = true
+            )
+        )
+
+        repository.saveFmStations(stations)
+
+        verify { mockEditor.putString("stations", any()) }
+        verify { mockEditor.commit() }
+    }
+
+    @Test
+    fun `clearDabStations removes stations key`() {
+        repository.clearDabStations()
+
+        verify { mockEditor.remove("stations") }
+        verify { mockEditor.apply() }
+    }
+
+
+    @Test
+    fun `isDeezerEnabledFm returns true by default`() {
+        every { mockSettingsPrefs.getBoolean("deezer_enabled_fm", true) } returns true
+
+        val result = repository.isDeezerEnabledFm()
+
+        assertTrue(result)
+    }
+
+    @Test
+    fun `isShowFavoritesOnlyFm returns false by default`() {
+        every { mockSettingsPrefs.getBoolean("show_favorites_only_fm", false) } returns false
+
+        val result = repository.isShowFavoritesOnlyFm()
+
+        assertFalse(result)
+    }
+
+    // Per-tuner favorite tests deleted — the methods were removed from
+    // PresetRepository (had no production callers); StationRepository's
+    // per-tuner methods are still tested in StationRepositoryTest.
+
+    @Test
+    fun `isShowDebugInfos returns false by default`() {
+        every { mockSettingsPrefs.getBoolean("show_debug_infos", false) } returns false
+
+        val result = repository.isShowDebugInfos()
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun `isAutoBackgroundEnabled returns false by default`() {
+        every { mockSettingsPrefs.getBoolean("auto_background_enabled", false) } returns false
+
+        val result = repository.isAutoBackgroundEnabled()
+
+        assertFalse(result)
+    }
+
+    @Test
+    fun `getAutoBackgroundDelay returns default value of 5`() {
+        every { mockSettingsPrefs.getInt("auto_background_delay", 5) } returns 5
+
+        val result = repository.getAutoBackgroundDelay()
+
+        assertEquals(5, result)
+    }
+
+    @Test
+    fun `setAutoBackgroundDelay saves value`() {
+        repository.setAutoBackgroundDelay(30)
+
+        verify { mockEditor.putInt("auto_background_delay", 30) }
+        verify { mockEditor.apply() }
+    }
+
+    @Test
+    fun `fmStations flow emits list after saveFmStations`() {
+        val stations = listOf(
+            RadioStation(frequency = 99.9f, name = "Test", rssi = 50, isFavorite = true)
+        )
+        val captured = slot<String>()
+        every { mockEditor.putString("stations", capture(captured)) } answers {
+            every { mockFmPrefs.getString("stations", null) } returns captured.captured
+            mockEditor
+        }
+
+        repository.saveFmStations(stations)
+
+        assertEquals(1, repository.fmStations.value.size)
+        assertEquals("Test", repository.fmStations.value[0].name)
+        assertEquals(99.9f, repository.fmStations.value[0].frequency, 0.01f)
+    }
+
+    @Test
+    fun `fmStations flow resets to empty after clearFmStations`() {
+        val stations = listOf(
+            RadioStation(frequency = 101.1f, name = "X", rssi = 50, isFavorite = false)
+        )
+        val captured = slot<String>()
+        every { mockEditor.putString("stations", capture(captured)) } answers {
+            every { mockFmPrefs.getString("stations", null) } returns captured.captured
+            mockEditor
+        }
+        repository.saveFmStations(stations)
+        assertEquals(1, repository.fmStations.value.size)
+
+        repository.clearFmStations()
+
+        assertTrue(repository.fmStations.value.isEmpty())
+    }
+
+    @Test
+    fun `dabStations flow emits after saveDabStations`() {
+        val stations = listOf(
+            RadioStation(
+                frequency = 178.352f, name = "Radio Dab", rssi = 0,
+                isFavorite = false, isDab = true, serviceId = 42, ensembleId = 7, ensembleLabel = "E"
+            )
+        )
+        val captured = slot<String>()
+        every { mockEditor.putString("stations", capture(captured)) } answers {
+            every { mockDabPrefs.getString("stations", null) } returns captured.captured
+            mockEditor
+        }
+
+        repository.saveDabStations(stations)
+
+        assertEquals(1, repository.dabStations.value.size)
+        assertEquals(42, repository.dabStations.value[0].serviceId)
+    }
+}

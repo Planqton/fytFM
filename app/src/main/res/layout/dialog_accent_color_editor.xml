@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/dialog_background"
+    android:padding="20dp">
+
+    <!-- Title -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/accent_color_editor_title"
+        android:textColor="@color/dialog_text"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Tab toggle Day / Night -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp">
+
+        <Button
+            android:id="@+id/tabDayMode"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/tab_background"
+            android:text="@string/accent_day_mode"
+            android:textColor="@color/dialog_text" />
+
+        <Button
+            android:id="@+id/tabNightMode"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/tab_background"
+            android:text="@string/accent_night_mode"
+            android:textColor="@color/dialog_text" />
+
+    </LinearLayout>
+
+    <!-- Color preset container — Code füllt zwei horizontale Reihen mit
+         Swatches. Größe und Anzahl der Spalten kommen aus Code. -->
+    <LinearLayout
+        android:id="@+id/colorPresetGrid"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="8dp"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Reset + Close buttons -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <Button
+            android:id="@+id/btnAccentReset"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/accent_reset_default"
+            android:textColor="@color/dialog_text"
+            android:background="?attr/selectableItemBackground"
+            android:layout_marginEnd="16dp" />
+
+        <Button
+            android:id="@+id/btnAccentClose"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/close"
+            android:textColor="@color/dialog_text"
+            android:background="?attr/selectableItemBackground" />
+
+    </LinearLayout>
+
+</LinearLayout>

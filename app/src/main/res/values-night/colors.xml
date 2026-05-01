@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Mode Radio UI Colors -->
+    <color name="radio_background">#FF1A1A1A</color>
+    <color name="radio_text_primary">#FFF5F5F5</color>
+    <color name="radio_text_secondary">#FFAAAAAA</color>
+    <color name="radio_indicator">#FFFF5252</color>
+    <color name="radio_accent">#FFFF5252</color>
+    <color name="radio_scale_line">#FF666666</color>
+
+    <!-- Card Colors Dark -->
+    <color name="card_background">#FF2A2A2A</color>
+    <color name="card_background_selected">#FF3A3A3A</color>
+    <color name="card_text_primary">#FF82B1FF</color>
+    <color name="card_text_secondary">#FFAAAAAA</color>
+    <color name="card_text_tertiary">#FF888888</color>
+
+    <!-- Now Playing Bar Dark -->
+    <color name="now_playing_background">#FF2A2A2A</color>
+    <color name="now_playing_border">#FF444444</color>
+
+    <!-- Dialog/Overlay Colors Dark -->
+    <color name="dialog_background">#FF2A2A2A</color>
+    <color name="dialog_text">#FFF5F5F5</color>
+</resources>

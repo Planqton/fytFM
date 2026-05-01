@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#222222">
+
+    <!-- Header -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/dls_log_title"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/dlsLogCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            tools:text="0 entries"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp"
+            android:layout_marginEnd="12dp" />
+
+        <Button
+            android:id="@+id/btnClearDlsLog"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:text="@string/clear"
+            android:textSize="10sp"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/button_dialog"
+            app:backgroundTint="@null"
+            android:paddingHorizontal="12dp" />
+    </LinearLayout>
+
+    <!-- Log Content -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <TextView
+            android:id="@+id/dlsLogContent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/no_dls_received"
+            android:textColor="#CCCCCC"
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:lineSpacingExtra="4dp" />
+    </ScrollView>
+
+    <!-- Footer with file path -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/dlsLogFilePath"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            tools:text="File: /sdcard/fytfm_dls_log.txt"
+            android:textColor="#888888"
+            android:textSize="9sp"
+            android:fontFamily="monospace" />
+
+        <Button
+            android:id="@+id/btnCloseDlsLog"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:layout_marginTop="8dp"
+            android:text="@string/close"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/button_dialog"
+            app:backgroundTint="@null" />
+    </LinearLayout>
+
+</LinearLayout>

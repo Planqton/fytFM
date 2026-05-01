@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- USB Serial for UART Debug -->
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+
+    <application
+        android:name=".FytFMApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.FytFM"
+        android:requestLegacyExternalStorage="true"
+        android:usesCleartextTraffic="false"
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:targetApi="31">
+
+        <!-- Android Auto Support -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:screenOrientation="landscape"
+            android:supportsPictureInPicture="true"
+            android:launchMode="singleTask"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- FYT System Radio Intent abfangen -->
+            <intent-filter android:priority="1000">
+                <action android:name="com.syu.radio" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter android:priority="1000">
+                <action android:name="com.syu.radio" />
+            </intent-filter>
+            <!-- USB DAB+ Dongle -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_dab_device_filter" />
+        </activity>
+
+        <activity
+            android:name=".BugReportActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.FytFM" />
+
+        <activity
+            android:name=".BugReportDetailActivity"
+            android:exported="false"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.FytFM" />
+
+
+        <!-- Debug Receiver für ADB-Steuerung -->
+        <receiver
+            android:name=".DebugReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="at.planqton.fytfm.DEBUG" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Boot Receiver für Autostart -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+        <!-- MediaButton Receiver für Lenkradtasten -->
+        <receiver
+            android:name=".media.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter android:priority="999">
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <!-- FYT/BYD spezifische Media Button Actions -->
+                <action android:name="byd.intent.action.MEDIA_BUTTON" />
+                <action android:name="byd.intent.action.MEDIA_MODE" />
+            </intent-filter>
+        </receiver>
+
+        <!-- FYT Radio Key Event Receiver - versucht com.syu.radio Events abzufangen -->
+        <receiver
+            android:name=".steering.SyuRadioReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="999">
+                <action android:name="com.syu.radio.broadcast.MyService" />
+                <action android:name="com.syu.radio.broadcast" />
+                <action android:name="com.syu.radio" />
+            </intent-filter>
+        </receiver>
+
+        <!-- FYT Radio Service - versucht als com.syu.radio.broadcast.MyService zu fungieren -->
+        <service
+            android:name=".steering.SyuRadioService"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter android:priority="999">
+                <action android:name="com.syu.radio.broadcast.MyService" />
+            </intent-filter>
+        </service>
+
+        <!-- FileProvider für APK Updates -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- MediaLibraryService für Car Launcher Media Widget -->
+        <service
+            android:name=".media.FytFMMediaService"
+            android:foregroundServiceType="mediaPlayback"
+            android:persistent="true"
+            android:enabled="true"
+            android:exported="true"
+            tools:ignore="ExportedService">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
+
+        <!-- Station Change Overlay Service -->
+        <service
+            android:name=".StationChangeOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="overlay_display" />
+        </service>
+
+        <!-- DAB+ Decoder Plugin Service -->
+        <service
+            android:name="de.irt.dabmpg123decoderplugin.Mpg123Decoder"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="de.irt.dab.DECODER_PLUGIN" />
+            </intent-filter>
+        </service>
+
+            </application>
+
+</manifest>

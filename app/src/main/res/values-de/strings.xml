@@ -1,0 +1,596 @@
+<resources>
+    <string name="app_name">fytFM</string>
+
+    <!-- Main UI -->
+    <string name="default_frequency">FM 98.40</string>
+    <string name="prev_station">Vorheriger Sender</string>
+    <string name="next_station">Nächster Sender</string>
+    <string name="favorite">Favorit</string>
+    <string name="search">Suche</string>
+    <string name="skip_previous">Vorheriger</string>
+    <string name="skip_next">Nächster</string>
+    <string name="play_pause">Play/Pause</string>
+    <string name="folder">Ordner</string>
+    <string name="settings">Einstellungen</string>
+    <string name="back">Zurück</string>
+    <string name="clear">Löschen</string>
+
+    <!-- Settings Dialog -->
+    <string name="settings_title">Radio Einstellungen</string>
+    <string name="search_settings">Einstellungen suchen…</string>
+    <string name="no_search_results">Keine Einstellungen gefunden</string>
+    <string name="radio_editor">Radio Editor</string>
+    <string name="show_debug_infos">Debug Infos anzeigen</string>
+    <string name="allow_root_fallback">Root-Fallback erlauben</string>
+    <string name="allow_root_fallback_summary">Verwendet \"su\" für sqlfmservice, wenn der Binder-Zugriff blockiert ist (UIS7870/DUDU7).</string>
+    <string name="loc_local_only">LOC Nur Lokal</string>
+    <string name="loc_description">Nur starke lokale Sender empfangen</string>
+    <string name="mono_noise_reduction">Mono / Rauschunterdrückung</string>
+    <string name="mono_description">Mono erzwingen für weniger Rauschen bei schwachen Signalen</string>
+    <string name="radio_area">Radio Region</string>
+    <string name="auto_scan_sensitivity">Auto Scan Empfindlichkeit</string>
+    <string name="fm_step_size">FM Schritt</string>
+    <string name="am_step_size">AM Schritt</string>
+    <string name="section_app">App</string>
+    <string name="app_version">App Version</string>
+    <string name="error_prefix">Fehler: %s</string>
+    <string name="section_rds_archive">RDS Archiv</string>
+    <string name="rds_logging">RDS Aufzeichnung</string>
+    <string name="rds_logging_desc">Radio Text Änderungen ins Archiv speichern</string>
+    <string name="archive_retention">Archiv Aufbewahrung</string>
+    <string name="days_format">%d Tage</string>
+    <string name="clear_archive">Archiv löschen</string>
+    <string name="entries_format">%d Einträge</string>
+    <string name="language">Sprache</string>
+    <string name="close_app">App beenden</string>
+
+    <!-- Language Options -->
+    <string name="language_system">Systemstandard</string>
+    <string name="language_english">English</string>
+    <string name="language_german">Deutsch</string>
+
+    <!-- Radio Area Options -->
+    <string name="area_usa_korea">USA, Korea</string>
+    <string name="area_latin_america">Lateinamerika</string>
+    <string name="area_europe">Europa</string>
+    <string name="area_russia">Russland</string>
+    <string name="area_japan">Japan</string>
+
+    <!-- Archive -->
+    <string name="rds_archive">RDS Archiv</string>
+    <string name="search_radio_text">Radio Text suchen…</string>
+    <string name="all">Alle</string>
+    <string name="no_rds_data">Noch keine RDS Daten aufgezeichnet</string>
+    <string name="turn_on_radio">Radio einschalten um RDS zu empfangen</string>
+    <string name="no_radio_text">(kein Radio Text)</string>
+
+    <!-- Dialogs -->
+    <string name="clear_archive_title">Archiv löschen</string>
+    <string name="clear_archive_message">Alle RDS Einträge löschen?</string>
+    <string name="delete">Löschen</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="archive_cleared">Archiv gelöscht</string>
+    <string name="delete_station_title">Sender löschen</string>
+    <string name="delete_station_message">%s wirklich löschen?</string>
+    <string name="yes">Ja</string>
+    <string name="no">Nein</string>
+    <string name="edit_station">Sender bearbeiten</string>
+    <string name="station_name_hint">Sendername</string>
+    <string name="save">Speichern</string>
+
+    <!-- Toasts -->
+    <string name="seek_started_prev">Seek ◀ gestartet…</string>
+    <string name="seek_started_next">Seek ▶ gestartet…</string>
+    <string name="root_required_message">Root-Zugriff wird für FM-Steuerung verwendet (DUDU7)</string>
+    <string name="tuner_not_available">Tuner für %s nicht verfügbar</string>
+    <string name="tuner_error">Tuner Fehler: %s</string>
+    <string name="tuner_error_fm_start">Tuner Fehler: FM Radio konnte nicht gestartet werden</string>
+    <string name="tuner_error_dab_not_found">Tuner Fehler: DAB Sender nicht gefunden</string>
+    <string name="dab_init_failed">DAB+ Initialisierung fehlgeschlagen</string>
+    <string name="dab_stations_found">%d DAB+ Sender gefunden</string>
+    <string name="station_renamed">Sender umbenannt: %s</string>
+    <string name="deezer_enabled">Deezer aktiviert</string>
+    <string name="deezer_disabled">Deezer deaktiviert</string>
+    <string name="cannot_open_deezer">Kann Deezer nicht öffnen</string>
+    <string name="export_failed">Export fehlgeschlagen: %s</string>
+    <string name="import_failed">Import fehlgeschlagen: %s</string>
+    <string name="imported_template">Importiert: %s</string>
+    <string name="file_read_error">Datei konnte nicht gelesen werden</string>
+    <string name="template_saved">Template gespeichert</string>
+    <string name="name_cannot_be_empty">Name darf nicht leer sein</string>
+    <string name="template_name_exists">Template mit diesem Namen existiert bereits</string>
+    <string name="enter_search_term">Suchbegriff eingeben</string>
+    <string name="logo_downloaded">Logo heruntergeladen</string>
+    <string name="logo_download_failed">Logo-Download fehlgeschlagen: %s</string>
+    <string name="provide_ps_pi_or_freq">Mindestens PS, PI oder Frequenz angeben</string>
+    <string name="logo_url_required">Logo-URL erforderlich</string>
+
+    <!-- Settings -->
+    <string name="dark_mode">Dark Mode</string>
+    <string name="dark_mode_system">System</string>
+    <string name="auto_background">Auto-Background</string>
+    <string name="auto_background_only_on_boot">Nur bei Autostart</string>
+    <string name="autostart_on_boot">Autostart bei Boot</string>
+    <string name="not_supported_fyt">Nicht unterstützt auf FYT-Geräten</string>
+
+    <!-- Scan Dialog -->
+    <string name="scanning">Suche läuft…</string>
+    <string name="stations_found">%d Sender gefunden</string>
+    <string name="start_scan">Suche starten</string>
+
+    <!-- EPG -->
+    <string name="epg_title">Programmvorschau</string>
+    <string name="epg_now">JETZT</string>
+    <string name="epg_upcoming">ALS NÄCHSTES</string>
+    <string name="epg_no_data">Keine Programmdaten verfügbar</string>
+    <string name="epg_no_data_desc">Dieser Sender sendet aktuell keine EPG-Informationen.</string>
+    <string name="epg_updated">Aktualisiert: %s</string>
+    <string name="epg_until">bis %s</string>
+    <string name="epg_close">Schließen</string>
+
+    <!-- Settings Dialog - Additional -->
+    <string name="autoplay_at_startup">Autoplay beim Start</string>
+    <string name="edit_stations">Sender bearbeiten</string>
+    <string name="deezer_cover">Deezer Cover</string>
+    <string name="deezer_cover_desc_fm">Album-Cover via Deezer laden</string>
+    <string name="deezer_cover_desc_dab">Album-Cover via Deezer (statt Slideshow)</string>
+    <string name="audio_visualizer">Audio Visualizer</string>
+    <string name="audio_visualizer_desc">FFT Visualisierung anzeigen</string>
+    <string name="visualizer_style">Visualizer Stil</string>
+    <string-array name="visualizer_styles">
+        <item>Balken</item>
+        <item>Waveform</item>
+        <item>Kreisförmig</item>
+        <item>Spiegel-Balken</item>
+        <item>Punkte</item>
+        <item>Spektrum</item>
+        <item>Blöcke</item>
+        <item>Symmetrie</item>
+        <item>Puls</item>
+        <item>Diamanten</item>
+        <item>Wellen-Balken</item>
+        <item>Glühwürmchen</item>
+    </string-array>
+    <string name="style_bars">Balken</string>
+    <string name="recording_path">Aufnahme-Speicherort</string>
+    <string name="not_configured">Nicht konfiguriert</string>
+    <string name="section_general">ALLGEMEIN</string>
+    <string name="auto_background_desc">App geht nach X Sekunden in den Hintergrund</string>
+    <string name="seconds_label">Sekunden:</string>
+    <string name="station_change_overlay">Overlay bei Senderwechsel</string>
+    <string name="station_change_overlay_desc">Popup bei Lenkradtasten</string>
+    <string name="swap_prev_next">Prev/Next vertauschen</string>
+    <string name="swap_prev_next_desc">Lenkradtasten Richtung umkehren</string>
+    <string name="section_radio_logos">RADIO LOGOS</string>
+    <string name="logo_template_manager">Logo Template Manager</string>
+    <string name="no_template">Kein Template</string>
+    <string name="show_logos_in_favorites">Logos in Favoriten anzeigen</string>
+    <string name="now_playing_animation">Now Playing Animation</string>
+    <string name="animation_slide">Slide</string>
+    <string name="correction_helpers">Correction Helpers</string>
+    <string name="correction_helpers_desc">Trash/Refresh in Now Playing</string>
+    <string name="rt_correction_rules">RT Korrektur Regeln</string>
+    <string name="corrections_count_format">%d Korrekturen</string>
+    <string name="local_cache">Lokaler Cache</string>
+    <string name="local_cache_desc">Tracks lokal speichern</string>
+    <string name="cache_tracks_format">Cache: %d Tracks</string>
+    <string name="view">Anzeigen</string>
+    <string name="export">Export</string>
+    <string name="import_action">Import</string>
+    <string name="create_bug_report">Bug Report erstellen</string>
+    <string name="save_logs_to_downloads">Logs in Downloads speichern</string>
+
+    <!-- Scan Dialog -->
+    <string name="station_scan_title">Sendersuche</string>
+    <string name="skip">Überspringen</string>
+    <string name="no_stations_found">Keine Sender gefunden.\nTippe Scan um zu suchen.</string>
+    <string name="rds_filter">RDS-Filter:</string>
+    <string name="ps_name">PS (Name)</string>
+    <string name="pi_id">PI (ID)</string>
+    <string name="both_and">Beide (UND)</string>
+    <string name="one_or">Eines (ODER)</string>
+    <string name="rds_wait_time">RDS-Wartezeit: %ds</string>
+    <string name="rescan">Neu Scannen</string>
+    <string name="filter">Filtern</string>
+    <string name="add">Hinzufügen</string>
+    <string name="close">Schließen</string>
+    <string name="scan_method">Scan-Methode:</string>
+    <string name="quick_scan">Quick Scan (direkt hinzufügen)</string>
+    <string name="native_scan">Native (Schnell)</string>
+    <string name="experimental_scan">Experimentell (Frequenz-Scan)</string>
+    <string name="overwrite_favorites_short">Favoriten überschreiben</string>
+    <string name="overwrite_favorites_scan_desc">Aktualisiert auch favorisierte Sender</string>
+    <string name="start">Starten</string>
+    <string name="start_filter">Starten + Filter</string>
+
+    <!-- Template Editor -->
+    <string name="edit_template">Template bearbeiten</string>
+    <string name="name_label">Name:</string>
+    <string name="template_name_hint">Template Name</string>
+    <string name="stations_count">Sender (%d)</string>
+    <string name="no_stations">Keine Sender</string>
+    <string name="add_station">Sender hinzufügen</string>
+
+    <!-- Deezer Cache Dialog -->
+    <string name="deezer_cache">Deezer Cache</string>
+    <string name="tracks_count">%d Tracks</string>
+    <string name="no_tracks_in_cache">Keine Tracks im Cache</string>
+    <string name="search_hint">Suchen…</string>
+
+    <!-- Corrections Viewer -->
+    <string name="rules">Regeln</string>
+    <string name="rules_description">Texte die vor der Suche ersetzt/entfernt werden</string>
+    <string name="no_rules_defined">Keine Regeln definiert</string>
+    <string name="ignored_rts">Ignorierte RTs / Übersprungene Tracks</string>
+    <string name="ignored_rts_description">RTs die ignoriert oder deren Tracks übersprungen werden</string>
+    <string name="no_rt_corrections">Keine RT Korrekturen vorhanden</string>
+    <string name="delete_all">Alle löschen</string>
+    <string name="add_rule">Regel hinzufügen</string>
+
+    <!-- DAB Scan Dialog -->
+    <string name="dab_scan_title">DAB+ Sendersuche…</string>
+    <string name="dab_scan_dialog_title">DAB+ Sendersuche</string>
+    <string name="dab_scan_press_start">Drücke \'Suche starten\' um zu beginnen</string>
+    <string name="dab_scan_running">DAB+ Sendersuche läuft…</string>
+    <string name="dab_scanning_progress">Scanne… %d%%</string>
+    <string name="stations_found_count">Gefundene Sender: %d</string>
+    <string name="no_dab_stations_found">Keine DAB+ Sender gefunden</string>
+    <string name="check_antenna_retry">Bitte prüfen Sie die Antenne und versuchen Sie es erneut.</string>
+    <string name="dab_scan_completed">Sendersuche abgeschlossen</string>
+    <string name="accept">Übernehmen</string>
+
+    <!-- Bug Report Dialog -->
+    <string name="bug_report_type_title">Bug Report Typ</string>
+    <string name="general_bug_report">Allgemeiner Bug Report</string>
+    <string name="parser_bug_report">Parser Bug Report</string>
+    <string name="deezer_bug_report">Deezer Bug Report</string>
+    <string name="collecting_parser_logs">Sammle Parser-Logs…</string>
+    <string name="parser_bug_hint">Was wurde falsch geparst? (optional)</string>
+    <string name="parser_bug_report_title">Parser Bug Report</string>
+    <string name="parser_bug_message">RT-DLS Parser Logs werden erfasst.\n\nBeschreibe das Problem (optional):</string>
+    <string name="next">Weiter</string>
+    <string name="collecting_deezer_data">Sammle Deezer-Daten…</string>
+    <string name="deezer_bug_hint">Was ist das Problem? (z.B. falsches Cover, falscher Track)</string>
+    <string name="deezer_bug_report_title">Deezer Bug Report</string>
+    <string name="deezer_bug_message">Deezer-Status wird erfasst.\n\nBeschreibe das Problem (optional):</string>
+    <string name="collecting_logs">Sammle Logs…</string>
+    <string name="create_bug_report_title">Bug Report erstellen</string>
+    <string name="bug_report_message">App-Status wurde erfasst.\n\nBeschreibe das Problem (optional):</string>
+    <string name="parser_log_exported">Parser Log exportiert</string>
+
+    <!-- Permissions -->
+    <string name="audio_permission_visualizer">Audio-Berechtigung für Visualizer benötigt</string>
+
+    <!-- Cache Dialog -->
+
+    <!-- Delete Confirmations -->
+    <string name="delete_all_title">Alle löschen?</string>
+    <string name="delete_all_corrections_message">Alle RT-Korrektionen werden gelöscht.</string>
+
+    <!-- Template Selection -->
+    <string name="loading_logos">Lade Logos…</string>
+    <string name="loading_logos_progress">Lade Logos… (%1$d/%2$d)</string>
+    <string name="logos_loaded_title">Logos geladen</string>
+
+    <!-- Station Editor -->
+    <string name="no_results_for_query">Keine Ergebnisse für \"%s\"</string>
+    <string name="no_images_found">Keine Bilder gefunden</string>
+
+    <!-- Version/Update -->
+
+    <!-- Misc -->
+    <string name="not_available">Nicht verfügbar</string>
+    <string name="available">Verfügbar</string>
+    <string name="no_station">Kein Sender</string>
+    <string name="template_station_count">%d Sender</string>
+
+    <!-- Other Dialogs -->
+    <string name="logo_search">Logo suchen</string>
+    <string name="enter_search_and_search">Suchbegriff eingeben und suchen</string>
+    <string name="search_logo_hint">z.B. Ö3 Radio Logo</string>
+    <string name="ps_name_rds">PS Name (RDS)</string>
+    <string name="ps_hint">z.B. OE3, FM4</string>
+    <string name="pi_code_hex">PI Code (hex)</string>
+    <string name="pi_hint">z.B. A3E0</string>
+    <string name="frequencies_mhz">Frequenzen (MHz, kommagetrennt)</string>
+    <string name="frequencies_hint">z.B. 88.8, 90.4, 99.5</string>
+    <string name="logo_url">Logo URL *</string>
+    <string name="minimum_ps_pi_freq">Mindestens PS, PI oder Frequenz angeben.</string>
+    <string name="logo_downloading">Logo wird heruntergeladen…</string>
+    <string name="logo_template_manager_title">Logo Template Manager</string>
+    <string name="region_format">Region: %s</string>
+    <string name="no_templates_for_region">Keine Templates für diese Region</string>
+    <string name="import_template">Template importieren</string>
+    <string name="no_template_use">Kein Template verwenden</string>
+    <string name="bug_reports">Bug Reports</string>
+    <string name="no_bug_reports">Keine Bug Reports gefunden</string>
+
+    <!-- Corrections -->
+    <string name="type_ignored">Ignoriert</string>
+    <string name="type_track_skipped">Track übersprungen</string>
+
+    <!-- MainActivity Toasts & Dialogs -->
+    <string name="report_saved">Report gespeichert</string>
+    <string name="bug_report_created">Bug Report erstellt</string>
+    <string name="bug_report_failed">Bug Report konnte nicht erstellt werden</string>
+    <string name="app_internet_disabled">App Internet deaktiviert (debug)</string>
+    <string name="app_internet_enabled">App Internet aktiviert</string>
+    <string name="deezer_local_blocked">Deezer/Local blockiert - nur RDS</string>
+    <string name="deezer_local_enabled">Deezer/Local aktiviert</string>
+    <string name="scan_error">Scan Fehler: %s</string>
+    <string name="recording_started">Aufnahme gestartet</string>
+    <string name="recording_saved">Aufnahme gespeichert: %s</string>
+    <string name="mock_dab_init_failed">Mock DAB+ Initialisierung fehlgeschlagen</string>
+    <string name="select_storage_first">Bitte zuerst Speicherort in Einstellungen wählen</string>
+    <string name="recording_could_not_start">Aufnahme konnte nicht gestartet werden</string>
+    <string name="skip_stations_hint">Du kannst später Sender scannen oder manuell hinzufügen</string>
+    <string name="collecting_syu_stations">Sammle Sender vom SYU Service…</string>
+    <string name="no_stations_from_original">Keine Sender von der Original-App empfangen</string>
+    <string name="no_valid_stations_found">Keine gültigen Sender gefunden</string>
+    <string name="visualizer_style_title">Visualizer Stil</string>
+    <string name="delete_template_title">Template löschen</string>
+    <string name="delete_template_message">Template \'%s\' wirklich löschen?</string>
+    <string name="delete_entry_message">Eintrag wirklich löschen?</string>
+    <string name="searching_logos_for_stations">Suche Logos für %d Sender…</string>
+    <string name="no_logos_found_title">Keine Logos gefunden</string>
+    <string name="no_logos_found_for_stations">Für keinen der %d Sender konnte ein Logo gefunden werden.</string>
+    <string name="error_title">Fehler</string>
+    <string name="logo_search_failed">Logo-Suche fehlgeschlagen: %s</string>
+    <string name="logo_search_results">Logo Suchergebnisse</string>
+    <string name="scanning_frequency">Scanne: %s</string>
+    <string name="import_stations_title">Sender importieren?</string>
+    <string name="import_stations_message">Die Senderliste ist leer.\n\nMöchtest du die Sender von der Original-Radio-App importieren?</string>
+    <string name="app_crashed_title">App wurde nicht richtig beendet</string>
+    <string name="app_crashed_message">Die App ist beim letzten Mal abgestürzt.\n\nMöchtest du einen Bug Report erstellen?</string>
+    <string name="bug_report_describe">Beschreibe optional was du gemacht hast:</string>
+    <string name="report_preview_title">Report Vorschau</string>
+    <string name="enter_search_please">Bitte Suchbegriff eingeben</string>
+    <string name="dab_edit_station">DAB Sender bearbeiten</string>
+
+    <!-- Additional MainActivity strings -->
+    <string name="logo_downloading_progress">Logo wird heruntergeladen…</string>
+    <string name="sync_with_rds_ps">Sync mit RDS (PS)</string>
+    <string name="tap_to_apply_remaining">Tippe zum Übernehmen (%1$d übrig, %2$d gespeichert)</string>
+    <string name="crash_hint">Was hast du gemacht als die App abgestürzt ist? (optional)</string>
+    <string name="steering_wheel_active">Lenkradtasten aktiv</string>
+    <string name="failed_to_read_report">Report konnte nicht gelesen werden</string>
+    <string name="delete_bug_report_question">Diesen Bug Report löschen?</string>
+    <string name="report_deleted">Report gelöscht</string>
+    <string name="failed_to_delete_report">Report konnte nicht gelöscht werden</string>
+    <string name="no_file_specified">Keine Datei angegeben</string>
+    <string name="file_not_found">Datei nicht gefunden</string>
+    <string name="error_reading_file">Fehler beim Lesen der Datei: %s</string>
+    <string name="failed_to_share_report">Report konnte nicht geteilt werden</string>
+    <string name="no_dls_received">Kein DLS empfangen</string>
+    <string name="file_path_format">Datei: %s</string>
+    <string name="deezer_local_search">Deezer/Lokal Suche</string>
+    <string name="ensemble_format">Ensemble: %s</string>
+    <string name="unknown">Unbekannt</string>
+
+    <!-- Scan Status Messages -->
+    <string name="native_scan_status">Native Scan…</string>
+    <string name="signal_scan_status">Signal-Scan…</string>
+    <string name="scanning_am">Scanne AM…</string>
+    <string name="rds_filter_status">RDS-Filter…</string>
+    <string name="found_suffix">gefunden</string>
+    <string name="filtered_suffix">gefiltert</string>
+    <string name="verified_suffix">verifiziert</string>
+    <string name="no_log_entries">Keine %s Log-Einträge</string>
+    <string name="log_entries_count">%d Einträge</string>
+    <string name="stations_imported">%d Sender importiert!</string>
+    <string name="bug_report_title">Bug Report</string>
+
+    <!-- ============================================================ -->
+    <!-- i18n migration round 1 (2026-04) -->
+    <!-- ============================================================ -->
+
+    <!-- Generic actions -->
+    <string name="ok">OK</string>
+    <string name="done">Fertig</string>
+    <string name="ignore">Ignorieren</string>
+    <string name="configured">Konfiguriert</string>
+
+    <!-- Band labels -->
+    <string name="band_fm">FM</string>
+    <string name="band_am">AM</string>
+    <string name="band_dab_plus">DAB+</string>
+    <string name="band_dab_dev">DAB Demo</string>
+
+    <!-- DAB Demo Mode info messages -->
+    <string name="demo_info_message_1">fytFM Demo-Modus</string>
+    <string name="demo_info_message_2">Tippen und entdecken</string>
+    <string name="demo_info_message_3">Kein DAB-Dongle nötig</string>
+    <string name="demo_info_message_4">Showcase-Modus aktiv</string>
+
+    <!-- Crash report dialog -->
+    <string name="crash_only_log">Nur Crash-Log</string>
+
+    <!-- Deezer cache delete dialog -->
+    <string name="cache_delete_title">Cache löschen</string>
+    <string name="cache_delete_message">Möchten Sie den gesamten Deezer-Cache löschen?</string>
+
+    <!-- DAB Dev Mode -->
+    <string name="dab_dev_mode">DAB Demo-Modus</string>
+    <string name="dab_dev_mode_desc">Demo-Sender mit echter Audio-Wiedergabe — für Vorführungen ohne DAB-Dongle.</string>
+    <string name="dab_dev_scan_title">DAB Demo Scan</string>
+    <string name="dab_dev_scanning_message">Simuliere Sendersuche…</string>
+    <string name="mock_stations_found_format">%d Mock-Sender gefunden</string>
+
+    <!-- Manual logo download toasts -->
+    <string name="select_cover_source_first">Bitte erst Slideshow oder Deezer auswählen</string>
+    <string name="logo_saved_for_format">✓ Logo für \"%1$s\" gespeichert</string>
+    <string name="no_cover_to_save">Kein Cover zum Speichern verfügbar</string>
+    <string name="logo_save_failed">Fehler beim Speichern des Logos</string>
+
+    <!-- Track skip / RT corrections -->
+    <string name="rt_ignored">RT wird ignoriert</string>
+    <string name="searching_other_track">Suche anderen Track…</string>
+
+    <!-- Favorites filter toast -->
+    <string name="favorites_only">Nur Favoriten</string>
+    <string name="all_stations">Alle Sender</string>
+
+    <!-- Steering wheel media buttons -->
+    <string name="media_button_next">fytFM: NEXT</string>
+    <string name="media_button_prev">fytFM: PREV</string>
+    <string name="media_button_play_pause">fytFM: PLAY/PAUSE</string>
+    <string name="swc_next">NEXT</string>
+    <string name="swc_prev">PREV</string>
+
+    <!-- SyuRadio debug toasts -->
+    <string name="syu_radio_broadcast_received">SyuRadio Broadcast empfangen!</string>
+    <string name="syu_radio_service_started">SyuRadio Service gestartet!</string>
+    <string name="syu_radio_service_bound">SyuRadio Service gebunden!</string>
+
+    <!-- Logo template / batch download -->
+    <string name="logos_loaded_count">%1$d Logos geladen</string>
+    <string name="logos_loaded_with_failures_format">%1$d/%2$d Logos geladen.\n\nFehlgeschlagen:\n%3$s</string>
+    <string name="template_progress_format">%1$d/%2$d: %3$s</string>
+    <plurals name="logos_saved_count">
+        <item quantity="one">%d Logo gespeichert</item>
+        <item quantity="other">%d Logos gespeichert</item>
+    </plurals>
+
+    <!-- Update notification -->
+    <string name="update_notification_title_format">fytFM Update v%1$s</string>
+    <string name="update_download_description">Tippe nach Download um zu installieren</string>
+
+    <!-- Media library folders -->
+    <string name="media_folder_fm">FM Sender</string>
+    <string name="media_folder_am">AM Sender</string>
+
+    <!-- Notification channel -->
+    <string name="notif_channel_overlay_name">Senderwechsel Overlay</string>
+    <string name="notif_channel_overlay_desc">Zeigt Overlay bei Senderwechsel</string>
+
+    <!-- Settings extras -->
+    <string name="tick_sound">Tick-Sound</string>
+    <string name="tick_sound_desc">Sound beim Senderwechsel</string>
+    <string name="volume">Lautstärke</string>
+    <string name="deezer_section">DEEZER</string>
+    <string name="seconds_format_short">%ds</string>
+    <string name="percent_format">%d%%</string>
+
+    <!-- Now Playing animation options -->
+    <string name="animation_none">Keine</string>
+    <string name="animation_fade">Fade</string>
+    <string-array name="now_playing_animation_options">
+        <item>@string/animation_none</item>
+        <item>@string/animation_slide</item>
+        <item>@string/animation_fade</item>
+    </string-array>
+
+    <!-- Dark Mode options -->
+    <string name="dark_mode_light">Hell</string>
+    <string name="dark_mode_dark">Dunkel</string>
+    <string-array name="dark_mode_options">
+        <item>@string/dark_mode_system</item>
+        <item>@string/dark_mode_light</item>
+        <item>@string/dark_mode_dark</item>
+    </string-array>
+
+    <!-- Radio mode spinner -->
+    <string-array name="radio_mode_options">
+        <item>@string/band_fm</item>
+        <item>@string/band_am</item>
+        <item>@string/band_dab_plus</item>
+    </string-array>
+
+    <!-- Area template dialog title -->
+    <string name="area_template_dialog_title_format">%1$s - Template</string>
+
+    <!-- DLS log dialog -->
+    <string name="dls_log_title">DLS Log</string>
+
+    <!-- Manual logo search dialog -->
+    <string name="manual_logo_search_title">Logo für Sender suchen</string>
+    <string name="search_term_hint">Suchbegriff eingeben…</string>
+
+    <!-- ContentDescriptions -->
+    <string name="cd_power">Power</string>
+    <string name="cd_equalizer">Equalizer</string>
+    <string name="cd_image">Bild</string>
+    <string name="cd_skip_track">Diesen Track überspringen</string>
+    <string name="cd_ignore_rt">Diesen RT ignorieren</string>
+    <string name="cd_toggle_deezer">Deezer umschalten</string>
+    <string name="cd_filter">Filter</string>
+    <string name="cd_record">Aufnehmen</string>
+    <string name="cd_epg">EPG</string>
+    <string name="cd_archive">Archiv</string>
+    <string name="cd_share">Teilen</string>
+    <string name="cd_edit">Bearbeiten</string>
+    <string name="cd_delete">Löschen</string>
+    <string name="cd_export">Export</string>
+    <string name="cd_search_logo">Logo suchen</string>
+
+    <!-- RDS Log adapter -->
+    <string name="rds_event_tune">TUNE</string>
+    <string name="rssi_format">RSSI: %d</string>
+    <string name="pi_format">PI: 0x%04X</string>
+    <string name="pty_format">PTY: %s</string>
+    <string name="signal_db_format">%d dB</string>
+    <string name="placeholder_dashes">---</string>
+
+    <!-- RDS PTY Namen (deutsche Übersetzungen) -->
+    <string-array name="rds_pty_names">
+        <item>Keine</item>
+        <item>Nachrichten</item>
+        <item>Aktuelles</item>
+        <item>Information</item>
+        <item>Sport</item>
+        <item>Bildung</item>
+        <item>Hörspiel</item>
+        <item>Kultur</item>
+        <item>Wissenschaft</item>
+        <item>Unterhaltung</item>
+        <item>Popmusik</item>
+        <item>Rockmusik</item>
+        <item>Leichte Musik</item>
+        <item>Leichte Klassik</item>
+        <item>Klassik</item>
+        <item>Andere Musik</item>
+        <item>Wetter</item>
+        <item>Wirtschaft</item>
+        <item>Kinder</item>
+        <item>Soziales</item>
+        <item>Religion</item>
+        <item>Anrufer</item>
+        <item>Reise</item>
+        <item>Freizeit</item>
+        <item>Jazz</item>
+        <item>Country</item>
+        <item>Volksmusik</item>
+        <item>Oldies</item>
+        <item>Folk</item>
+        <item>Dokumentation</item>
+        <item>Alarmtest</item>
+        <item>Alarm</item>
+    </string-array>
+
+    <!-- DAB-Empfangsverlust-Banner -->
+    <string name="dab_signal_lost">DAB-Sender aktuell nicht verfügbar</string>
+    <string name="cd_simulate_signal_loss">Empfangsverlust simulieren</string>
+
+    <!-- App Design (Settings) -->
+    <string name="section_app_design">APP-DESIGN</string>
+    <string name="accent_colors">Akzentfarben</string>
+    <string name="accent_colors_desc">Tag- und Nacht-Modus-Farben anpassen</string>
+    <string name="accent_color_editor_title">Akzentfarben</string>
+    <string name="accent_day_mode">Tag-Modus</string>
+    <string name="accent_night_mode">Nacht-Modus</string>
+    <string name="accent_reset_default">Zurücksetzen</string>
+    <string name="accent_color_red">Rot</string>
+    <string name="accent_color_blue">Blau</string>
+    <string name="accent_color_green">Grün</string>
+    <string name="accent_color_orange">Orange</string>
+    <string name="accent_color_purple">Lila</string>
+    <string name="accent_color_pink">Pink</string>
+    <string name="accent_color_teal">Türkis</string>
+
+    <!-- AF Switch Indicator -->
+    <string name="af_active_indicator">AF: %1$.1f MHz aktiv</string>
+
+    <!-- Signal-bars icon toggle (FM/AM) -->
+    <string name="signal_icon_toggle">Signal-Symbol</string>
+    <string name="signal_icon_toggle_desc">Empfangsstärke-Anzeige unter der Frequenz</string>
+</resources>

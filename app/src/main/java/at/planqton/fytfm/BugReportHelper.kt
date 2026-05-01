@@ -1,0 +1,469 @@
+package at.planqton.fytfm
+
+import android.content.Context
+import android.os.Build
+import android.os.Environment
+import android.util.Log
+import at.planqton.fytfm.deezer.ParserLogger
+import at.planqton.fytfm.deezer.TrackInfo
+import java.io.BufferedReader
+import java.io.File
+import java.io.InputStreamReader
+import java.text.SimpleDateFormat
+import java.util.*
+
+/**
+ * Helper class for creating bug reports with logcat, RDS data, Spotify info, etc.
+ */
+class BugReportHelper(private val context: Context) {
+
+    companion object {
+        private const val TAG = "BugReportHelper"
+        private const val REPORTS_DIR = "bug_reports"
+        private const val MAX_LOGCAT_LINES = 2000
+    }
+
+    data class AppState(
+        // RDS Data
+        val rdsPs: String? = null,
+        val rdsRt: String? = null,
+        val rdsPi: Int = 0,
+        val rdsPty: Int = 0,
+        val rdsRssi: Int = 0,
+        val rdsTp: Int = 0,
+        val rdsTa: Int = 0,
+        val rdsAfEnabled: Boolean = false,
+        val rdsAfList: List<Short>? = null,
+        val currentFrequency: Float = 0f,
+
+        // Spotify Data
+        val spotifyStatus: String? = null,
+        val spotifyOriginalRt: String? = null,
+        val spotifyStrippedRt: String? = null,
+        val spotifyQuery: String? = null,
+        val spotifyTrackInfo: TrackInfo? = null,
+
+        // Additional info
+        val userDescription: String? = null,
+        // Crash log (only for crash reports)
+        val crashLog: String? = null
+    )
+
+    /**
+     * Builds report content as string (for preview or saving)
+     */
+    fun buildReportContent(appState: AppState): String {
+        return buildString {
+            appendLine("=".repeat(60))
+            appendLine("fytFM Bug Report")
+            appendLine("=".repeat(60))
+            appendLine()
+
+            // Timestamp and version
+            appendLine("## Report Info")
+            appendLine("Timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
+            appendLine("App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine("Build Date: ${BuildConfig.BUILD_DATE} ${BuildConfig.BUILD_TIME}")
+            appendLine("Build Type: ${BuildConfig.BUILD_TYPE}")
+            appendLine()
+
+            // Device Info
+            appendLine("## Device Info")
+            appendLine("Manufacturer: ${Build.MANUFACTURER}")
+            appendLine("Model: ${Build.MODEL}")
+            appendLine("Device: ${Build.DEVICE}")
+            appendLine("Product: ${Build.PRODUCT}")
+            appendLine("Board: ${Build.BOARD}")
+            appendLine("Hardware: ${Build.HARDWARE}")
+            appendLine("Android Version: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+            appendLine("Display: ${Build.DISPLAY}")
+            appendLine()
+
+            // User Description
+            if (!appState.userDescription.isNullOrEmpty()) {
+                appendLine("## Problem Description")
+                appendLine(appState.userDescription)
+                appendLine()
+            }
+
+            // Crash Log (if present)
+            if (!appState.crashLog.isNullOrEmpty()) {
+                appendLine("## Crash Log")
+                appendLine("-".repeat(60))
+                appendLine(appState.crashLog)
+                appendLine()
+            }
+
+            // RDS Data
+            appendLine("## RDS Data")
+            appendLine("Frequency: ${appState.currentFrequency} MHz")
+            appendLine("PS: ${appState.rdsPs ?: "(none)"}")
+            appendLine("RT: ${appState.rdsRt ?: "(none)"}")
+            appendLine("PI: 0x${Integer.toHexString(appState.rdsPi).uppercase()}")
+            appendLine("PTY: ${appState.rdsPty} (${getPtyName(appState.rdsPty)})")
+            appendLine("RSSI: ${appState.rdsRssi}")
+            appendLine("TP: ${appState.rdsTp}")
+            appendLine("TA: ${appState.rdsTa}")
+            appendLine("AF Enabled: ${appState.rdsAfEnabled}")
+            if (appState.rdsAfList != null && appState.rdsAfList.isNotEmpty()) {
+                appendLine("AF List: ${appState.rdsAfList.joinToString(", ") { "%.1f".format(it / 10.0) }}")
+            }
+            appendLine()
+
+            // Deezer Data
+            appendLine("## Deezer Data")
+            appendLine("Status: ${appState.spotifyStatus ?: "(none)"}")
+            appendLine("Original RT: ${appState.spotifyOriginalRt ?: "(none)"}")
+            appendLine("Stripped RT: ${appState.spotifyStrippedRt ?: "(none)"}")
+            appendLine("Query: ${appState.spotifyQuery ?: "(none)"}")
+            if (appState.spotifyTrackInfo != null) {
+                val track = appState.spotifyTrackInfo
+                appendLine()
+                appendLine("### Track Info")
+                appendLine("Artist: ${track.artist}")
+                appendLine("Title: ${track.title}")
+                appendLine("Album: ${track.album ?: "(none)"}")
+                appendLine("Duration: ${formatDuration(track.durationMs)}")
+                appendLine("Track ID: ${track.trackId ?: "(none)"}")
+            }
+            appendLine()
+
+            // Logcat
+            appendLine("## Logcat (last $MAX_LOGCAT_LINES lines)")
+            appendLine("-".repeat(60))
+            append(getLogcat())
+        }
+    }
+
+    /**
+     * Builds Parser bug report content (RT-DLS parsing issues)
+     */
+    fun buildParserReportContent(userDescription: String? = null): String {
+        return buildString {
+            appendLine("=".repeat(60))
+            appendLine("fytFM Parser Bug Report")
+            appendLine("=".repeat(60))
+            appendLine()
+
+            // Timestamp and version
+            appendLine("## Report Info")
+            appendLine("Timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
+            appendLine("App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine("Build Type: ${BuildConfig.BUILD_TYPE}")
+            appendLine()
+
+            // Device Info
+            appendLine("## Device Info")
+            appendLine("Manufacturer: ${Build.MANUFACTURER}")
+            appendLine("Model: ${Build.MODEL}")
+            appendLine("Android Version: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+            appendLine()
+
+            // User Description
+            if (!userDescription.isNullOrEmpty()) {
+                appendLine("## Problem Description")
+                appendLine(userDescription)
+                appendLine()
+            }
+
+            // RT-DLS Parser Logs
+            appendLine("## RT-DLS Parser Log")
+            appendLine("-".repeat(60))
+            appendLine(ParserLogger.export())
+            appendLine()
+
+            // Logcat
+            appendLine("## Logcat (last $MAX_LOGCAT_LINES lines)")
+            appendLine("-".repeat(60))
+            append(getLogcat())
+        }
+    }
+
+    /**
+     * Builds Deezer bug report content (cover/track matching issues)
+     * Works for both FM RDS and DAB+ DLS
+     */
+    fun buildDeezerReportContent(
+        userDescription: String? = null,
+        deezerStatus: String? = null,
+        originalRt: String? = null,
+        strippedRt: String? = null,
+        query: String? = null,
+        trackInfo: TrackInfo? = null,
+        // FM RDS Data
+        fmFrequency: Float = 0f,
+        fmPs: String? = null,
+        fmRt: String? = null,
+        fmPi: Int = 0,
+        // DAB+ Data
+        dabStation: String? = null,
+        dabDls: String? = null
+    ): String {
+        return buildString {
+            appendLine("=".repeat(60))
+            appendLine("fytFM Deezer Bug Report")
+            appendLine("=".repeat(60))
+            appendLine()
+
+            // Timestamp and version
+            appendLine("## Report Info")
+            appendLine("Timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
+            appendLine("App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+            appendLine("Build Type: ${BuildConfig.BUILD_TYPE}")
+            appendLine()
+
+            // Device Info
+            appendLine("## Device Info")
+            appendLine("Manufacturer: ${Build.MANUFACTURER}")
+            appendLine("Model: ${Build.MODEL}")
+            appendLine("Android Version: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+            appendLine()
+
+            // User Description
+            if (!userDescription.isNullOrEmpty()) {
+                appendLine("## Problem Description")
+                appendLine(userDescription)
+                appendLine()
+            }
+
+            // FM RDS Data
+            appendLine("## FM RDS Data")
+            appendLine("Frequency: $fmFrequency MHz")
+            appendLine("PS: ${fmPs ?: "(none)"}")
+            appendLine("RT: ${fmRt ?: "(none)"}")
+            appendLine("PI: 0x${Integer.toHexString(fmPi).uppercase()}")
+            appendLine()
+
+            // DAB+ Data
+            appendLine("## DAB+ Data")
+            appendLine("Station: ${dabStation ?: "(none)"}")
+            appendLine("DLS: ${dabDls ?: "(none)"}")
+            appendLine()
+
+            // Deezer Data
+            appendLine("## Deezer Data")
+            appendLine("Status: ${deezerStatus ?: "(none)"}")
+            appendLine("Original RT/DLS: ${originalRt ?: "(none)"}")
+            appendLine("Parsed/Stripped: ${strippedRt ?: "(none)"}")
+            appendLine("Query: ${query ?: "(none)"}")
+            if (trackInfo != null) {
+                appendLine()
+                appendLine("### Track Info")
+                appendLine("Artist: ${trackInfo.artist}")
+                appendLine("Title: ${trackInfo.title}")
+                appendLine("Album: ${trackInfo.album ?: "(none)"}")
+                appendLine("All Artists: ${trackInfo.allArtists.joinToString(", ")}")
+                appendLine("Duration: ${formatDuration(trackInfo.durationMs)}")
+                appendLine("Popularity: ${trackInfo.popularity}/100")
+                appendLine("Track ID: ${trackInfo.trackId ?: "(none)"}")
+                appendLine("Album ID: ${trackInfo.albumId ?: "(none)"}")
+                appendLine("Deezer URL: ${trackInfo.deezerUrl ?: "(none)"}")
+                appendLine("Cover URL: ${trackInfo.coverUrl ?: trackInfo.coverUrlMedium ?: "(none)"}")
+            }
+            appendLine()
+
+            // RT-DLS Parser Logs (helpful context)
+            appendLine("## RT-DLS Parser Log")
+            appendLine("-".repeat(60))
+            appendLine(ParserLogger.export())
+            appendLine()
+
+            // Logcat
+            appendLine("## Logcat (last $MAX_LOGCAT_LINES lines)")
+            appendLine("-".repeat(60))
+            append(getLogcat())
+        }
+    }
+
+    /**
+     * Creates a bug report and saves it to the app's files directory.
+     * @return The file path of the created report, or null on error.
+     */
+    fun createBugReport(appState: AppState): String? {
+        return try {
+            val reportsDir = File(context.filesDir, REPORTS_DIR)
+            if (!reportsDir.exists()) {
+                reportsDir.mkdirs()
+            }
+
+            val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault()).format(Date())
+            val filename = "bugreport_$timestamp.txt"
+            val reportFile = File(reportsDir, filename)
+
+            val report = buildString {
+                appendLine("=" .repeat(60))
+                appendLine("fytFM Bug Report")
+                appendLine("=" .repeat(60))
+                appendLine()
+
+                // Timestamp and version
+                appendLine("## Report Info")
+                appendLine("Timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())}")
+                appendLine("App Version: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
+                appendLine("Build Date: ${BuildConfig.BUILD_DATE} ${BuildConfig.BUILD_TIME}")
+                appendLine("Build Type: ${BuildConfig.BUILD_TYPE}")
+                appendLine()
+
+                // Device Info
+                appendLine("## Device Info")
+                appendLine("Manufacturer: ${Build.MANUFACTURER}")
+                appendLine("Model: ${Build.MODEL}")
+                appendLine("Device: ${Build.DEVICE}")
+                appendLine("Product: ${Build.PRODUCT}")
+                appendLine("Board: ${Build.BOARD}")
+                appendLine("Hardware: ${Build.HARDWARE}")
+                appendLine("Android Version: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                appendLine("Display: ${Build.DISPLAY}")
+                appendLine()
+
+                // User Description
+                if (!appState.userDescription.isNullOrEmpty()) {
+                    appendLine("## User Description")
+                    appendLine(appState.userDescription)
+                    appendLine()
+                }
+
+                // RDS Data
+                appendLine("## RDS Data")
+                appendLine("Frequency: ${appState.currentFrequency} MHz")
+                appendLine("PS: ${appState.rdsPs ?: "(none)"}")
+                appendLine("RT: ${appState.rdsRt ?: "(none)"}")
+                appendLine("PI: 0x${Integer.toHexString(appState.rdsPi).uppercase()}")
+                appendLine("PTY: ${appState.rdsPty} (${getPtyName(appState.rdsPty)})")
+                appendLine("RSSI: ${appState.rdsRssi}")
+                appendLine("TP: ${appState.rdsTp}")
+                appendLine("TA: ${appState.rdsTa}")
+                appendLine("AF Enabled: ${appState.rdsAfEnabled}")
+                if (appState.rdsAfList != null && appState.rdsAfList.isNotEmpty()) {
+                    appendLine("AF List: ${appState.rdsAfList.joinToString(", ") { "%.1f".format(it / 10.0) }}")
+                }
+                appendLine()
+
+                // Spotify Data
+                appendLine("## Spotify Data")
+                appendLine("Status: ${appState.spotifyStatus ?: "(none)"}")
+                appendLine("Original RT: ${appState.spotifyOriginalRt ?: "(none)"}")
+                appendLine("Stripped RT: ${appState.spotifyStrippedRt ?: "(none)"}")
+                appendLine("Query: ${appState.spotifyQuery ?: "(none)"}")
+                if (appState.spotifyTrackInfo != null) {
+                    val track = appState.spotifyTrackInfo
+                    appendLine()
+                    appendLine("### Track Info")
+                    appendLine("Artist: ${track.artist}")
+                    appendLine("Title: ${track.title}")
+                    appendLine("Album: ${track.album ?: "(none)"}")
+                    appendLine("All Artists: ${track.allArtists.joinToString(", ")}")
+                    appendLine("Duration: ${formatDuration(track.durationMs)}")
+                    appendLine("Popularity: ${track.popularity}/100")
+                    appendLine("Explicit: ${track.explicit}")
+                    appendLine("Track/Disc: ${track.trackNumber}/${track.discNumber}")
+                    appendLine("ISRC: ${track.isrc ?: "(none)"}")
+                    appendLine("Album Type: ${track.albumType ?: "(none)"}")
+                    appendLine("Release Date: ${track.releaseDate ?: "(none)"}")
+                    appendLine("Track ID: ${track.trackId ?: "(none)"}")
+                    appendLine("Album ID: ${track.albumId ?: "(none)"}")
+                    appendLine("Spotify URL: ${track.deezerUrl ?: "(none)"}")
+                    appendLine("Cover URL: ${track.coverUrl ?: track.coverUrlMedium ?: "(none)"}")
+                }
+                appendLine()
+
+                // Logcat
+                appendLine("## Logcat (last $MAX_LOGCAT_LINES lines)")
+                appendLine("-".repeat(60))
+                append(getLogcat())
+            }
+
+            reportFile.writeText(report)
+            Log.i(TAG, "Bug report created: ${reportFile.absolutePath}")
+            reportFile.absolutePath
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create bug report", e)
+            null
+        }
+    }
+
+    /**
+     * Gets the list of all bug reports.
+     */
+    fun getBugReports(): List<File> {
+        val reportsDir = File(context.filesDir, REPORTS_DIR)
+        return if (reportsDir.exists()) {
+            reportsDir.listFiles()
+                ?.filter { it.name.startsWith("bugreport_") && it.name.endsWith(".txt") }
+                ?.sortedByDescending { it.lastModified() }
+                ?: emptyList()
+        } else {
+            emptyList()
+        }
+    }
+
+    /**
+     * Deletes a bug report.
+     */
+    fun deleteBugReport(file: File): Boolean {
+        return try {
+            file.delete()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to delete bug report", e)
+            false
+        }
+    }
+
+    /**
+     * Reads the content of a bug report.
+     */
+    fun readBugReport(file: File): String? {
+        return try {
+            file.readText()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to read bug report", e)
+            null
+        }
+    }
+
+    private fun getLogcat(): String {
+        return try {
+            val process = Runtime.getRuntime().exec("logcat -d -v threadtime *:V")
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val lines = mutableListOf<String>()
+
+            reader.useLines { lineSequence ->
+                lineSequence.forEach { line ->
+                    // Filter for relevant tags
+                    if (line.contains("fytFM") ||
+                        line.contains("FmRadio") ||
+                        line.contains("FmNative") ||
+                        line.contains("RdsManager") ||
+                        line.contains("FmService") ||
+                        line.contains("Spotify") ||
+                        line.contains("AndroidRuntime") ||
+                        line.contains("System.err")) {
+                        lines.add(line)
+                    }
+                }
+            }
+
+            // Take last MAX_LOGCAT_LINES lines
+            val result = if (lines.size > MAX_LOGCAT_LINES) {
+                lines.takeLast(MAX_LOGCAT_LINES)
+            } else {
+                lines
+            }
+
+            result.joinToString("\n")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get logcat", e)
+            "Error getting logcat: ${e.message}"
+        }
+    }
+
+    private fun getPtyName(pty: Int): String = RdsPtyNames.nameFor(pty)
+
+    private fun formatDuration(ms: Long): String {
+        val totalSeconds = ms / 1000
+        val minutes = totalSeconds / 60
+        val seconds = totalSeconds % 60
+        return "${minutes}:${seconds.toString().padStart(2, '0')}"
+    }
+
+}
