@@ -1251,7 +1251,7 @@ class MainActivity : AppCompatActivity(),
             else "No (${String.format("%.1f", hwFreq)} MHz)"
         } else "-- (not available)"
 
-        binding.debugHeader.text = "RDS Debug"
+        debugManager.setRdsHeaderTitle("RDS Debug")
         debugManager.updateDebugInfo(ps = psStr, rt = rtStr, rssiStr = rssiStr, pi = piStr, pty = ptyStr, tpTa = tpTaStr, af = afStr, afUsing = afUsingStr)
     }
 
@@ -3294,8 +3294,8 @@ class MainActivity : AppCompatActivity(),
      * Initialisiert die Anzeige für DAB-Modus beim App-Start
      */
     private fun initDabDisplay() {
-        // Debug-Header auf DAB Debug setzen
-        binding.debugHeader.text = "DAB Debug"
+        // Debug-Header auf DAB Debug setzen (über DebugManager, damit ▼/▶ erhalten bleibt)
+        debugManager.setRdsHeaderTitle("DAB Debug")
 
         if (currentDabServiceId != -1) {
             // Versuche den gespeicherten Sender zu finden
@@ -6622,5 +6622,33 @@ class MainActivity : AppCompatActivity(),
 
     override fun getUpdateRepository(): at.planqton.fytfm.data.UpdateRepository {
         return updateRepository
+    }
+
+    override fun setUpdateStateListener(listener: ((UpdateState) -> Unit)?) {
+        settingsUpdateListener = listener
+    }
+
+    override fun getCurrentUpdateState(): UpdateState {
+        return updateRepository.updateState
+    }
+
+    override fun installUpdate(localPath: String) {
+        try {
+            val file = java.io.File(localPath)
+            if (!file.exists()) {
+                android.widget.Toast.makeText(this, "APK-Datei nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
+                return
+            }
+            val authority = "${packageName}.fileprovider"
+            val uri = androidx.core.content.FileProvider.getUriForFile(this, authority, file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Install intent failed", e)
+            android.widget.Toast.makeText(this, "Installation fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 }

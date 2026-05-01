@@ -134,7 +134,7 @@ class DebugManager(
      * "RDS Debug" and "DAB+ Debug" depending on the active mode) while
      * preserving the current collapse affordance.
      */
-    private fun setRdsHeaderTitle(title: String) {
+    fun setRdsHeaderTitle(title: String) {
         headerTitles[binding.debugOverlay.id] = title
         applyCollapseState(binding.debugOverlay.id)
     }

@@ -8,7 +8,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
-import android.os.Environment
 import android.util.Log
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -34,7 +33,7 @@ sealed class UpdateState {
     data class UpdateAvailable(val info: UpdateInfo) : UpdateState()
     object NoUpdate : UpdateState()
     data class Downloading(val progress: Int) : UpdateState()
-    object DownloadComplete : UpdateState()
+    data class DownloadComplete(val localPath: String) : UpdateState()
     data class Error(val message: String) : UpdateState()
 }
 
@@ -47,6 +46,7 @@ class UpdateRepository(private val context: Context) {
 
     private var currentDownloadId: Long = -1
     private val executor = Executors.newSingleThreadExecutor()
+    @Volatile private var progressPollerActive: Boolean = false
 
     private val downloadReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -182,16 +182,15 @@ class UpdateRepository(private val context: Context) {
 
             val fileName = "fytFM-v${version}.apk"
 
-            // Delete old APK files from public Downloads
-            val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+            val downloadDir = context.getExternalFilesDir("Download")
             downloadDir?.listFiles()?.filter { it.name.startsWith("fytFM") && it.name.endsWith(".apk") }
                 ?.forEach { it.delete() }
 
             val request = DownloadManager.Request(Uri.parse(downloadUrl))
                 .setTitle(context.getString(at.planqton.fytfm.R.string.update_notification_title_format, version))
                 .setDescription(context.getString(at.planqton.fytfm.R.string.update_download_description))
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_HIDDEN)
+                .setDestinationInExternalFilesDir(context, "Download", fileName)
                 .setAllowedOverMetered(true)
                 .setAllowedOverRoaming(true)
                 .setMimeType("application/vnd.android.package-archive")
@@ -200,6 +199,7 @@ class UpdateRepository(private val context: Context) {
             currentDownloadId = downloadManager.enqueue(request)
 
             Log.i(TAG, "Download started with ID: $currentDownloadId -> $fileName")
+            startProgressPolling(downloadManager)
 
         } catch (e: Exception) {
             Log.e(TAG, "Error starting download", e)
@@ -207,7 +207,45 @@ class UpdateRepository(private val context: Context) {
         }
     }
 
+    private fun startProgressPolling(downloadManager: DownloadManager) {
+        if (progressPollerActive) return
+        progressPollerActive = true
+        Thread {
+            try {
+                while (progressPollerActive && currentDownloadId != -1L) {
+                    val query = DownloadManager.Query().setFilterById(currentDownloadId)
+                    val cursor = downloadManager.query(query) ?: break
+                    if (!cursor.moveToFirst()) {
+                        cursor.close()
+                        break
+                    }
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    if (status == DownloadManager.STATUS_SUCCESSFUL || status == DownloadManager.STATUS_FAILED) {
+                        cursor.close()
+                        break
+                    }
+                    val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    val soFar = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    val percent = if (total > 0) ((soFar * 100) / total).toInt() else 0
+                    setState(UpdateState.Downloading(percent))
+                    cursor.close()
+                    Thread.sleep(400)
+                }
+            } catch (e: InterruptedException) {
+                // shutdown
+            } catch (e: Exception) {
+                Log.e(TAG, "Progress polling error", e)
+            } finally {
+                progressPollerActive = false
+            }
+        }.apply {
+            isDaemon = true
+            name = "UpdateProgressPoller"
+        }.start()
+    }
+
     private fun handleDownloadComplete() {
+        progressPollerActive = false
         try {
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val query = DownloadManager.Query().setFilterById(currentDownloadId)
@@ -218,8 +256,15 @@ class UpdateRepository(private val context: Context) {
                 val status = cursor.getInt(statusIndex)
 
                 if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                    setState(UpdateState.DownloadComplete)
-                    Log.i(TAG, "Download complete - tap notification to install")
+                    val localUriIndex = cursor.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI)
+                    val localUriString = cursor.getString(localUriIndex)
+                    val localPath = Uri.parse(localUriString).path
+                    if (localPath.isNullOrBlank()) {
+                        setState(UpdateState.Error("Download-Pfad nicht gefunden"))
+                    } else {
+                        setState(UpdateState.DownloadComplete(localPath))
+                        Log.i(TAG, "Download complete: $localPath")
+                    }
                 } else {
                     setState(UpdateState.Error("Download fehlgeschlagen"))
                 }

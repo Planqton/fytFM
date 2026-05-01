@@ -3,12 +3,15 @@ package at.planqton.fytfm.ui.settings
 import android.app.AlertDialog
 import android.app.Dialog
 import android.content.Context
+import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.SeekBar
+import android.widget.TextView
 import androidx.fragment.app.DialogFragment
 import at.planqton.fytfm.R
 import at.planqton.fytfm.data.PresetRepository
@@ -78,10 +81,15 @@ class AccentColorEditorDialogFragment : DialogFragment() {
             grid.removeAllViews()
             val prefs = callback?.getPresetRepository() ?: return
             val current = if (editingNight) prefs.getAccentColorNight() else prefs.getAccentColorDay()
+            // Tiles: alle Presets + 1 Custom-Slot am Ende
+            val tileCount = presets.size + 1
             val cols = 4
-            val rows = (presets.size + cols - 1) / cols
+            val rows = (tileCount + cols - 1) / cols
             val swatchSize = dp(48)
             val swatchMargin = dp(8)
+            // Wenn current keinem Preset entspricht, ist es eine Custom-Farbe
+            val presetColors = presets.map { if (editingNight) it.night else it.day }.toSet()
+            val isCustom = current != 0 && current !in presetColors
             for (row in 0 until rows) {
                 val rowLayout = LinearLayout(requireContext()).apply {
                     layoutParams = LinearLayout.LayoutParams(
@@ -92,30 +100,64 @@ class AccentColorEditorDialogFragment : DialogFragment() {
                 }
                 for (col in 0 until cols) {
                     val idx = row * cols + col
-                    if (idx >= presets.size) break
-                    val preset = presets[idx]
-                    val color = if (editingNight) preset.night else preset.day
-                    val view = View(requireContext()).apply {
-                        background = GradientDrawable().apply {
-                            shape = GradientDrawable.OVAL
-                            setColor(color)
-                            setStroke(
-                                if (current == color) dp(3) else dp(1),
-                                if (current == color) 0xFFFFFFFF.toInt() else 0x80000000.toInt()
-                            )
+                    if (idx >= tileCount) break
+                    val tile = if (idx < presets.size) {
+                        val preset = presets[idx]
+                        val color = if (editingNight) preset.night else preset.day
+                        View(requireContext()).apply {
+                            background = GradientDrawable().apply {
+                                shape = GradientDrawable.OVAL
+                                setColor(color)
+                                setStroke(
+                                    if (current == color) dp(3) else dp(1),
+                                    if (current == color) 0xFFFFFFFF.toInt() else 0x80000000.toInt()
+                                )
+                            }
+                            contentDescription = getString(preset.nameRes)
+                            setOnClickListener {
+                                if (editingNight) prefs.setAccentColorNight(color)
+                                else prefs.setAccentColorDay(color)
+                                callback?.onAccentColorChanged()
+                                rebuildGrid()
+                            }
                         }
-                        contentDescription = getString(preset.nameRes)
-                        setOnClickListener {
-                            if (editingNight) prefs.setAccentColorNight(color)
-                            else prefs.setAccentColorDay(color)
-                            callback?.onAccentColorChanged()
-                            rebuildGrid()
+                    } else {
+                        // Custom slot: zeigt aktuelle Custom-Farbe wenn gesetzt, sonst Regenbogen-Gradient
+                        View(requireContext()).apply {
+                            background = if (isCustom) {
+                                GradientDrawable().apply {
+                                    shape = GradientDrawable.OVAL
+                                    setColor(current)
+                                    setStroke(dp(3), 0xFFFFFFFF.toInt())
+                                }
+                            } else {
+                                GradientDrawable(
+                                    GradientDrawable.Orientation.TL_BR,
+                                    intArrayOf(
+                                        0xFFFF5252.toInt(), 0xFFFFEB3B.toInt(),
+                                        0xFF4CAF50.toInt(), 0xFF2196F3.toInt(),
+                                        0xFFE040FB.toInt()
+                                    )
+                                ).apply {
+                                    shape = GradientDrawable.OVAL
+                                    setStroke(dp(1), 0x80000000.toInt())
+                                }
+                            }
+                            contentDescription = getString(R.string.accent_color_custom)
+                            setOnClickListener {
+                                showCustomColorPicker(current.takeIf { isCustom } ?: 0xFF888888.toInt()) { picked ->
+                                    if (editingNight) prefs.setAccentColorNight(picked)
+                                    else prefs.setAccentColorDay(picked)
+                                    callback?.onAccentColorChanged()
+                                    rebuildGrid()
+                                }
+                            }
                         }
                     }
                     val lp = LinearLayout.LayoutParams(swatchSize, swatchSize).apply {
                         setMargins(swatchMargin, swatchMargin, swatchMargin, swatchMargin)
                     }
-                    rowLayout.addView(view, lp)
+                    rowLayout.addView(tile, lp)
                 }
                 grid.addView(rowLayout)
             }
@@ -150,6 +192,10 @@ class AccentColorEditorDialogFragment : DialogFragment() {
             value.toFloat(),
             resources.displayMetrics
         ).toInt()
+
+    private fun showCustomColorPicker(initial: Int, onPicked: (Int) -> Unit) {
+        HsvColorPicker.show(requireContext(), initial, onPicked)
+    }
 
     companion object {
         const val TAG = "AccentColorEditor"

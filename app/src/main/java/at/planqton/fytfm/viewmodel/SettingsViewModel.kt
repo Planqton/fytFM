@@ -283,11 +283,8 @@ class SettingsViewModel(
         updateRepository.checkForUpdates()
     }
 
-    fun downloadUpdate() {
-        val state = _state.value.updateState
-        if (state is UpdateState.UpdateAvailable) {
-            updateRepository.downloadUpdate(state.info.downloadUrl, state.info.latestVersion)
-        }
+    fun downloadUpdate(downloadUrl: String, version: String) {
+        updateRepository.downloadUpdate(downloadUrl, version)
     }
 
     /**

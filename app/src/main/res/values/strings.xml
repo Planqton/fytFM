@@ -155,6 +155,8 @@
     <string name="recording_path">Recording Location</string>
     <string name="not_configured">Not configured</string>
     <string name="section_general">GENERAL</string>
+    <string name="show_more">Show more</string>
+    <string name="show_less">Show less</string>
     <string name="auto_background_desc">App goes to background after X seconds</string>
     <string name="seconds_label">Seconds:</string>
     <string name="station_change_overlay">Overlay on station change</string>
@@ -458,6 +460,17 @@
     <string name="update_notification_title_format">fytFM Update v%1$s</string>
     <string name="update_download_description">Tap after download to install</string>
 
+    <!-- Update dialog -->
+    <string name="update_dialog_title">Update verfügbar: v%1$s</string>
+    <string name="update_dialog_message_format">Aktuelle Version: %1$s\nNeue Version: %2$s\n\n%3$s</string>
+    <string name="update_download">Herunterladen</string>
+    <string name="update_download_started">Download gestartet</string>
+    <string name="update_downloading">Download läuft…</string>
+    <string name="update_checking">Suche nach Updates…</string>
+    <string name="update_no_update">Du hast bereits die neueste Version</string>
+    <string name="update_progress_title">Update wird heruntergeladen</string>
+    <string name="update_progress_format">%1$d %%</string>
+
     <!-- Media library folders (Android Auto / car launcher browse) -->
     <string name="media_folder_fm">FM Stations</string>
     <string name="media_folder_am">AM Stations</string>
@@ -575,7 +588,7 @@
     <string name="cd_simulate_signal_loss">Simulate signal loss</string>
 
     <!-- App Design (Settings) -->
-    <string name="section_app_design">APP DESIGN</string>
+    <string name="section_app_design">VISUAL SETTINGS</string>
     <string name="accent_colors">Accent Colors</string>
     <string name="accent_colors_desc">Customize light and dark theme colors</string>
     <string name="accent_color_editor_title">Accent Colors</string>
@@ -589,6 +602,8 @@
     <string name="accent_color_purple">Purple</string>
     <string name="accent_color_pink">Pink</string>
     <string name="accent_color_teal">Teal</string>
+    <string name="accent_color_custom">Custom</string>
+    <string name="accent_color_custom_picker_title">Pick a color</string>
 
     <!-- AF Switch Indicator -->
     <string name="af_active_indicator">AF: %1$.1f MHz aktiv</string>

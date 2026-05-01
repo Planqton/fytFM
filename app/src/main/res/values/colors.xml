@@ -25,4 +25,5 @@
     <!-- Dialog/Overlay Colors -->
     <color name="dialog_background">#FFFFFFFF</color>
     <color name="dialog_text">#FF333333</color>
+    <color name="search_bg">#F0F0F0</color>
 </resources>

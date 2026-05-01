@@ -1,13 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- Subtle background -->
-    <item>
+    <item android:id="@+id/headerBgFill">
         <shape android:shape="rectangle">
             <solid android:color="#0AFEAA2D" />
         </shape>
     </item>
     <!-- Left accent bar -->
-    <item android:width="4dp">
+    <item android:id="@+id/headerAccentBar" android:width="4dp">
         <shape android:shape="rectangle">
             <solid android:color="#FEAA2D" />
         </shape>

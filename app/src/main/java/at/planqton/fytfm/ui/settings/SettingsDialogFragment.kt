@@ -5,7 +5,10 @@ import android.app.Dialog
 import android.content.Context
 import android.os.Bundle
 import android.text.Editable
+import android.text.Spannable
+import android.text.SpannableString
 import android.text.TextWatcher
+import android.text.style.BackgroundColorSpan
 import android.view.View
 import androidx.core.content.ContextCompat
 import android.widget.EditText
@@ -13,6 +16,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.widget.SwitchCompat
 import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.Lifecycle
@@ -22,6 +26,7 @@ import at.planqton.fytfm.FrequencyScaleView
 import at.planqton.fytfm.R
 import at.planqton.fytfm.data.PresetRepository
 import at.planqton.fytfm.data.UpdateRepository
+import at.planqton.fytfm.data.UpdateState
 import at.planqton.fytfm.viewmodel.SettingsUiState
 import at.planqton.fytfm.viewmodel.SettingsViewModel
 import kotlinx.coroutines.flow.collectLatest
@@ -72,6 +77,9 @@ class SettingsDialogFragment : DialogFragment() {
         fun onRecordingPathCallbackSet(callback: (String?) -> Unit)
         fun getPresetRepository(): PresetRepository
         fun getUpdateRepository(): UpdateRepository
+        fun setUpdateStateListener(listener: ((UpdateState) -> Unit)?)
+        fun getCurrentUpdateState(): UpdateState
+        fun installUpdate(localPath: String)
         fun onAccentColorEditorRequested()
         /** Wird gefeuert wenn der FM-Deezer-Master-Toggle geändert wurde,
          *  damit der btnDeezerToggle in der Hauptansicht synchron bleibt. */
@@ -92,8 +100,16 @@ class SettingsDialogFragment : DialogFragment() {
 
     override fun onDetach() {
         super.onDetach()
+        callback?.setUpdateStateListener(null)
+        dismissProgressDialog()
         callback = null
     }
+
+    private var updateInfoDialog: AlertDialog? = null
+    private var progressDialog: AlertDialog? = null
+    private var progressBar: android.widget.ProgressBar? = null
+    private var progressText: TextView? = null
+    private var didAutoInstall: Boolean = false
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         dialogView = layoutInflater.inflate(R.layout.dialog_settings, null)
@@ -102,6 +118,7 @@ class SettingsDialogFragment : DialogFragment() {
             .setView(dialogView)
             .create()
 
+        setupCollapsibleSections()
         setupSearch()
         setupFmSettings()
         setupAmSettings()
@@ -114,6 +131,8 @@ class SettingsDialogFragment : DialogFragment() {
         setupAppSettings()
         setupOtherSettings()
         applyAccentToSwitches()
+        applyAccentToSectionHeaders()
+        applyAccentToSeekBars()
 
         observeViewModel()
 
@@ -199,6 +218,208 @@ class SettingsDialogFragment : DialogFragment() {
         }
     }
 
+    private fun currentAccentColor(): Int {
+        val ctx = requireContext()
+        return at.planqton.fytfm.ui.theme.AccentColors.current(
+            ctx,
+            callback?.getPresetRepository() ?: return ContextCompat.getColor(ctx, R.color.radio_accent)
+        )
+    }
+
+    private fun applyAccentToSectionHeaders() {
+        val accent = currentAccentColor()
+        val textColor = ContextCompat.getColor(requireContext(), R.color.dialog_text)
+        val headerIds = listOf(
+            R.id.headerSectionGeneral, R.id.headerSectionAppDesign,
+            R.id.headerSectionFm, R.id.headerSectionAm, R.id.headerSectionDab,
+            R.id.headerSectionRadioLogos, R.id.headerSectionRdsArchive,
+            R.id.headerSectionDeezer, R.id.headerSectionApp
+        )
+        for (id in headerIds) {
+            val header = dialogView.findViewById<View>(id) ?: continue
+            tintHeaderBackground(header, accent)
+            // Header-Text in dialog_text-Farbe (weiß im Night-, dunkel im Day-Mode);
+            // Chevron in Akzent-Farbe
+            if (header is TextView) {
+                header.setTextColor(textColor)
+            } else if (header is android.view.ViewGroup) {
+                for (i in 0 until header.childCount) {
+                    val child = header.getChildAt(i)
+                    if (child is TextView) child.setTextColor(textColor)
+                    if (child is ImageView) child.setColorFilter(accent)
+                }
+            }
+        }
+    }
+
+    private fun tintHeaderBackground(header: View, accent: Int) {
+        val bg = header.background ?: return
+        val mutated = bg.mutate()
+        if (mutated is android.graphics.drawable.LayerDrawable) {
+            (mutated.findDrawableByLayerId(R.id.headerAccentBar) as? android.graphics.drawable.GradientDrawable)
+                ?.setColor(accent)
+            (mutated.findDrawableByLayerId(R.id.headerBgFill) as? android.graphics.drawable.GradientDrawable)
+                ?.setColor((accent and 0x00FFFFFF) or 0x0A000000)
+            header.background = mutated
+        }
+    }
+
+    private fun applyAccentToSeekBars() {
+        val accent = currentAccentColor()
+        val tintList = android.content.res.ColorStateList.valueOf(accent)
+        forEachSeekBar(dialogView) { sb ->
+            sb.thumbTintList = tintList
+            sb.progressTintList = tintList
+            sb.progressBackgroundTintList = android.content.res.ColorStateList.valueOf(
+                (accent and 0x00FFFFFF) or 0x40000000
+            )
+        }
+    }
+
+    private fun forEachSeekBar(view: View, action: (SeekBar) -> Unit) {
+        if (view is SeekBar) action(view)
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) forEachSeekBar(view.getChildAt(i), action)
+        }
+    }
+
+    // ========== COLLAPSIBLE SECTIONS ==========
+    private val collapsibleSectionTriples = listOf(
+        Triple(R.id.headerSectionGeneral, R.id.contentSectionGeneral, R.id.chevronSectionGeneral),
+        Triple(R.id.headerSectionFm, R.id.contentSectionFm, R.id.chevronSectionFm),
+        Triple(R.id.headerSectionAm, R.id.contentSectionAm, R.id.chevronSectionAm),
+        Triple(R.id.headerSectionDab, R.id.contentSectionDab, R.id.chevronSectionDab),
+        Triple(R.id.headerSectionRadioLogos, R.id.contentSectionRadioLogos, R.id.chevronSectionRadioLogos),
+        Triple(R.id.headerSectionRdsArchive, R.id.contentSectionRdsArchive, R.id.chevronSectionRdsArchive),
+        Triple(R.id.headerSectionDeezer, R.id.contentSectionDeezer, R.id.chevronSectionDeezer)
+    )
+
+    // contentId → headerId for ALL sections (including non-collapsible App Design + App)
+    private val sectionHeaderForContent = mapOf(
+        R.id.contentSectionGeneral to R.id.headerSectionGeneral,
+        R.id.contentSectionAppDesign to R.id.headerSectionAppDesign,
+        R.id.contentSectionFm to R.id.headerSectionFm,
+        R.id.contentSectionAm to R.id.headerSectionAm,
+        R.id.contentSectionDab to R.id.headerSectionDab,
+        R.id.contentSectionRadioLogos to R.id.headerSectionRadioLogos,
+        R.id.contentSectionRdsArchive to R.id.headerSectionRdsArchive,
+        R.id.contentSectionDeezer to R.id.headerSectionDeezer,
+        R.id.contentSectionApp to R.id.headerSectionApp
+    )
+
+    private fun tintEditTextHandles(et: EditText, accent: Int) {
+        et.highlightColor = (accent and 0x00FFFFFF) or 0x66000000
+        et.textCursorDrawable?.mutate()?.setTint(accent)
+        et.textSelectHandle?.mutate()?.let {
+            it.setTint(accent)
+            et.setTextSelectHandle(it)
+        }
+        et.textSelectHandleLeft?.mutate()?.let {
+            it.setTint(accent)
+            et.setTextSelectHandleLeft(it)
+        }
+        et.textSelectHandleRight?.mutate()?.let {
+            it.setTint(accent)
+            et.setTextSelectHandleRight(it)
+        }
+    }
+
+    // Items that stay visible even when their section is collapsed.
+    // The set holds View-IDs of any descendant of the row — we walk the row
+    // tree and treat the row as "minimal" if any descendant matches.
+    private val minimalItemsBySection: Map<Int, Set<Int>> = mapOf(
+        R.id.contentSectionGeneral to setOf(
+            R.id.switchAutoplayAtStartup,
+            R.id.switchAutoBackground,
+            R.id.switchStationChangeToast
+        ),
+        R.id.contentSectionFm to setOf(
+            R.id.itemRadioEditorFm,
+            R.id.switchDeezerFm
+        ),
+        R.id.contentSectionAm to setOf(
+            R.id.itemRadioEditorAm
+        ),
+        R.id.contentSectionDab to setOf(
+            R.id.itemRadioEditorDab,
+            R.id.switchDeezerDab,
+            R.id.switchDabVisualizer,
+            R.id.itemDabVisualizerStyle,
+            R.id.itemDabRecordingPath
+        )
+    )
+
+    // Sub-containers whose visibility is owned by their parent switch's listener —
+    // skipped by section-collapse logic so the existing switch behavior is preserved.
+    private val managedSubContainerIds: Set<Int> = setOf(
+        R.id.layoutAutoBackgroundOptions,
+        R.id.layoutTickSoundVolume
+    )
+
+    // Per-section expansion state: true = advanced items visible, false = only minimal
+    private val sectionExpansionState = mutableMapOf<Int, Boolean>()
+
+    private fun rowContainsAnyId(row: View, ids: Set<Int>): Boolean {
+        if (row.id in ids) return true
+        if (row is android.view.ViewGroup) {
+            for (i in 0 until row.childCount) {
+                if (rowContainsAnyId(row.getChildAt(i), ids)) return true
+            }
+        }
+        return false
+    }
+
+    private fun applySectionExpansionState(contentId: Int) {
+        val expanded = sectionExpansionState[contentId] == true
+        val content = dialogView.findViewById<android.view.ViewGroup>(contentId) ?: return
+        content.visibility = View.VISIBLE
+        val minimal = minimalItemsBySection[contentId] ?: emptySet()
+        for (i in 0 until content.childCount) {
+            val row = content.getChildAt(i)
+            // Skip switch-managed sub-containers — their visibility is owned by their parent switch listener.
+            if (row.id in managedSubContainerIds) continue
+            row.visibility = if (expanded || rowContainsAnyId(row, minimal)) View.VISIBLE else View.GONE
+        }
+    }
+
+    private fun setupCollapsibleSections() {
+        val ctx = requireContext()
+        val density = resources.displayMetrics.density
+        for ((headerId, contentId, chevronId) in collapsibleSectionTriples) {
+            val header = dialogView.findViewById<android.view.ViewGroup>(headerId) ?: continue
+            val chevron = dialogView.findViewById<View>(chevronId) ?: continue
+            // Programmatically insert "Show more" / "Show less" label right before the chevron.
+            val showMoreLabel = TextView(ctx).apply {
+                text = ctx.getString(R.string.show_more)
+                textSize = 12f
+                setTextColor(ContextCompat.getColor(ctx, R.color.dialog_text))
+                alpha = 0.7f
+                val params = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                params.marginEnd = (density * 8).toInt()
+                layoutParams = params
+            }
+            val chevronIndex = header.indexOfChild(chevron)
+            if (chevronIndex >= 0) header.addView(showMoreLabel, chevronIndex)
+
+            // Initial state: collapsed (only minimal items shown)
+            sectionExpansionState[contentId] = false
+            applySectionExpansionState(contentId)
+            chevron.rotation = 0f
+            header.setOnClickListener {
+                val newExpanded = sectionExpansionState[contentId] != true
+                sectionExpansionState[contentId] = newExpanded
+                applySectionExpansionState(contentId)
+                chevron.animate().rotation(if (newExpanded) 90f else 0f).setDuration(180).start()
+                showMoreLabel.text = ctx.getString(
+                    if (newExpanded) R.string.show_less else R.string.show_more
+                )
+            }
+        }
+    }
+
     // ========== SEARCH ==========
     private fun setupSearch() {
         val searchSettings = dialogView.findViewById<EditText>(R.id.searchSettings)
@@ -206,14 +427,23 @@ class SettingsDialogFragment : DialogFragment() {
         val textNoSearchResults = dialogView.findViewById<TextView>(R.id.textNoSearchResults)
         val contentContainer = dialogView.findViewById<LinearLayout>(R.id.settingsContentContainer)
 
-        // Helper function to find the row container (direct child of contentContainer)
-        fun findRowContainer(view: View?): View? {
+        // Cursor + Selection-Handles + Highlight in Akzent-Farbe (statt System-Rot)
+        tintEditTextHandles(searchSettings, currentAccentColor())
+
+        val sectionContentIds = sectionHeaderForContent.keys
+
+        // Walk up from a matched view until reaching a "row container" — i.e. a view whose
+        // parent is either the main contentContainer or a section content container.
+        fun findRow(view: View?): View? {
             if (view == null || contentContainer == null) return null
             var current: View? = view
-            while (current != null && current.parent != contentContainer) {
-                current = current.parent as? View
+            while (current != null) {
+                val parent = current.parent as? View ?: return null
+                if (parent === contentContainer) return current
+                if (parent.id in sectionContentIds) return current
+                current = parent
             }
-            return current
+            return null
         }
 
         // Define searchable items with their keywords (German and English)
@@ -268,22 +498,71 @@ class SettingsDialogFragment : DialogFragment() {
             SearchableItem(R.id.btnCloseApp, listOf("close", "beenden", "schließen", "app", "exit"))
         )
 
-        // Store original visibility states
-        val originalVisibility = mutableMapOf<View, Int>()
-        contentContainer?.let { container ->
-            for (i in 0 until container.childCount) {
-                val child = container.getChildAt(i)
-                originalVisibility[child] = child.visibility
+        // Pre-search expansion state per section (to restore on clear)
+        var preSearchExpansion: Map<Int, Boolean>? = null
+
+        // Cache of original (non-highlighted) text per TextView, to restore on clear
+        val originalTextCache = mutableMapOf<TextView, CharSequence>()
+        val highlightColor = (currentAccentColor() and 0x00FFFFFF) or 0x66000000
+
+        fun findTextViewsRecursive(view: View, out: MutableList<TextView>) {
+            if (view is TextView) out.add(view)
+            if (view is android.view.ViewGroup) {
+                for (i in 0 until view.childCount) {
+                    findTextViewsRecursive(view.getChildAt(i), out)
+                }
             }
+        }
+
+        fun highlightInRow(row: View, query: String) {
+            val tvs = mutableListOf<TextView>()
+            findTextViewsRecursive(row, tvs)
+            for (tv in tvs) {
+                val original = originalTextCache.getOrPut(tv) { tv.text ?: "" }
+                val text = original.toString()
+                val idx = text.lowercase().indexOf(query)
+                if (idx >= 0) {
+                    val span = SpannableString(text)
+                    span.setSpan(
+                        BackgroundColorSpan(highlightColor),
+                        idx, idx + query.length,
+                        Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                    )
+                    tv.text = span
+                } else {
+                    tv.text = original
+                }
+            }
+        }
+
+        fun clearAllHighlights() {
+            for ((tv, original) in originalTextCache) {
+                tv.text = original
+            }
+            originalTextCache.clear()
         }
 
         fun filterSettings(query: String) {
             val trimmedQuery = query.trim().lowercase()
 
             if (trimmedQuery.isEmpty()) {
-                // Restore all items to original state
-                originalVisibility.forEach { (view, visibility) ->
-                    view.visibility = visibility
+                clearAllHighlights()
+                // Restore visibility of direct contentContainer children (headers, dividers, bottom items)
+                contentContainer?.let { container ->
+                    for (i in 0 until container.childCount) {
+                        val child = container.getChildAt(i)
+                        if (child.id !in sectionContentIds) {
+                            child.visibility = View.VISIBLE
+                        }
+                    }
+                }
+                // Restore per-section expansion state and apply
+                preSearchExpansion?.forEach { (contentId, expanded) ->
+                    sectionExpansionState[contentId] = expanded
+                }
+                preSearchExpansion = null
+                for (contentId in sectionContentIds) {
+                    applySectionExpansionState(contentId)
                 }
                 textNoSearchResults.visibility = View.GONE
                 btnClearSearch.visibility = View.GONE
@@ -292,23 +571,53 @@ class SettingsDialogFragment : DialogFragment() {
 
             btnClearSearch.visibility = View.VISIBLE
 
-            // First: hide all items in content container
+            // First search input — capture current expansion state so we can restore later
+            if (preSearchExpansion == null) {
+                preSearchExpansion = sectionContentIds.associateWith {
+                    sectionExpansionState[it] == true
+                }
+            }
+
+            // Hide everything: direct children of contentContainer + rows inside section content
             contentContainer?.let { container ->
                 for (i in 0 until container.childCount) {
                     container.getChildAt(i).visibility = View.GONE
                 }
             }
+            for (sectionId in sectionContentIds) {
+                val section = dialogView.findViewById<android.view.ViewGroup>(sectionId) ?: continue
+                for (i in 0 until section.childCount) {
+                    section.getChildAt(i).visibility = View.GONE
+                }
+            }
 
-            // Find and show matching items
+            // Find matches and reveal: row + section content + section header.
+            // Match wins if query is substring of any keyword OR of any visible TextView text in the row.
             var matchCount = 0
             for (item in searchableItems) {
-                val view = dialogView.findViewById<View>(item.viewId)
-                val matches = item.keywords.any { it.contains(trimmedQuery) }
-                if (matches) {
+                val view = dialogView.findViewById<View>(item.viewId) ?: continue
+                val row = findRow(view) ?: continue
+                val keywordMatch = item.keywords.any { it.contains(trimmedQuery) }
+                val textMatch = if (!keywordMatch) {
+                    val tvs = mutableListOf<TextView>()
+                    findTextViewsRecursive(row, tvs)
+                    tvs.any {
+                        val orig = originalTextCache[it] ?: it.text ?: ""
+                        orig.toString().lowercase().contains(trimmedQuery)
+                    }
+                } else false
+                if (keywordMatch || textMatch) {
                     matchCount++
-                    // Find and show the row container
-                    val rowContainer = findRowContainer(view)
-                    rowContainer?.visibility = View.VISIBLE
+                    row.visibility = View.VISIBLE
+                    highlightInRow(row, trimmedQuery)
+                    // Reveal containing section if any
+                    val parent = row.parent as? View
+                    if (parent != null && parent.id in sectionContentIds) {
+                        parent.visibility = View.VISIBLE
+                        sectionHeaderForContent[parent.id]?.let { headerId ->
+                            dialogView.findViewById<View>(headerId)?.visibility = View.VISIBLE
+                        }
+                    }
                 }
             }
 
@@ -781,7 +1090,44 @@ class SettingsDialogFragment : DialogFragment() {
         val textVersionValue = dialogView.findViewById<TextView>(R.id.textVersionValue)
         textVersionValue?.text = viewModel.state.value.currentVersion
         dialogView.findViewById<View>(R.id.itemAppVersion).setOnClickListener {
-            viewModel.checkForUpdates()
+            handleUpdateClick()
+        }
+
+        val appVersionBadge = dialogView.findViewById<View>(R.id.updateBadgeAppVersion)
+        // Initialer State: wenn beim Öffnen schon ein Update bekannt ist, Punkt zeigen
+        appVersionBadge.visibility =
+            if (callback?.getCurrentUpdateState() is UpdateState.UpdateAvailable) View.VISIBLE else View.GONE
+
+        // Listener: live State-Änderungen während Dialog offen ist
+        callback?.setUpdateStateListener { state ->
+            if (!isAdded) return@setUpdateStateListener
+            appVersionBadge.visibility =
+                if (state is UpdateState.UpdateAvailable) View.VISIBLE else View.GONE
+            when (state) {
+                is UpdateState.Downloading -> showOrUpdateProgressDialog(state.progress)
+                is UpdateState.DownloadComplete -> {
+                    dismissProgressDialog()
+                    if (!didAutoInstall) {
+                        didAutoInstall = true
+                        updateInfoDialog?.dismiss()
+                        updateInfoDialog = null
+                        callback?.installUpdate(state.localPath)
+                    }
+                }
+                is UpdateState.UpdateAvailable -> {
+                    if (updateInfoDialog == null) showUpdateAvailableDialog(state)
+                }
+                is UpdateState.NoUpdate -> {
+                    if (updateInfoDialog == null) {
+                        Toast.makeText(requireContext(), R.string.update_no_update, Toast.LENGTH_SHORT).show()
+                    }
+                }
+                is UpdateState.Error -> {
+                    dismissProgressDialog()
+                    Toast.makeText(requireContext(), state.message, Toast.LENGTH_LONG).show()
+                }
+                else -> { /* Idle, Checking — nichts tun */ }
+            }
         }
 
         // Language item
@@ -817,6 +1163,88 @@ class SettingsDialogFragment : DialogFragment() {
         dialogView.findViewById<View>(R.id.itemViewCorrections).setOnClickListener {
             callback?.onCorrectionsViewerRequested()
         }
+    }
+
+    private fun handleUpdateClick() {
+        val state = callback?.getCurrentUpdateState() ?: UpdateState.Idle
+        when (state) {
+            is UpdateState.UpdateAvailable -> showUpdateAvailableDialog(state)
+            is UpdateState.Downloading -> Toast.makeText(requireContext(), R.string.update_downloading, Toast.LENGTH_SHORT).show()
+            is UpdateState.DownloadComplete -> callback?.installUpdate(state.localPath)
+            is UpdateState.Checking -> Toast.makeText(requireContext(), R.string.update_checking, Toast.LENGTH_SHORT).show()
+            else -> {
+                Toast.makeText(requireContext(), R.string.update_checking, Toast.LENGTH_SHORT).show()
+                viewModel.checkForUpdates()
+            }
+        }
+    }
+
+    private fun showOrUpdateProgressDialog(percent: Int) {
+        if (!isAdded) return
+        if (progressDialog == null) {
+            val ctx = requireContext()
+            val container = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                val pad = (resources.displayMetrics.density * 24).toInt()
+                setPadding(pad, pad, pad, pad)
+            }
+            progressText = TextView(ctx).apply {
+                text = getString(R.string.update_progress_format, 0)
+                textSize = 16f
+            }
+            progressBar = android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
+                isIndeterminate = false
+                max = 100
+                progress = 0
+                val topMargin = (resources.displayMetrics.density * 12).toInt()
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins(0, topMargin, 0, 0) }
+            }
+            container.addView(progressText)
+            container.addView(progressBar)
+            progressDialog = AlertDialog.Builder(ctx)
+                .setTitle(R.string.update_progress_title)
+                .setView(container)
+                .setCancelable(false)
+                .create()
+                .also { it.show() }
+        }
+        progressBar?.progress = percent.coerceIn(0, 100)
+        progressText?.text = getString(R.string.update_progress_format, percent.coerceIn(0, 100))
+    }
+
+    private fun dismissProgressDialog() {
+        progressDialog?.dismiss()
+        progressDialog = null
+        progressBar = null
+        progressText = null
+    }
+
+    private fun showUpdateAvailableDialog(state: UpdateState.UpdateAvailable) {
+        if (!isAdded) return
+        val info = state.info
+        val notes = info.releaseNotes?.takeIf { it.isNotBlank() } ?: ""
+        val title = getString(R.string.update_dialog_title, info.latestVersion)
+        val message = getString(
+            R.string.update_dialog_message_format,
+            info.currentVersion,
+            info.latestVersion,
+            notes
+        )
+        updateInfoDialog?.dismiss()
+        updateInfoDialog = AlertDialog.Builder(requireContext())
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton(R.string.update_download) { _, _ ->
+                didAutoInstall = false
+                viewModel.downloadUpdate(info.downloadUrl, info.latestVersion)
+                Toast.makeText(requireContext(), R.string.update_download_started, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .setOnDismissListener { updateInfoDialog = null }
+            .show()
     }
 
     // ========== OTHER SETTINGS ==========

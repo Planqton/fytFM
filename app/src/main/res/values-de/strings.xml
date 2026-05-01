@@ -155,6 +155,8 @@
     <string name="recording_path">Aufnahme-Speicherort</string>
     <string name="not_configured">Nicht konfiguriert</string>
     <string name="section_general">ALLGEMEIN</string>
+    <string name="show_more">Mehr anzeigen</string>
+    <string name="show_less">Weniger anzeigen</string>
     <string name="auto_background_desc">App geht nach X Sekunden in den Hintergrund</string>
     <string name="seconds_label">Sekunden:</string>
     <string name="station_change_overlay">Overlay bei Senderwechsel</string>
@@ -572,7 +574,7 @@
     <string name="cd_simulate_signal_loss">Empfangsverlust simulieren</string>
 
     <!-- App Design (Settings) -->
-    <string name="section_app_design">APP-DESIGN</string>
+    <string name="section_app_design">VISUAL SETTINGS</string>
     <string name="accent_colors">Akzentfarben</string>
     <string name="accent_colors_desc">Tag- und Nacht-Modus-Farben anpassen</string>
     <string name="accent_color_editor_title">Akzentfarben</string>
@@ -586,6 +588,8 @@
     <string name="accent_color_purple">Lila</string>
     <string name="accent_color_pink">Pink</string>
     <string name="accent_color_teal">Türkis</string>
+    <string name="accent_color_custom">Eigene</string>
+    <string name="accent_color_custom_picker_title">Farbe wählen</string>
 
     <!-- AF Switch Indicator -->
     <string name="af_active_indicator">AF: %1$.1f MHz aktiv</string>
