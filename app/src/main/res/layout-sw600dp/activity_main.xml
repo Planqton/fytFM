@@ -521,6 +521,18 @@
                         android:padding="10dp"
                         android:contentDescription="@string/favorite" />
 
+                    <!-- Deezer Toggle (DAB) -->
+                    <ImageButton
+                        android:id="@+id/dabListDeezerToggleBtn"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="8dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_deezer"
+                        android:scaleType="fitCenter"
+                        android:padding="10dp"
+                        android:contentDescription="@string/cd_toggle_deezer" />
+
                     <!-- Favorites Filter Toggle -->
                     <ImageButton
                         android:id="@+id/dabListFilterBtn"
@@ -994,6 +1006,7 @@
         android:id="@+id/stationBar"
         android:layout_width="match_parent"
         android:layout_height="70dp"
+        android:layout_marginTop="16dp"
         android:layout_marginBottom="16dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"

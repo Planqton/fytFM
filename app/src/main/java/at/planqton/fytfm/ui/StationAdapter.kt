@@ -131,12 +131,15 @@ class StationAdapter(
         fun bind(station: RadioStation, isSelected: Boolean, logoPath: String?) {
             tvFrequency.text = station.getDisplayFrequency()
 
+            // INVISIBLE statt GONE: Höhe bleibt reserviert, damit Chips ohne Sendername
+            // dieselbe Höhe haben wie Chips mit Sendername.
             val name = station.getDisplayName()
             if (name != null) {
                 tvStationName.text = name
                 tvStationName.visibility = View.VISIBLE
             } else {
-                tvStationName.visibility = View.GONE
+                tvStationName.text = " "
+                tvStationName.visibility = View.INVISIBLE
             }
 
             // Favoriten-Stern anzeigen

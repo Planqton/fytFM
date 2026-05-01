@@ -84,6 +84,8 @@ class SettingsDialogFragment : DialogFragment() {
         /** Wird gefeuert wenn der FM-Deezer-Master-Toggle geändert wurde,
          *  damit der btnDeezerToggle in der Hauptansicht synchron bleibt. */
         fun onDeezerEnabledFmChanged(enabled: Boolean)
+        /** Analog für DAB+. */
+        fun onDeezerEnabledDabChanged(enabled: Boolean)
     }
 
     private var callback: SettingsCallback? = null
@@ -370,9 +372,19 @@ class SettingsDialogFragment : DialogFragment() {
     }
 
     private fun applySectionExpansionState(contentId: Int) {
-        val expanded = sectionExpansionState[contentId] == true
         val content = dialogView.findViewById<android.view.ViewGroup>(contentId) ?: return
         content.visibility = View.VISIBLE
+        // Nicht-klappbare Sektionen (Visual Settings, App): alle Rows immer sichtbar.
+        val isCollapsible = collapsibleSectionTriples.any { it.second == contentId }
+        if (!isCollapsible) {
+            for (i in 0 until content.childCount) {
+                val row = content.getChildAt(i)
+                if (row.id in managedSubContainerIds) continue
+                row.visibility = View.VISIBLE
+            }
+            return
+        }
+        val expanded = sectionExpansionState[contentId] == true
         val minimal = minimalItemsBySection[contentId] ?: emptySet()
         for (i in 0 until content.childCount) {
             val row = content.getChildAt(i)
@@ -764,6 +776,7 @@ class SettingsDialogFragment : DialogFragment() {
         switchDeezerDab.isChecked = viewModel.state.value.isDeezerEnabledDab
         switchDeezerDab.setOnCheckedChangeListener { _, isChecked ->
             viewModel.setDeezerEnabledDab(isChecked)
+            callback?.onDeezerEnabledDabChanged(isChecked)
             val mode = callback?.getCurrentRadioMode()
             if (mode == FrequencyScaleView.RadioMode.DAB ||
                 mode == FrequencyScaleView.RadioMode.DAB_DEV) {
@@ -986,6 +999,7 @@ class SettingsDialogFragment : DialogFragment() {
      * Änderung im Editor aufgerufen.
      */
     fun refreshAccentPreviewSwatches() {
+        if (!isAdded || !::dialogView.isInitialized) return
         val prefs = callback?.getPresetRepository() ?: return
         val daySwatch = dialogView.findViewById<View>(R.id.accentColorPreviewDay)
         val nightSwatch = dialogView.findViewById<View>(R.id.accentColorPreviewNight)
@@ -995,6 +1009,13 @@ class SettingsDialogFragment : DialogFragment() {
             ?: 0xFFFF5252.toInt()  // values-night/colors.xml radio_accent default
         (daySwatch.background as? android.graphics.drawable.GradientDrawable)?.setColor(dayColor)
         (nightSwatch.background as? android.graphics.drawable.GradientDrawable)?.setColor(nightColor)
+        // Auch alle anderen akzent-getinteten Elemente live aktualisieren
+        applyAccentToSwitches()
+        applyAccentToSectionHeaders()
+        applyAccentToSeekBars()
+        dialogView.findViewById<EditText>(R.id.searchSettings)?.let {
+            tintEditTextHandles(it, currentAccentColor())
+        }
     }
 
     // ========== RADIO LOGOS SETTINGS ==========

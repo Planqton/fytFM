@@ -2389,8 +2389,13 @@ class MainActivity : AppCompatActivity(),
     private fun updateDeezerWatermarks(showDeezer: Boolean) =
         coverDisplayController.updateDeezerWatermarks(showDeezer)
 
-    private fun updateSlideshowIndicators(canToggle: Boolean) =
-        coverDisplayController.updateIndicators(canToggle)
+    private fun updateSlideshowIndicators(canToggle: Boolean) {
+        // Dots zeigen die Cover-Source-Auswahl (DAB_LOGO / STATION_LOGO /
+        // SLIDESHOW / DEEZER) — das macht nur in DAB-Modus Sinn. In FM/AM
+        // gibt es nichts umzuschalten, daher Container ausblenden.
+        val effectiveToggle = canToggle && (isDabMode || isDabDevMode)
+        coverDisplayController.updateIndicators(effectiveToggle)
+    }
 
     private fun toggleDabCover() = coverDisplayController.toggleDabCover()
 
@@ -3721,6 +3726,7 @@ class MainActivity : AppCompatActivity(),
     private fun setupDeezerToggle() {
         // Load saved state for current frequency
         updateDeezerToggleForCurrentFrequency()
+        setupDabDeezerToggle()
 
         // Click handlers for both toggles (normal and carousel)
         val toggleAction = {
@@ -3753,7 +3759,76 @@ class MainActivity : AppCompatActivity(),
         }
 
         binding.btnDeezerToggle.setOnClickListener { toggleAction() }
-        binding.btnCarouselDeezerToggle.setOnClickListener { toggleAction() }
+        // Carousel-Button ist mode-aware: in DAB+ togglet er DAB-Deezer,
+        // in FM/AM den FM-Master.
+        binding.btnCarouselDeezerToggle.setOnClickListener {
+            if (isDabMode || isDabDevMode) {
+                val newState = !presetRepository.isDeezerEnabledDab()
+                presetRepository.setDeezerEnabledDab(newState)
+                updateDabDeezerToggleAppearance(newState)
+                updateCarouselDeezerToggleAppearance()
+                coverDisplayController.updateDabDisplay()
+                updateSlideshowIndicators(true)
+                toast(if (newState) R.string.deezer_enabled else R.string.deezer_disabled)
+            } else {
+                toggleAction()
+            }
+        }
+    }
+
+    /** Spiegelt den richtigen Pref-Wert (FM oder DAB je nach Mode) auf den
+     *  Carousel-Deezer-Button. Aufruf nach Mode-Wechsel oder Pref-Änderung. */
+    private fun updateCarouselDeezerToggleAppearance() {
+        val enabled = if (isDabMode || isDabDevMode) {
+            presetRepository.isDeezerEnabledDab()
+        } else {
+            presetRepository.isDeezerEnabledFm()
+        }
+        val bg = if (enabled) R.drawable.toggle_selected else android.R.color.transparent
+        val drawableRes = if (enabled) R.drawable.ic_deezer else R.drawable.ic_deezer_off
+        val tintColor = if (enabled) {
+            at.planqton.fytfm.ui.theme.AccentColors.current(this, presetRepository)
+        } else {
+            androidx.core.content.ContextCompat.getColor(this, R.color.radio_text_secondary)
+        }
+        binding.btnCarouselDeezerToggle.setImageResource(drawableRes)
+        binding.btnCarouselDeezerToggle.setBackgroundResource(bg)
+        binding.btnCarouselDeezerToggle.alpha = 1.0f
+        androidx.core.widget.ImageViewCompat.setImageTintList(
+            binding.btnCarouselDeezerToggle,
+            android.content.res.ColorStateList.valueOf(tintColor)
+        )
+    }
+
+    /** DAB-Pendant zum FM-Deezer-Toggle. Schaltet das DAB-Master-Pref um
+     *  und triggert den Cover-Display-Refresh, damit Deezer-Cover sofort
+     *  geladen oder weggeschaltet werden. */
+    private fun setupDabDeezerToggle() {
+        updateDabDeezerToggleAppearance(presetRepository.isDeezerEnabledDab())
+        binding.dabListDeezerToggleBtn.setOnClickListener {
+            val newState = !presetRepository.isDeezerEnabledDab()
+            presetRepository.setDeezerEnabledDab(newState)
+            updateDabDeezerToggleAppearance(newState)
+            if (isDabMode || isDabDevMode) {
+                coverDisplayController.updateDabDisplay()
+                updateSlideshowIndicators(true)
+            }
+            toast(if (newState) R.string.deezer_enabled else R.string.deezer_disabled)
+        }
+    }
+
+    private fun updateDabDeezerToggleAppearance(enabled: Boolean) {
+        val drawableRes = if (enabled) R.drawable.ic_deezer else R.drawable.ic_deezer_off
+        val tintColor = if (enabled) {
+            at.planqton.fytfm.ui.theme.AccentColors.current(this, presetRepository)
+        } else {
+            androidx.core.content.ContextCompat.getColor(this, R.color.radio_text_secondary)
+        }
+        binding.dabListDeezerToggleBtn.setImageResource(drawableRes)
+        androidx.core.widget.ImageViewCompat.setImageTintList(
+            binding.dabListDeezerToggleBtn,
+            android.content.res.ColorStateList.valueOf(tintColor)
+        )
     }
 
     /**
@@ -3781,13 +3856,13 @@ class MainActivity : AppCompatActivity(),
             androidx.core.content.ContextCompat.getColor(this, R.color.radio_text_secondary)
         }
         val tintList = android.content.res.ColorStateList.valueOf(tintColor)
-
-        listOf(binding.btnDeezerToggle, binding.btnCarouselDeezerToggle).forEach { btn ->
-            btn.setImageResource(drawableRes)
-            btn.setBackgroundResource(bg)
-            btn.alpha = 1.0f
-            androidx.core.widget.ImageViewCompat.setImageTintList(btn, tintList)
-        }
+        // FM-Hauptbutton folgt immer FM-Pref. Carousel-Button ist mode-aware
+        // und wird unten separat gesetzt.
+        binding.btnDeezerToggle.setImageResource(drawableRes)
+        binding.btnDeezerToggle.setBackgroundResource(bg)
+        binding.btnDeezerToggle.alpha = 1.0f
+        androidx.core.widget.ImageViewCompat.setImageTintList(binding.btnDeezerToggle, tintList)
+        updateCarouselDeezerToggleAppearance()
     }
 
     /**
@@ -5517,6 +5592,9 @@ class MainActivity : AppCompatActivity(),
 
         // 6. UI aktualisieren
         updateUiAfterModeChange(mode)
+
+        // 7. Carousel-Deezer-Toggle ist mode-abhängig — nach Mode-Wechsel re-rendern
+        updateCarouselDeezerToggleAppearance()
     }
 
     private fun updateModeSpinner() {
@@ -6452,6 +6530,11 @@ class MainActivity : AppCompatActivity(),
         updateDeezerToggleAppearance(enabled)
     }
 
+    override fun onDeezerEnabledDabChanged(enabled: Boolean) {
+        updateDabDeezerToggleAppearance(enabled)
+        updateCarouselDeezerToggleAppearance()
+    }
+
     override fun onAccentColorChanged() {
         applyCurrentAccentColor()
         // Settings-Dialog (falls offen) seine Preview-Swatches refreshen lassen.
@@ -6505,9 +6588,10 @@ class MainActivity : AppCompatActivity(),
         // theme's colorAccent (legacy red). Tint to follow the user's accent.
         binding.debugOverlaysAlphaSlider.progressTintList = tint
         binding.debugOverlaysAlphaSlider.thumbTintList = tint
-        // Deezer-Toggles (FM-Hauptansicht + Carousel) sind jetzt akzent-
-        // getintet — bei jedem Akzent-Wechsel re-rendern.
+        // Deezer-Toggles (FM-Hauptansicht + Carousel + DAB-UI1) sind jetzt
+        // akzent-getintet — bei jedem Akzent-Wechsel re-rendern.
         updateDeezerToggleForCurrentFrequency()
+        updateDabDeezerToggleAppearance(presetRepository.isDeezerEnabledDab())
         // Placeholder-Tint im Carousel-Adapter aktualisieren — die
         // FM/AM/DAB-Branding-Vektoren bekommen die Akzentfarbe.
         stationCarouselAdapter?.setAccentColor(color)
