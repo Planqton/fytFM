@@ -597,4 +597,35 @@
     <!-- Signal-bars icon toggle (FM/AM) -->
     <string name="signal_icon_toggle">Signal-Symbol</string>
     <string name="signal_icon_toggle_desc">Empfangsstärke-Anzeige unter der Frequenz</string>
+
+    <!-- Update install errors -->
+    <string name="update_apk_not_found">APK-Datei nicht gefunden</string>
+    <string name="update_install_failed_format">Installation fehlgeschlagen: %1$s</string>
+    <string name="update_download_path_not_found">Download-Pfad nicht gefunden</string>
+    <string name="update_download_failed">Download fehlgeschlagen</string>
+    <string name="update_error_generic_format">Fehler: %1$s</string>
+
+    <!-- DAB Errors -->
+    <string name="dab_init_failed_format">DAB-Initialisierung fehlgeschlagen: %1$s</string>
+    <string name="dab_scan_already_running">Scan läuft bereits</string>
+    <string name="dab_tuner_error">DAB-Tuner-Fehler</string>
+    <string name="dab_recording_stop_error_format">Aufnahme-Stopp fehlgeschlagen: %1$s</string>
+    <string name="dab_demo_recording_failed">Demo-Aufnahme fehlgeschlagen</string>
+
+    <!-- Scan status -->
+    <string name="scan_status_phase_count_format">%1$s%2$s</string>
+    <string name="scan_status_fm_phase_format">%1$s: %2$.1f MHz | ~%3$s%4$s</string>
+    <string name="scan_status_am_format">AM %1$d kHz | ~%2$s</string>
+    <string name="scan_status_rds_format">RDS: %1$.1f MHz | ~%2$s%3$s%4$s</string>
+
+    <!-- Accessibility content descriptions (cd_edit/cd_delete/cd_export/cd_search_logo bereits vorhanden) -->
+    <string name="cd_favorite_action">Favorit</string>
+
+    <!-- Debug-mode buttons -->
+    <string name="debug_app_internet_off">App-Internet: AUS</string>
+    <string name="debug_kill_app_internet">App-Internet trennen</string>
+
+    <!-- Layout placeholder defaults -->
+    <string name="placeholder_dab_station">DAB+ Sender</string>
+    <string name="placeholder_ensemble">Ensemble</string>
 </resources>

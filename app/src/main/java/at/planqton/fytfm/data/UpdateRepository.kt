@@ -11,6 +11,7 @@ import android.os.Build
 import android.util.Log
 import org.json.JSONObject
 import java.net.HttpURLConnection
+import at.planqton.fytfm.R
 import java.net.URL
 import java.util.concurrent.Executors
 
@@ -141,7 +142,7 @@ class UpdateRepository(private val context: Context) {
             } catch (e: Exception) {
                 Log.e(TAG, "Error checking for updates", e)
                 if (!silent) {
-                    setState(UpdateState.Error("Fehler: ${e.message}"))
+                    setState(UpdateState.Error(context.getString(R.string.update_error_generic_format, e.message ?: "")))
                 }
             }
         }
@@ -203,7 +204,7 @@ class UpdateRepository(private val context: Context) {
 
         } catch (e: Exception) {
             Log.e(TAG, "Error starting download", e)
-            setState(UpdateState.Error("Download fehlgeschlagen: ${e.message}"))
+            setState(UpdateState.Error(context.getString(R.string.update_error_generic_format, e.message ?: "")))
         }
     }
 
@@ -260,19 +261,19 @@ class UpdateRepository(private val context: Context) {
                     val localUriString = cursor.getString(localUriIndex)
                     val localPath = Uri.parse(localUriString).path
                     if (localPath.isNullOrBlank()) {
-                        setState(UpdateState.Error("Download-Pfad nicht gefunden"))
+                        setState(UpdateState.Error(context.getString(R.string.update_download_path_not_found)))
                     } else {
                         setState(UpdateState.DownloadComplete(localPath))
                         Log.i(TAG, "Download complete: $localPath")
                     }
                 } else {
-                    setState(UpdateState.Error("Download fehlgeschlagen"))
+                    setState(UpdateState.Error(context.getString(R.string.update_download_failed)))
                 }
             }
             cursor.close()
         } catch (e: Exception) {
             Log.e(TAG, "Error handling download complete", e)
-            setState(UpdateState.Error("Fehler: ${e.message}"))
+            setState(UpdateState.Error(context.getString(R.string.update_error_generic_format, e.message ?: "")))
         }
     }
 

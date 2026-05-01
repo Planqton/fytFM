@@ -59,7 +59,7 @@
         android:src="@drawable/ic_edit"
         android:scaleType="centerInside"
         android:padding="8dp"
-        android:contentDescription="Bearbeiten" />
+        android:contentDescription="@string/cd_edit" />
 
     <!-- Delete Button -->
     <ImageButton
@@ -70,6 +70,6 @@
         android:src="@drawable/ic_delete"
         android:scaleType="centerInside"
         android:padding="8dp"
-        android:contentDescription="Löschen" />
+        android:contentDescription="@string/cd_delete" />
 
 </LinearLayout>

@@ -57,7 +57,7 @@
             android:background="@drawable/button_icon_background"
             android:src="@drawable/ic_search"
             android:scaleType="center"
-            android:contentDescription="Search Logo" />
+            android:contentDescription="@string/cd_search_logo" />
 
         <ImageButton
             android:id="@+id/btnEdit"
@@ -67,7 +67,7 @@
             android:background="@drawable/button_icon_background"
             android:src="@drawable/ic_edit"
             android:scaleType="center"
-            android:contentDescription="Edit" />
+            android:contentDescription="@string/cd_edit" />
 
         <ImageButton
             android:id="@+id/btnFavorite"
@@ -77,7 +77,7 @@
             android:background="@drawable/button_icon_background"
             android:src="@drawable/ic_favorite_border"
             android:scaleType="center"
-            android:contentDescription="Favorite" />
+            android:contentDescription="@string/cd_favorite_action" />
 
         <ImageButton
             android:id="@+id/btnDelete"
@@ -87,7 +87,7 @@
             android:background="@drawable/button_icon_background"
             android:src="@drawable/ic_delete"
             android:scaleType="center"
-            android:contentDescription="Delete" />
+            android:contentDescription="@string/cd_delete" />
 
     </LinearLayout>
 

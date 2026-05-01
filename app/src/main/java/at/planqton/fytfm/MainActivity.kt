@@ -6720,7 +6720,7 @@ class MainActivity : AppCompatActivity(),
         try {
             val file = java.io.File(localPath)
             if (!file.exists()) {
-                android.widget.Toast.makeText(this, "APK-Datei nicht gefunden", android.widget.Toast.LENGTH_LONG).show()
+                android.widget.Toast.makeText(this, R.string.update_apk_not_found, android.widget.Toast.LENGTH_LONG).show()
                 return
             }
             val authority = "${packageName}.fileprovider"
@@ -6732,7 +6732,11 @@ class MainActivity : AppCompatActivity(),
             startActivity(intent)
         } catch (e: Exception) {
             android.util.Log.e(TAG, "Install intent failed", e)
-            android.widget.Toast.makeText(this, "Installation fehlgeschlagen: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(
+                this,
+                getString(R.string.update_install_failed_format, e.message ?: ""),
+                android.widget.Toast.LENGTH_LONG
+            ).show()
         }
     }
 }

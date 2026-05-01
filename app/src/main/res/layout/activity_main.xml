@@ -49,7 +49,7 @@
             android:textSize="18sp"
             android:textStyle="bold"
             android:visibility="invisible"
-            android:text="99s" />
+            tools:text="99s" />
 
         <View
             android:layout_width="0dp"
@@ -436,7 +436,8 @@
                     android:id="@+id/dabListStationName"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="DAB+ Station"
+                    android:text=""
+                    tools:text="DAB+ Station"
                     android:textColor="@color/radio_text_primary"
                     android:textSize="32sp"
                     android:textStyle="bold"
@@ -455,7 +456,8 @@
                         android:id="@+id/dabListEnsemble"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Ensemble"
+                        android:text=""
+                        tools:text="Ensemble"
                         android:textColor="@color/radio_accent"
                         android:textSize="14sp" />
 
@@ -673,7 +675,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
-                android:text="FM 103.70"
+                android:text=""
+                tools:text="FM 103.70"
                 android:textSize="24sp"
                 android:textColor="@color/radio_text_primary" />
 

@@ -160,7 +160,11 @@ class DabRecorder(private val context: Context) {
             return fileName
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping recording: ${e.message}", e)
-            mainHandler.post { onRecordingError?.invoke("Fehler beim Beenden: ${e.message}") }
+            mainHandler.post {
+                onRecordingError?.invoke(
+                    context.getString(at.planqton.fytfm.R.string.dab_recording_stop_error_format, e.message ?: "")
+                )
+            }
             cleanup()
             return null
         }

@@ -449,7 +449,12 @@ class MockDabTunerManager : DabTunerBackend {
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Demo recording stub failed: ${e.message}", e)
-            mainHandler.post { onRecordingError?.invoke("Demo recording failed") }
+            mainHandler.post {
+                onRecordingError?.invoke(
+                    appContext?.getString(R.string.dab_demo_recording_failed)
+                        ?: "Demo recording failed"
+                )
+            }
             return false
         }
     }

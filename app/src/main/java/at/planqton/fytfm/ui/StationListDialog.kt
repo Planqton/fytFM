@@ -299,7 +299,7 @@ class StationListDialog(
                     highSensitivity = highSensitivity,
                     onProgress = { _, _, _, _, phase ->
                         val countStr = " | ${scanResultsLive.size} ${context.getString(R.string.found_suffix)}"
-                        tvScanStatus.text = "$phase$countStr"
+                        tvScanStatus.text = context.getString(R.string.scan_status_phase_count_format, phase, countStr)
                     },
                     onStationFound = { station ->
                         scanResultsLive.add(station)
@@ -328,7 +328,7 @@ class StationListDialog(
                         scanProgress.progress = progress
                         val timeStr = if (remainingSec > 60) "%d:%02d".format(remainingSec / 60, remainingSec % 60) else "%ds".format(remainingSec)
                         val countStr = " | ${scanResultsLive.size} ${context.getString(R.string.found_suffix)}"
-                        tvScanStatus.text = "$phase: %.1f MHz | ~$timeStr$countStr".format(frequency)
+                        tvScanStatus.text = context.getString(R.string.scan_status_fm_phase_format, phase, frequency, timeStr, countStr)
                     },
                     onStationFound = { station ->
                         scanResultsLive.add(station)
@@ -352,7 +352,7 @@ class StationListDialog(
                 onProgress = { progress, frequency, remainingSec, _ ->
                     scanProgress.progress = progress
                     val timeStr = if (remainingSec > 60) "%d:%02d".format(remainingSec / 60, remainingSec % 60) else "%ds".format(remainingSec)
-                    tvScanStatus.text = "AM ${frequency.toInt()} kHz | ~$timeStr"
+                    tvScanStatus.text = context.getString(R.string.scan_status_am_format, frequency.toInt(), timeStr)
                 },
                 onComplete = { stations ->
                     if (stations.isNotEmpty()) {
@@ -436,7 +436,7 @@ class StationListDialog(
                 val timeStr = if (remainingSec > 60) "%d:%02d".format(remainingSec / 60, remainingSec % 60) else "%ds".format(remainingSec)
                 val filterStr = if (filteredCount > 0) " | $filteredCount ${context.getString(R.string.filtered_suffix)}" else ""
                 val countStr = " | ${scanResultsLive.size} ${context.getString(R.string.verified_suffix)}"
-                tvScanStatus.text = "RDS: %.1f MHz | ~$timeStr$filterStr$countStr".format(frequency)
+                tvScanStatus.text = context.getString(R.string.scan_status_rds_format, frequency, timeStr, filterStr, countStr)
             },
             onStationVerified = { station ->
                 scanResultsLive.add(station)

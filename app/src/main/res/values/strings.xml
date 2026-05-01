@@ -470,6 +470,35 @@
     <string name="update_no_update">Du hast bereits die neueste Version</string>
     <string name="update_progress_title">Update wird heruntergeladen</string>
     <string name="update_progress_format">%1$d %%</string>
+    <string name="update_apk_not_found">APK file not found</string>
+    <string name="update_install_failed_format">Installation failed: %1$s</string>
+    <string name="update_download_path_not_found">Download path not found</string>
+    <string name="update_download_failed">Download failed</string>
+    <string name="update_error_generic_format">Error: %1$s</string>
+
+    <!-- DAB Errors -->
+    <string name="dab_init_failed_format">DAB initialization failed: %1$s</string>
+    <string name="dab_scan_already_running">Scan already running</string>
+    <string name="dab_tuner_error">DAB tuner error</string>
+    <string name="dab_recording_stop_error_format">Stop recording failed: %1$s</string>
+    <string name="dab_demo_recording_failed">Demo recording failed</string>
+
+    <!-- Scan status (StationListDialog) -->
+    <string name="scan_status_phase_count_format">%1$s%2$s</string>
+    <string name="scan_status_fm_phase_format">%1$s: %2$.1f MHz | ~%3$s%4$s</string>
+    <string name="scan_status_am_format">AM %1$d kHz | ~%2$s</string>
+    <string name="scan_status_rds_format">RDS: %1$.1f MHz | ~%2$s%3$s%4$s</string>
+
+    <!-- Accessibility content descriptions (cd_edit/cd_delete/cd_export/cd_search_logo bereits vorhanden) -->
+    <string name="cd_favorite_action">Favorite</string>
+
+    <!-- Debug-mode buttons -->
+    <string name="debug_app_internet_off">App Internet: OFF</string>
+    <string name="debug_kill_app_internet">Kill App Internet Connection</string>
+
+    <!-- Layout placeholder defaults -->
+    <string name="placeholder_dab_station">DAB+ Station</string>
+    <string name="placeholder_ensemble">Ensemble</string>
 
     <!-- Media library folders (Android Auto / car launcher browse) -->
     <string name="media_folder_fm">FM Stations</string>

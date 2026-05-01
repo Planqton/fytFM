@@ -51,6 +51,9 @@ class DabTunerManager :
     private var scanListener: DabScanListener? = null
     private val scannedServices = mutableListOf<DabStation>()
     private val mainHandler = Handler(Looper.getMainLooper())
+    // Application-Context wird von initialize() gespeichert, damit Error-Callbacks
+    // außerhalb dieser Methode lokalisierte Strings ausliefern können.
+    private var appContext: Context? = null
 
     // Audio playback
     private var audioTrack: AudioTrack? = null
@@ -89,6 +92,7 @@ class DabTunerManager :
      * Initialisiert die OMRI Radio API und sucht nach USB DAB-Dongles.
      */
     override fun initialize(context: Context): Boolean {
+        appContext = context.applicationContext
         try {
             Log.i(TAG, "Initializing DAB+ tuner... (isInitialized=$isInitialized)")
 
@@ -143,7 +147,9 @@ class DabTunerManager :
             return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize DAB: ${e.message}", e)
-            onTunerError?.invoke("DAB Initialisierung fehlgeschlagen: ${e.message}")
+            onTunerError?.invoke(
+                context.getString(at.planqton.fytfm.R.string.dab_init_failed_format, e.message ?: "")
+            )
             return false
         }
     }
@@ -184,7 +190,10 @@ class DabTunerManager :
             }
 
             if (tuner.tunerStatus == TunerStatus.TUNER_STATUS_SCANNING) {
-                listener.onScanError("Scan läuft bereits")
+                listener.onScanError(
+                    appContext?.getString(at.planqton.fytfm.R.string.dab_scan_already_running)
+                        ?: "Scan running"
+                )
                 return
             }
 
@@ -412,7 +421,10 @@ class DabTunerManager :
         mainHandler.post {
             when (status) {
                 TunerStatus.TUNER_STATUS_INITIALIZED -> onTunerReady?.invoke()
-                TunerStatus.TUNER_STATUS_ERROR -> onTunerError?.invoke("DAB Tuner Fehler")
+                TunerStatus.TUNER_STATUS_ERROR -> onTunerError?.invoke(
+                    appContext?.getString(at.planqton.fytfm.R.string.dab_tuner_error)
+                        ?: "DAB tuner error"
+                )
                 else -> {}
             }
         }
