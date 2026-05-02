@@ -467,8 +467,12 @@ class DabListViewBinder(
      * Tint follows the secondary text color so the icon reads on both
      * day and night themes.
      */
-    fun updateSignalIndicator(sync: Boolean, quality: String) {
+    fun updateSignalIndicator(sync: Boolean, quality: String, enabled: Boolean = true) {
         val icon = dabListSignalIcon ?: return
+        if (!enabled) {
+            icon.visibility = View.GONE
+            return
+        }
         val drawableRes = if (!sync) {
             R.drawable.ic_signal_bars_none
         } else when (quality.lowercase()) {

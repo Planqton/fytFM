@@ -49,6 +49,7 @@ internal object SettingsKeys {
     // Signal-bars icon (per mode)
     const val SIGNAL_ICON_ENABLED_FM = "signal_icon_enabled_fm"
     const val SIGNAL_ICON_ENABLED_AM = "signal_icon_enabled_am"
+    const val SIGNAL_ICON_ENABLED_DAB = "signal_icon_enabled_dab"
 
     // Favourites filter (per mode)
     const val SHOW_FAVORITES_ONLY_FM = "show_favorites_only_fm"

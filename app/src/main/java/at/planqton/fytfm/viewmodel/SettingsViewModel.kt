@@ -39,6 +39,7 @@ data class SettingsUiState(
 
     // DAB Settings
     val isDeezerEnabledDab: Boolean = true,
+    val isSignalIconEnabledDab: Boolean = true,
     val isDabVisualizerEnabled: Boolean = false,
     val dabVisualizerStyle: Int = 0,
     val dabRecordingPath: String? = null,
@@ -106,6 +107,7 @@ class SettingsViewModel(
 
             // DAB Settings
             isDeezerEnabledDab = presetRepository.isDeezerEnabledDab(),
+            isSignalIconEnabledDab = presetRepository.isSignalIconEnabledDab(),
             isDabVisualizerEnabled = presetRepository.isDabVisualizerEnabled(),
             dabVisualizerStyle = presetRepository.getDabVisualizerStyle(),
             dabRecordingPath = presetRepository.getDabRecordingPath(),
@@ -222,6 +224,11 @@ class SettingsViewModel(
     fun setSignalIconEnabledAm(enabled: Boolean) {
         presetRepository.setSignalIconEnabledAm(enabled)
         _state.update { it.copy(isSignalIconEnabledAm = enabled) }
+    }
+
+    fun setSignalIconEnabledDab(enabled: Boolean) {
+        presetRepository.setSignalIconEnabledDab(enabled)
+        _state.update { it.copy(isSignalIconEnabledDab = enabled) }
     }
 
     // ========== DAB SETTINGS ==========

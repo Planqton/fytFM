@@ -23,7 +23,7 @@
             android:layout_width="80dp"
             android:layout_height="80dp"
             android:layout_marginTop="16dp"
-            android:scaleType="centerCrop"
+            android:scaleType="fitCenter"
             android:visibility="gone" />
 
         <!-- FM RADIO label -->
@@ -54,14 +54,6 @@
                 android:maxWidth="100dp"
                 android:maxLines="1"
                 android:ellipsize="end" />
-
-            <!-- Signal icon -->
-            <ImageView
-                android:layout_width="12dp"
-                android:layout_height="12dp"
-                android:layout_marginStart="2dp"
-                android:src="@drawable/ic_signal"
-                app:tint="@color/card_text_secondary" />
 
         </LinearLayout>
 

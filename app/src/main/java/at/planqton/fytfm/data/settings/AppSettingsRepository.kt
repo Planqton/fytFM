@@ -180,6 +180,12 @@ class AppSettingsRepository(context: Context) {
         prefs.edit().putBoolean(SettingsKeys.SIGNAL_ICON_ENABLED_AM, enabled).apply()
     }
 
+    fun isSignalIconEnabledDab(): Boolean = prefs.getBoolean(SettingsKeys.SIGNAL_ICON_ENABLED_DAB, true)
+
+    fun setSignalIconEnabledDab(enabled: Boolean) {
+        prefs.edit().putBoolean(SettingsKeys.SIGNAL_ICON_ENABLED_DAB, enabled).apply()
+    }
+
     // ===== Favourites filter (per mode) =====
 
     fun isShowFavoritesOnlyFm(): Boolean = prefs.getBoolean(SettingsKeys.SHOW_FAVORITES_ONLY_FM, false)

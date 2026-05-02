@@ -858,6 +858,16 @@
                     android:src="@drawable/ic_trash" />
             </LinearLayout>
 
+            <!-- Carousel FM/AM/DAB Signal-Bars-Icon -->
+            <ImageView
+                android:id="@+id/ivCarouselSignalIcon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_marginStart="8dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_signal_bars_none"
+                android:visibility="gone" />
+
             <!-- Carousel Spotify Toggle -->
             <LinearLayout
                 android:layout_width="wrap_content"

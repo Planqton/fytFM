@@ -86,6 +86,9 @@ class SettingsDialogFragment : DialogFragment() {
         fun onDeezerEnabledFmChanged(enabled: Boolean)
         /** Analog für DAB+. */
         fun onDeezerEnabledDabChanged(enabled: Boolean)
+        /** Wird gefeuert wenn ein Signal-Icon-Toggle geändert wurde, damit
+         *  die Hauptansicht das Icon sofort ein-/ausblendet. */
+        fun onSignalIconToggleChanged(mode: FrequencyScaleView.RadioMode, enabled: Boolean)
     }
 
     private var callback: SettingsCallback? = null
@@ -474,6 +477,7 @@ class SettingsDialogFragment : DialogFragment() {
             SearchableItem(R.id.switchSignalIconAm, listOf("signal", "rssi", "balken", "bars", "empfang", "stärke", "am")),
             // DAB Section
             SearchableItem(R.id.itemRadioEditorDab, listOf("dab", "radio", "editor", "sender", "bearbeiten", "edit", "stations")),
+            SearchableItem(R.id.switchSignalIconDab, listOf("signal", "rssi", "balken", "bars", "empfang", "stärke", "dab", "qualität", "quality")),
             SearchableItem(R.id.switchDeezerDab, listOf("deezer", "cover", "dab", "artwork", "album")),
             SearchableItem(R.id.switchDabVisualizer, listOf("visualizer", "audio", "spektrum", "anzeige", "dab")),
             SearchableItem(R.id.itemDabVisualizerStyle, listOf("visualizer", "style", "stil", "bars", "wave", "dab")),
@@ -702,6 +706,7 @@ class SettingsDialogFragment : DialogFragment() {
         switchSignalIconFm.isChecked = viewModel.state.value.isSignalIconEnabledFm
         switchSignalIconFm.setOnCheckedChangeListener { _, isChecked ->
             viewModel.setSignalIconEnabledFm(isChecked)
+            callback?.onSignalIconToggleChanged(FrequencyScaleView.RadioMode.FM, isChecked)
         }
 
         // FM Step Size SeekBar — progress 0..9 → 0.05..0.50 MHz in 0.05-Schritten.
@@ -743,6 +748,7 @@ class SettingsDialogFragment : DialogFragment() {
         switchSignalIconAm.isChecked = viewModel.state.value.isSignalIconEnabledAm
         switchSignalIconAm.setOnCheckedChangeListener { _, isChecked ->
             viewModel.setSignalIconEnabledAm(isChecked)
+            callback?.onSignalIconToggleChanged(FrequencyScaleView.RadioMode.AM, isChecked)
         }
 
         // AM Step Size SeekBar — progress 0..99 → 1..100 kHz in 1-kHz-Schritten.
@@ -782,6 +788,14 @@ class SettingsDialogFragment : DialogFragment() {
                 mode == FrequencyScaleView.RadioMode.DAB_DEV) {
                 callback?.onDabCoverDisplayNeedsUpdate()
             }
+        }
+
+        // Signal-Icon für DAB toggle
+        val switchSignalIconDab = dialogView.findViewById<SwitchCompat>(R.id.switchSignalIconDab)
+        switchSignalIconDab.isChecked = viewModel.state.value.isSignalIconEnabledDab
+        switchSignalIconDab.setOnCheckedChangeListener { _, isChecked ->
+            viewModel.setSignalIconEnabledDab(isChecked)
+            callback?.onSignalIconToggleChanged(FrequencyScaleView.RadioMode.DAB, isChecked)
         }
 
         // DAB Visualizer toggle

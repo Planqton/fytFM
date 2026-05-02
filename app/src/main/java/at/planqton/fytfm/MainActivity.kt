@@ -1036,6 +1036,7 @@ class MainActivity : AppCompatActivity(),
      */
     private fun updateSignalBars(rssi: Int, ageMs: Long) {
         val icon = binding.ivFmSignalIcon
+        val carouselIcon = binding.ivCarouselSignalIcon
         val enabled = when {
             isFmMode -> presetRepository.isSignalIconEnabledFm()
             isAmMode -> presetRepository.isSignalIconEnabledAm()
@@ -1043,6 +1044,7 @@ class MainActivity : AppCompatActivity(),
         }
         if (!enabled) {
             icon.visibility = View.GONE
+            carouselIcon.visibility = View.GONE
             return
         }
         val drawableRes = when {
@@ -1052,6 +1054,34 @@ class MainActivity : AppCompatActivity(),
             rssi < 80 -> R.drawable.ic_signal_bars_weak
             rssi < 140 -> R.drawable.ic_signal_bars_half
             else -> R.drawable.ic_signal_bars_full
+        }
+        val tint = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.radio_text_secondary))
+        icon.setImageResource(drawableRes)
+        ImageViewCompat.setImageTintList(icon, tint)
+        icon.visibility = View.VISIBLE
+        carouselIcon.setImageResource(drawableRes)
+        ImageViewCompat.setImageTintList(carouselIcon, tint)
+        carouselIcon.visibility = View.VISIBLE
+    }
+
+    /**
+     * Spiegelt die DAB-Empfangs-Qualität auf das Carousel-Signal-Icon
+     * (UI 2). Drawable-Logik identisch zu DabListViewBinder.updateSignalIndicator
+     * — same Quellen (sync + quality), gleiche 3-Bar-Mapping.
+     */
+    private fun updateCarouselDabSignalIcon(sync: Boolean, quality: String) {
+        val icon = binding.ivCarouselSignalIcon
+        if (!presetRepository.isSignalIconEnabledDab()) {
+            icon.visibility = View.GONE
+            return
+        }
+        val drawableRes = if (!sync) {
+            R.drawable.ic_signal_bars_none
+        } else when (quality.lowercase()) {
+            "best" -> R.drawable.ic_signal_bars_full
+            "good" -> R.drawable.ic_signal_bars_half
+            "okay" -> R.drawable.ic_signal_bars_weak
+            else -> R.drawable.ic_signal_bars_none
         }
         icon.setImageResource(drawableRes)
         ImageViewCompat.setImageTintList(
@@ -2982,7 +3012,9 @@ class MainActivity : AppCompatActivity(),
         lifecycleScope.launch {
             radioViewModel.receptionStatsEvents.collect { stats ->
                 debugManager.updateDabReceptionStats(stats.sync, stats.quality, stats.snr)
-                dabListView.updateSignalIndicator(stats.sync, stats.quality)
+                val dabSignalEnabled = presetRepository.isSignalIconEnabledDab()
+                dabListView.updateSignalIndicator(stats.sync, stats.quality, dabSignalEnabled)
+                updateCarouselDabSignalIcon(stats.sync, stats.quality)
                 // Empfangsverlust-Banner: nur in DAB/DAB Demo, und nur wenn
                 // der Tuner kein Sync hat oder die Qualität als BAD/POOR
                 // gemeldet wird. Bei Mode-Wechsel weg von DAB blendet ein
@@ -4005,7 +4037,6 @@ class MainActivity : AppCompatActivity(),
             binding.frequencyScale.setFrequency(station.frequency)
             fmNative?.tune(station.frequency)
             updateCarouselSelection()
-            startCarouselCenterTimer(station.frequency, station.isAM)
         } catch (e: Exception) {
             android.util.Log.e(TAG, "FM tune error: ${e.message}", e)
             toast(getString(R.string.tuner_error, e.message), long = true)
@@ -4131,6 +4162,7 @@ class MainActivity : AppCompatActivity(),
         updateCarouselFavoriteIcon()
         val position = stationCarouselAdapter?.getPositionForFrequency(currentFreq, isAmMode) ?: -1
         android.util.Log.d(TAG, "updateCarouselSelection: position=$position")
+        if (position >= 0) smoothScrollCarouselToCenter(position)
     }
 
     /**
@@ -4237,14 +4269,14 @@ class MainActivity : AppCompatActivity(),
         }
 
         carouselReturnJob = lifecycleScope.launch {
-            delay(2000)
+            delay(8000)
             val pos = carouselPendingCenterPosition
             android.util.Log.d(TAG, "Carousel return timer: scrolling to position $pos")
             if (pos >= 0) smoothScrollCarouselToCenter(pos)
             carouselPendingCenterPosition = -1
             updateCarouselDebugInfo()
         }
-        android.util.Log.d(TAG, "Carousel return timer started (2s)")
+        android.util.Log.d(TAG, "Carousel return timer started (8s)")
     }
 
     /**
@@ -4508,7 +4540,7 @@ class MainActivity : AppCompatActivity(),
 
     override fun onLogosUpdated() {
         radioLogoRepository.invalidateCache()
-        loadStationsForCurrentMode()
+        refreshUiAfterLogoSave()
     }
 
     private fun showLogoTemplateDialogFragment(onDismiss: () -> Unit = {}) {
@@ -6191,7 +6223,8 @@ class MainActivity : AppCompatActivity(),
             stopDlsTimestampUpdates()
             // Empfangsverlust-Banner ausblenden — gilt nur im DAB-Modus.
             requestSignalLostBanner(false)
-            dabListView.updateSignalIndicator(sync = false, quality = "")
+            dabListView.updateSignalIndicator(sync = false, quality = "", enabled = presetRepository.isSignalIconEnabledDab())
+            updateCarouselDabSignalIcon(sync = false, quality = "")
             android.util.Log.i(TAG, "Stopping DAB tuner ($oldMode) via controller...")
             if (isDabOn) {
                 // powerOffDab resets DabController.currentServiceId/EnsembleId.
@@ -6273,11 +6306,15 @@ class MainActivity : AppCompatActivity(),
         loadStationsForCurrentMode()
 
         if (isCarouselMode) {
+            mainContentArea?.visibility = View.GONE
+            dabListContentArea?.visibility = View.GONE
+            carouselContentArea?.visibility = View.VISIBLE
             populateCarousel()
             updateCarouselSelection()
             binding.controlBar.visibility = View.VISIBLE
             binding.stationBar.visibility = View.VISIBLE
         } else if (mode == FrequencyScaleView.RadioMode.DAB || mode == FrequencyScaleView.RadioMode.DAB_DEV) {
+            carouselContentArea?.visibility = View.GONE
             mainContentArea?.visibility = View.GONE
             dabListContentArea?.visibility = View.VISIBLE
             dabListView.dabListStationStrip?.visibility = View.GONE
@@ -6286,6 +6323,7 @@ class MainActivity : AppCompatActivity(),
             populateDabListMode()
             updateDabListModeSelection()
         } else {
+            carouselContentArea?.visibility = View.GONE
             mainContentArea?.visibility = View.VISIBLE
             dabListContentArea?.visibility = View.GONE
             binding.controlBar.visibility = View.VISIBLE
@@ -6533,6 +6571,34 @@ class MainActivity : AppCompatActivity(),
     override fun onDeezerEnabledDabChanged(enabled: Boolean) {
         updateDabDeezerToggleAppearance(enabled)
         updateCarouselDeezerToggleAppearance()
+    }
+
+    override fun onSignalIconToggleChanged(mode: FrequencyScaleView.RadioMode, enabled: Boolean) {
+        // Toggle for a non-current mode → just persist; the icon UI for the
+        // current mode must not be touched (carousel icon view is shared
+        // between FM/AM and DAB).
+        val toggledIsFmAm = mode == FrequencyScaleView.RadioMode.FM ||
+            mode == FrequencyScaleView.RadioMode.AM
+        val toggledIsDab = mode == FrequencyScaleView.RadioMode.DAB ||
+            mode == FrequencyScaleView.RadioMode.DAB_DEV
+
+        when {
+            toggledIsFmAm && (isFmMode || isAmMode) -> {
+                updateSignalBars(rdsManager.rssi, rdsManager.rssiAgeMs)
+            }
+            toggledIsDab && isAnyDabMode -> {
+                if (!enabled) {
+                    binding.ivCarouselSignalIcon.visibility = View.GONE
+                    dabListView.dabListSignalIcon?.visibility = View.GONE
+                } else {
+                    val dabState = (radioViewModel.uiState.value as? at.planqton.fytfm.viewmodel.RadioUiState.Dab)?.dabState
+                    val sync = dabState?.signalSync ?: false
+                    val quality = dabState?.receptionQuality ?: ""
+                    dabListView.updateSignalIndicator(sync, quality, true)
+                    updateCarouselDabSignalIcon(sync, quality)
+                }
+            }
+        }
     }
 
     override fun onAccentColorChanged() {

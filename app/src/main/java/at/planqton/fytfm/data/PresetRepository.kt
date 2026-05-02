@@ -106,6 +106,8 @@ class PresetRepository(context: Context) {
     fun setSignalIconEnabledFm(enabled: Boolean) = settings.setSignalIconEnabledFm(enabled)
     fun isSignalIconEnabledAm(): Boolean = settings.isSignalIconEnabledAm()
     fun setSignalIconEnabledAm(enabled: Boolean) = settings.setSignalIconEnabledAm(enabled)
+    fun isSignalIconEnabledDab(): Boolean = settings.isSignalIconEnabledDab()
+    fun setSignalIconEnabledDab(enabled: Boolean) = settings.setSignalIconEnabledDab(enabled)
 
     fun isShowFavoritesOnlyFm(): Boolean = settings.isShowFavoritesOnlyFm()
     fun setShowFavoritesOnlyFm(enabled: Boolean) = settings.setShowFavoritesOnlyFm(enabled)
