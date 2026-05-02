@@ -2008,6 +2008,16 @@
             android:textSize="12sp"
             android:backgroundTint="#666666" />
 
+        <Button
+            android:id="@+id/btnDebugResetWindows"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Reset Window Positions"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:backgroundTint="#3366AA" />
+
         <ToggleButton
             android:id="@+id/btnDebugBlockDeezer"
             android:layout_width="match_parent"

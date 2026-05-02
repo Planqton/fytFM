@@ -109,6 +109,7 @@ class RtCombiner(
             lastResult.remove(pi)
             lastTrackInfo.remove(pi)
             lastProcessedRt.remove(pi)
+            rtBuffer.remove(pi)
         }
 
         // Check if RT is ignored
@@ -231,21 +232,26 @@ class RtCombiner(
             return result
         }
 
-        // Add to buffer and try combinations
-        addToBuffer(pi, searchRt)
-        val buffer = rtBuffer[pi] ?: return lastResult[pi]
-        if (buffer.size >= 2) {
-            val (bufferResult, bufferTrack) = tryBufferCombinations(pi, buffer)
-            if (bufferResult != null) {
-                // Save buffer RTs for silent early-out on next cycle
-                val bufferTexts = buffer.map { it.text.lowercase() }.toSet()
-                bufferResultRts[pi] = bufferTexts
-                currentResultRts[pi] = bufferTexts
+        // Add to buffer and try combinations.
+        // Skipped for callers that pass skipBuffer=true (e.g. DAB DLS, which
+        // is already structured artist+title) — otherwise stale fragments
+        // would still get concatenated into search queries via the fallback.
+        if (!skipBuffer) {
+            addToBuffer(pi, searchRt)
+            val buffer = rtBuffer[pi] ?: return lastResult[pi]
+            if (buffer.size >= 2) {
+                val (bufferResult, bufferTrack) = tryBufferCombinations(pi, buffer)
+                if (bufferResult != null) {
+                    // Save buffer RTs for silent early-out on next cycle
+                    val bufferTexts = buffer.map { it.text.lowercase() }.toSet()
+                    bufferResultRts[pi] = bufferTexts
+                    currentResultRts[pi] = bufferTexts
 
-                lastResult[pi] = bufferResult
-                if (bufferTrack != null) lastTrackInfo[pi] = bufferTrack
-                clearBuffer(pi)
-                return bufferResult
+                    lastResult[pi] = bufferResult
+                    if (bufferTrack != null) lastTrackInfo[pi] = bufferTrack
+                    clearBuffer(pi)
+                    return bufferResult
+                }
             }
         }
 

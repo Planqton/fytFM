@@ -117,12 +117,31 @@ class DebugManager(
         applyCollapseState(overlayId)
     }
 
+    /**
+     * Expand every registered overlay, persist the cleared state, and
+     * re-render. Used by the "Reset Window Positions" debug button so a
+     * stuck collapse state can't keep an overlay hidden.
+     */
+    fun expandAll() {
+        collapsePrefs.edit().clear().apply()
+        for (id in collapseConfigs.keys) {
+            collapseStates[id] = false
+            applyCollapseState(id)
+        }
+    }
+
     private fun applyCollapseState(overlayId: Int) {
         val cfg = collapseConfigs[overlayId] ?: return
         val collapsed = collapseStates[overlayId] ?: false
         val visibility = if (collapsed) View.GONE else View.VISIBLE
-        for (i in 0 until cfg.overlay.childCount) {
-            val child = cfg.overlay.getChildAt(i)
+        // Iterate siblings of the header rather than direct children of the
+        // overlay. For overlays whose root is a ScrollView/wrapper (e.g.
+        // debugDeezerOverlay), the header sits inside an inner LinearLayout —
+        // hiding the overlay's only direct child would also hide the header
+        // and leave the user with a completely blank overlay.
+        val container = (cfg.headerContainer.parent as? android.view.ViewGroup) ?: cfg.overlay
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i)
             if (child !== cfg.headerContainer) child.visibility = visibility
         }
         val title = headerTitles[overlayId] ?: return

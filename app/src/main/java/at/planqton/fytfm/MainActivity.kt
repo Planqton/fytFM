@@ -1001,10 +1001,12 @@ class MainActivity : AppCompatActivity(),
                 }
 
                 runOnUiThread {
-                    // Auto-Sync PS zu Preset
-                    if (!ps.isNullOrBlank()) {
-                        handleRdsPsSync(ps)
-                    }
+                    // Deactivated. Experimental — RDS-PS kann verbuggt
+                    // sein (Bit-Errors, „E E E" statt richtigem Sendernamen)
+                    // und überschreibt sonst den manuellen Preset-Namen.
+                    // if (!ps.isNullOrBlank()) {
+                    //     handleRdsPsSync(ps)
+                    // }
                     // Debug-UI aktualisieren
                     handleRdsDebugUpdate(ps, rt, rssi, pi, pty, tp, ta, afList)
                     // Signal-Bars-Icon
@@ -1793,7 +1795,23 @@ class MainActivity : AppCompatActivity(),
             binding.debugDeezerOverlay.visibility = if (isChecked) View.VISIBLE else View.GONE
             presetRepository.setDebugWindowOpen("spotify", isChecked)
             if (isChecked) {
-                binding.debugDeezerOverlay.post { restoreDebugWindowPosition("spotify", binding.debugDeezerOverlay) }
+                binding.debugDeezerOverlay.post {
+                    val savedX = presetRepository.getDebugWindowPositionX("deezer")
+                    val savedY = presetRepository.getDebugWindowPositionY("deezer")
+                    if (savedX >= 1f && savedY >= 1f) {
+                        restoreDebugWindowPosition("deezer", binding.debugDeezerOverlay)
+                    } else {
+                        // No valid saved position — Android keeps stale view.x/y across
+                        // visibility toggles, so explicitly place at default bottom-right
+                        // (matches the layout_gravity="end|bottom" + 16dp margin).
+                        val parent = binding.debugDeezerOverlay.parent as? View
+                        if (parent != null && parent.width > 0 && parent.height > 0) {
+                            val margin = 16f * resources.displayMetrics.density
+                            binding.debugDeezerOverlay.x = (parent.width - binding.debugDeezerOverlay.width - margin).coerceAtLeast(0f)
+                            binding.debugDeezerOverlay.y = (parent.height - binding.debugDeezerOverlay.height - margin).coerceAtLeast(0f)
+                        }
+                    }
+                }
             }
         }
         binding.checkDebugButtons.setOnCheckedChangeListener { _, isChecked ->
@@ -1876,7 +1894,7 @@ class MainActivity : AppCompatActivity(),
         binding.debugOverlay.post { restoreDebugWindowPosition("rds", binding.debugOverlay) }
         binding.debugLayoutOverlay.post { restoreDebugWindowPosition("layout", binding.debugLayoutOverlay) }
         binding.debugBuildOverlay.post { restoreDebugWindowPosition("build", binding.debugBuildOverlay) }
-        binding.debugDeezerOverlay.post { restoreDebugWindowPosition("spotify", binding.debugDeezerOverlay) }
+        binding.debugDeezerOverlay.post { restoreDebugWindowPosition("deezer", binding.debugDeezerOverlay) }
         binding.debugButtonsOverlay.post { restoreDebugWindowPosition("buttons", binding.debugButtonsOverlay) }
         binding.debugSwcOverlay.post { restoreDebugWindowPosition("swc", binding.debugSwcOverlay) }
         binding.debugCarouselOverlay.post { restoreDebugWindowPosition("carousel", binding.debugCarouselOverlay) }
@@ -1890,7 +1908,24 @@ class MainActivity : AppCompatActivity(),
         view ?: return
         val x = presetRepository.getDebugWindowPositionX(windowId)
         val y = presetRepository.getDebugWindowPositionY(windowId)
-        if (x >= 0 && y >= 0) {
+        if (x < 0 || y < 0) return
+        // Treat a pinned-to-origin position (top-left corner) as junk —
+        // common cause is stale prefs or a 0,0 default that the user can
+        // never see because it sits behind the header bar / power button.
+        // Falls back to the layout-default position (e.g. end|bottom).
+        if (x < 1f && y < 1f) {
+            android.util.Log.i(TAG, "Skipping restore for '$windowId': stale 0,0 position")
+            return
+        }
+        // Clamp to parent bounds so a stale position from a different screen
+        // size or orientation can't leave the overlay invisible offscreen.
+        val parent = view.parent as? View
+        if (parent != null && parent.width > 0 && parent.height > 0) {
+            val maxX = (parent.width - view.width).coerceAtLeast(0).toFloat()
+            val maxY = (parent.height - view.height).coerceAtLeast(0).toFloat()
+            view.x = x.coerceIn(0f, maxX)
+            view.y = y.coerceIn(0f, maxY)
+        } else {
             view.x = x
             view.y = y
         }
@@ -2214,6 +2249,54 @@ class MainActivity : AppCompatActivity(),
         // View Reports Button
         binding.btnDebugViewReports.setOnClickListener {
             startActivity(android.content.Intent(this, BugReportActivity::class.java))
+        }
+
+        // Reset Window Positions Button — clears all saved positions, resets
+        // translation, and hard-positions every overlay in a tiled grid near
+        // the top-left so the user can definitely find them and drag them
+        // wherever they like. Also restores alpha in case it got knocked out.
+        binding.btnDebugResetWindows.setOnClickListener {
+            presetRepository.clearAllDebugWindowPositions()
+            // Also clear collapse states — a stuck collapse keeps an overlay
+            // blank even with a valid position and visibility=VISIBLE.
+            debugManager.expandAll()
+            val overlays = listOf(
+                binding.debugOverlay,
+                binding.debugLayoutOverlay,
+                binding.debugBuildOverlay,
+                binding.debugDeezerOverlay,
+                binding.debugButtonsOverlay,
+                binding.debugSwcOverlay,
+                binding.debugCarouselOverlay,
+                binding.debugStationOverlay,
+                binding.debugTunerOverlay,
+                binding.debugParserOverlay,
+                binding.debugChecklistOverlay,
+            )
+            for (overlay in overlays) {
+                overlay.translationX = 0f
+                overlay.translationY = 0f
+                overlay.alpha = 1f
+                overlay.requestLayout()
+            }
+            // After layout pass: tile each visible overlay so none can hide
+            // behind another or sit at a stale offscreen position.
+            binding.debugButtonsOverlay.post {
+                val density = resources.displayMetrics.density
+                val tile = 32f * density
+                var idx = 0
+                for (overlay in overlays) {
+                    if (overlay.visibility != View.VISIBLE) continue
+                    val parent = overlay.parent as? View ?: continue
+                    if (parent.width <= 0 || parent.height <= 0) continue
+                    val maxX = (parent.width - overlay.width).coerceAtLeast(0).toFloat()
+                    val maxY = (parent.height - overlay.height).coerceAtLeast(0).toFloat()
+                    overlay.x = (idx * tile).coerceIn(0f, maxX)
+                    overlay.y = (idx * tile).coerceIn(0f, maxY)
+                    idx++
+                }
+            }
+            toast("Debug-Window-Positionen zurückgesetzt")
         }
 
         // Block Spotify/Local Toggle Button
@@ -2827,6 +2910,11 @@ class MainActivity : AppCompatActivity(),
         // Wipe Deezer state via VM (clears coverPath + coverSourceKey + currentTrack).
         radioViewModel.updateDeezerTrack(null, null, null)
         // currentDabSlideshow is VM-driven and already cleared by VM on DabServiceStarted.
+        // DAB calls processRt with hardcoded PI=0, so old DLS fragments would
+        // otherwise leak across stations and get concatenated into the next
+        // search query, plus stale currentResultRts can keep the debug overlay
+        // stuck on "Waiting..." via the silent early-out.
+        rtCombiner?.clearAll()
 
         runOnUiThread {
             updateDeezerDebugInfo("Waiting...", null, null, null, null)
@@ -6215,6 +6303,9 @@ class MainActivity : AppCompatActivity(),
      * Alten Radio-Modus aufräumen bevor gewechselt wird.
      */
     private fun cleanupOldRadioMode(oldMode: FrequencyScaleView.RadioMode) {
+        // Defensive: clear any RtCombiner state from the previous mode so
+        // residual buffers can't leak across FM ↔ DAB switches.
+        rtCombiner?.clearAll()
         if (oldMode == FrequencyScaleView.RadioMode.DAB ||
             oldMode == FrequencyScaleView.RadioMode.DAB_DEV) {
             // Both DAB modes go through the controller now; the active backend

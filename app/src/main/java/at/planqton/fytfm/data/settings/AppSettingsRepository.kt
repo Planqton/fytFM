@@ -93,6 +93,17 @@ class AppSettingsRepository(context: Context) {
     fun getDebugWindowPositionY(windowId: String): Float =
         prefs.getFloat(SettingsKeys.DEBUG_WINDOW_Y_PREFIX + windowId, -1f)
 
+    fun clearAllDebugWindowPositions() {
+        val editor = prefs.edit()
+        prefs.all.keys
+            .filter {
+                it.startsWith(SettingsKeys.DEBUG_WINDOW_X_PREFIX) ||
+                    it.startsWith(SettingsKeys.DEBUG_WINDOW_Y_PREFIX)
+            }
+            .forEach { editor.remove(it) }
+        editor.apply()
+    }
+
     // ===== Auto-start / auto-background =====
 
     fun isAutoStartEnabled(): Boolean = prefs.getBoolean(SettingsKeys.AUTO_START_ENABLED, false)

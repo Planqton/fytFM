@@ -44,6 +44,14 @@ public class RdsManager {
 
     // Aktuelle RDS-Daten (volatile für Thread-Sicherheit - Scanner liest aus Background-Thread)
     private volatile String currentPs = "";
+    /** Stabilitäts-Filter: zuletzt vom Chip gelieferter PS und wie oft er
+     *  in Folge gleich kam. currentPs wird erst übernommen, wenn der Chip
+     *  zwei Polls in Folge denselben Wert liefert — filtert die typischen
+     *  PS-Bit-Errors (Group-0A-Position falsch dekodiert → Lücken/„E E E").
+     */
+    private String lastFetchedPs = "";
+    private int psStableCount = 0;
+    private static final int PS_STABLE_REQUIRED = 2;
     private volatile String currentRt = "";
     private volatile int currentRssi = 0;
     private volatile int currentPi = 0;
@@ -267,14 +275,26 @@ public class RdsManager {
             }
         }
 
-        // PS abrufen
+        // PS abrufen — Stabilitäts-Filter: gleicher Wert muss
+        // PS_STABLE_REQUIRED-mal in Folge ankommen, sonst verworfen.
         String ps = fetchPs();
         Log.d(TAG, "pollRds: fetchPs() returned: '" + ps + "'");
         if (ps != null && !ps.isEmpty()) {
-            lastPsTimestamp = System.currentTimeMillis();
-            if (!ps.equals(currentPs)) {
-                currentPs = ps;
-                Log.i(TAG, "PS: '" + ps + "'");
+            if (ps.equals(lastFetchedPs)) {
+                psStableCount++;
+            } else {
+                lastFetchedPs = ps;
+                psStableCount = 1;
+                Log.d(TAG, "PS unstable: new value '" + ps + "', count reset");
+            }
+            if (psStableCount >= PS_STABLE_REQUIRED) {
+                lastPsTimestamp = System.currentTimeMillis();
+                if (!ps.equals(currentPs)) {
+                    currentPs = ps;
+                    Log.i(TAG, "PS: '" + ps + "' (stable after " + psStableCount + " polls)");
+                }
+            } else {
+                Log.d(TAG, "PS held: '" + ps + "' (stable=" + psStableCount + "/" + PS_STABLE_REQUIRED + ")");
             }
         }
 
@@ -482,6 +502,7 @@ public class RdsManager {
                 if (psData != null && psData.length > 0) {
                     String ps = cleanRdsString(at.planqton.fytfm.rds.RdsCharset.decode(psData));
                     Log.d(TAG, "fetchPs: fmsyu_jni PS = '" + ps + "'");
+                    logPsCorruptionDebug("M1-fmsyu_jni", psData, ps);
                     if (!ps.isEmpty()) {
                         return ps;
                     }
@@ -498,6 +519,7 @@ public class RdsManager {
             if (ps != null && ps.length > 0) {
                 String result = cleanRdsString(at.planqton.fytfm.rds.RdsCharset.decode(ps));
                 Log.d(TAG, "fetchPs: native getPs = '" + result + "'");
+                logPsCorruptionDebug("M2-getPs", ps, result);
                 if (!result.isEmpty()) {
                     return result;
                 }
@@ -511,7 +533,9 @@ public class RdsManager {
             String ps = fmNative.getPsString();
             Log.d(TAG, "fetchPs: getPsString = '" + ps + "'");
             if (ps != null && !ps.isEmpty()) {
-                return cleanRdsString(ps);
+                String cleaned = cleanRdsString(ps);
+                logPsCorruptionDebug("M3-getPsString", null, cleaned);
+                return cleaned;
             }
         } catch (Throwable e) {
             Log.w(TAG, "getPsString() failed: " + e.getMessage());
@@ -541,6 +565,7 @@ public class RdsManager {
                     if (textData != null && textData.length > 0) {
                         String rt = cleanRdsString(at.planqton.fytfm.rds.RdsCharset.decode(textData));
                         Log.d(TAG, "fetchRt: fmsyu_jni RT = '" + rt + "'");
+                        logRtCorruptionDebug("M1-fmsyu_jni", textData, rt);
                         if (!rt.isEmpty()) {
                             return rt;
                         }
@@ -558,6 +583,7 @@ public class RdsManager {
             if (rt != null && rt.length > 0) {
                 String result = cleanRdsString(at.planqton.fytfm.rds.RdsCharset.decode(rt));
                 Log.d(TAG, "fetchRt: native getLrText = '" + result + "'");
+                logRtCorruptionDebug("M2-getLrText", rt, result);
                 if (!result.isEmpty()) {
                     return result;
                 }
@@ -571,13 +597,96 @@ public class RdsManager {
             String rt = fmNative.getRadioText();
             Log.d(TAG, "fetchRt: getRadioText = '" + rt + "'");
             if (rt != null && !rt.isEmpty()) {
-                return cleanRdsString(rt);
+                String cleaned = cleanRdsString(rt);
+                logRtCorruptionDebug("M3-getRadioText", null, cleaned);
+                return cleaned;
             }
         } catch (Throwable e) {
             Log.w(TAG, "getRadioText() failed: " + e.getMessage());
         }
 
         return null;
+    }
+
+    /**
+     * Diagnose-Logging fuer RT-Corruption. Zeigt Methode, Roh-Hex (falls
+     * Bytes vorhanden), und decodierten String. Markiert mit "RT_DEBUG_*"
+     * Prefixen, damit per logcat -s leicht filterbar.
+     *
+     * Heuristik fuer "suspicious": >0 Codepoints ueber U+007F mit gemischten
+     * Script-Bloecken (z.B. Latin + Greek) oder Codepoints, die typischerweise
+     * nicht im G0-Charset vorkommen (Greek lowercase wie eta U+03B7).
+     */
+    private void logRtCorruptionDebug(String tag, byte[] rawBytes, String decoded) {
+        if (decoded == null || decoded.isEmpty()) return;
+        boolean hasLatinLetter = false;
+        boolean hasGreekLowercase = false;
+        boolean hasCyrillic = false;
+        int highChars = 0;
+        for (int i = 0; i < decoded.length(); i++) {
+            int cp = decoded.codePointAt(i);
+            if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) hasLatinLetter = true;
+            if (cp >= 0x0370 && cp <= 0x03FF) hasGreekLowercase = true;     // Greek block
+            if (cp >= 0x0400 && cp <= 0x04FF) hasCyrillic = true;           // Cyrillic block
+            if (cp > 0x007F) highChars++;
+        }
+        boolean suspicious = (hasLatinLetter && (hasGreekLowercase || hasCyrillic));
+        String prefix = suspicious ? "RT_DEBUG_SUSPICIOUS" : "RT_DEBUG_OK";
+        StringBuilder hex = new StringBuilder();
+        if (rawBytes != null) {
+            for (int i = 0; i < Math.min(rawBytes.length, 80); i++) {
+                hex.append(String.format("%02X ", rawBytes[i] & 0xFF));
+            }
+        } else {
+            hex.append("(no bytes - method returned String directly)");
+        }
+        Log.i(TAG, prefix + " [" + tag + "] decoded='" + decoded
+            + "' highChars=" + highChars + " greekLC=" + hasGreekLowercase
+            + " cyr=" + hasCyrillic + " hex=" + hex.toString().trim());
+    }
+
+    /**
+     * Diagnose-Logging für PS-Corruption. Markiert verdächtige Strings
+     * (gemischte Latin+Greek/Cyrillic, oder „E E E"-artige Lücken-Muster
+     * wie sie bei verlorenen Group-0A-Position-Bits entstehen) mit
+     * "PS_DEBUG_SUSPICIOUS"-Prefix.
+     */
+    private void logPsCorruptionDebug(String tag, byte[] rawBytes, String decoded) {
+        if (decoded == null || decoded.isEmpty()) return;
+        boolean hasLatinLetter = false;
+        boolean hasGreekLowercase = false;
+        boolean hasCyrillic = false;
+        int highChars = 0;
+        int isolatedSpaces = 0;
+        for (int i = 0; i < decoded.length(); i++) {
+            int cp = decoded.codePointAt(i);
+            if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) hasLatinLetter = true;
+            if (cp >= 0x0370 && cp <= 0x03FF) hasGreekLowercase = true;
+            if (cp >= 0x0400 && cp <= 0x04FF) hasCyrillic = true;
+            if (cp > 0x007F) highChars++;
+            // Lücken-Muster: nicht-erstes/letztes Space zwischen Letter↔Letter
+            if (cp == ' ' && i > 0 && i < decoded.length() - 1) {
+                int prev = decoded.codePointAt(i - 1);
+                int next = decoded.codePointAt(i + 1);
+                boolean prevIsLetter = (prev >= 'A' && prev <= 'Z') || (prev >= 'a' && prev <= 'z');
+                boolean nextIsLetter = (next >= 'A' && next <= 'Z') || (next >= 'a' && next <= 'z');
+                if (prevIsLetter && nextIsLetter) isolatedSpaces++;
+            }
+        }
+        boolean suspicious = (hasLatinLetter && (hasGreekLowercase || hasCyrillic)) || isolatedSpaces >= 2;
+        String prefix = suspicious ? "PS_DEBUG_SUSPICIOUS" : "PS_DEBUG_OK";
+        StringBuilder hex = new StringBuilder();
+        if (rawBytes != null) {
+            for (int i = 0; i < Math.min(rawBytes.length, 16); i++) {
+                hex.append(String.format("%02X ", rawBytes[i] & 0xFF));
+            }
+        } else {
+            hex.append("(no bytes - method returned String directly)");
+        }
+        Log.i(TAG, prefix + " [" + tag + "] decoded='" + decoded
+            + "' highChars=" + highChars + " greekLC=" + hasGreekLowercase
+            + " cyr=" + hasCyrillic + " gaps=" + isolatedSpaces
+            + " hex=" + hex.toString().trim());
     }
 
     /**
@@ -650,6 +759,8 @@ public class RdsManager {
      */
     public void clearRds() {
         currentPs = "";
+        lastFetchedPs = "";
+        psStableCount = 0;
         currentRt = "";
         currentRssi = 0;
         currentPi = 0;

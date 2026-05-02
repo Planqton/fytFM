@@ -127,6 +127,7 @@ class PresetRepository(context: Context) {
     fun setDebugWindowPosition(windowId: String, x: Float, y: Float) =
         settings.setDebugWindowPosition(windowId, x, y)
     fun getDebugWindowPositionX(windowId: String): Float = settings.getDebugWindowPositionX(windowId)
+    fun clearAllDebugWindowPositions() = settings.clearAllDebugWindowPositions()
     fun getDebugWindowPositionY(windowId: String): Float = settings.getDebugWindowPositionY(windowId)
 
     fun getNowPlayingAnimation(): Int = settings.getNowPlayingAnimation()
