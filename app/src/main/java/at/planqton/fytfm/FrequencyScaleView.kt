@@ -37,11 +37,32 @@ class FrequencyScaleView @JvmOverloads constructor(
     private var onModeChangeListener: ((RadioMode) -> Unit)? = null
     private val density = context.resources.displayMetrics.density
 
+    /** Region-abhängige Bandgrenzen. Defaults entsprechen Western Europe;
+     *  MainActivity überschreibt sie via [setBands] aus der aktiven WorldArea. */
+    private var fmMin: Float = FM_MIN_FREQUENCY
+    private var fmMax: Float = FM_MAX_FREQUENCY
+    private var amMin: Float = AM_MIN_FREQUENCY
+    private var amMax: Float = AM_MAX_FREQUENCY
+
     private val minFrequency: Float
-        get() = if (radioMode == RadioMode.FM) FM_MIN_FREQUENCY else AM_MIN_FREQUENCY
+        get() = if (radioMode == RadioMode.FM) fmMin else amMin
 
     private val maxFrequency: Float
-        get() = if (radioMode == RadioMode.FM) FM_MAX_FREQUENCY else AM_MAX_FREQUENCY
+        get() = if (radioMode == RadioMode.FM) fmMax else amMax
+
+    /**
+     * Setzt die regionsabhängigen Bandgrenzen. Bewirkt redraw + (falls die
+     * aktuelle Frequenz außerhalb des neuen Bandes liegt) ein Coerce auf den
+     * neuen Min-Wert.
+     */
+    fun setBands(fmMinMHz: Float, fmMaxMHz: Float, amMinKHz: Float, amMaxKHz: Float) {
+        fmMin = fmMinMHz
+        fmMax = fmMaxMHz
+        amMin = amMinKHz
+        amMax = amMaxKHz
+        currentFrequency = currentFrequency.coerceIn(minFrequency, maxFrequency)
+        invalidate()
+    }
 
     private val scalePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.radio_scale_line)
@@ -99,17 +120,20 @@ class FrequencyScaleView @JvmOverloads constructor(
     }
 
     private fun drawFMScale(canvas: Canvas, availableWidth: Float, scaleY: Float, frequencyRange: Float) {
-        // Zeichne Ticks mit Integer-Arithmetik um Float-Präzisionsfehler zu vermeiden
-        // freqInt ist die Frequenz * 10 (875 = 87.5 MHz, 880 = 88.0 MHz, etc.)
-        var freqInt = 875  // Start bei 87.5 MHz
-        while (freqInt <= 1080) {  // Ende bei 108.0 MHz
+        // Region-aware: Start/Ende werden aus der aktuellen Bandgrenze
+        // abgeleitet (z.B. 76.0–95.0 MHz für Japan). Integer-Arithmetik um
+        // Float-Präzisionsfehler zu vermeiden — freqInt = freq × 10.
+        val startInt = Math.round(fmMin * 10f)
+        val endInt = Math.round(fmMax * 10f)
+        var freqInt = startInt
+        while (freqInt <= endInt) {
             val freq = freqInt / 10.0f
-            val x = paddingHorizontal + (freq - FM_MIN_FREQUENCY) / frequencyRange * availableWidth
+            val x = paddingHorizontal + (freq - fmMin) / frequencyRange * availableWidth
 
-            // Major tick: every 1.0 MHz (88.0, 89.0, 90.0...)
+            // Major tick: every 1.0 MHz
             val isMajorTick = freqInt % 10 == 0
-            // Medium tick: every 0.5 MHz but not whole MHz and not 87.5 (first tick)
-            val isMediumTick = freqInt % 5 == 0 && !isMajorTick && freqInt != 875
+            // Medium tick: every 0.5 MHz but not whole MHz and not first tick
+            val isMediumTick = freqInt % 5 == 0 && !isMajorTick && freqInt != startInt
 
             val tickHeight = when {
                 isMajorTick -> majorTickHeight
@@ -119,8 +143,10 @@ class FrequencyScaleView @JvmOverloads constructor(
 
             canvas.drawLine(x, scaleY - tickHeight, x, scaleY, scalePaint)
 
-            // Labels every 2.0 MHz from 88 onwards, plus 108
-            if ((freqInt % 20 == 0 && freqInt >= 880) || freqInt == 1080) {
+            // Labels every 2.0 MHz an ganzen MHz, plus letzter Tick.
+            val isFullEven2Mhz = freqInt % 20 == 0
+            val isLast = freqInt == endInt
+            if (isFullEven2Mhz || isLast) {
                 canvas.drawText(
                     (freqInt / 10).toString(),
                     x,
@@ -134,15 +160,17 @@ class FrequencyScaleView @JvmOverloads constructor(
     }
 
     private fun drawAMScale(canvas: Canvas, availableWidth: Float, scaleY: Float, frequencyRange: Float) {
-        // Draw ticks every 10 kHz for visual density
-        var freq = 520f  // Start slightly before min to align with round numbers
-        while (freq <= AM_MAX_FREQUENCY + 10) {
-            if (freq < AM_MIN_FREQUENCY) {
+        // Region-aware: Start/Ende aus aktuellem AM-Band. Ticks alle 10 kHz.
+        val startInt = (amMin / 10f).toInt() * 10  // auf nächst niedrigere 10 abrunden
+        val endInt = ((amMax / 10f).toInt() + 1) * 10  // auf nächst höhere 10 aufrunden
+        var freq = startInt.toFloat()
+        while (freq <= endInt) {
+            if (freq < amMin) {
                 freq += 10f
                 continue
             }
 
-            val x = paddingHorizontal + (freq - AM_MIN_FREQUENCY) / frequencyRange * availableWidth
+            val x = paddingHorizontal + (freq - amMin) / frequencyRange * availableWidth
 
             if (x < paddingHorizontal || x > width - paddingHorizontal) {
                 freq += 10f
@@ -163,8 +191,8 @@ class FrequencyScaleView @JvmOverloads constructor(
 
             canvas.drawLine(x, scaleY - tickHeight, x, scaleY, scalePaint)
 
-            // Labels every 100 kHz starting from 600
-            if (freqInt % 100 == 0 && freqInt >= 600 && freqInt <= 1600) {
+            // Labels every 100 kHz innerhalb des Bandes
+            if (freqInt % 100 == 0 && freqInt >= amMin && freqInt <= amMax) {
                 canvas.drawText(
                     freqInt.toString(),
                     x,

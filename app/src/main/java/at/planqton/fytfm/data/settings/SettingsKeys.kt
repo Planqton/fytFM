@@ -46,6 +46,14 @@ internal object SettingsKeys {
     const val FM_FREQUENCY_STEP = "fm_frequency_step"
     const val AM_FREQUENCY_STEP = "am_frequency_step"
 
+    // FM Stationname Auto-Parsing (NONE / PS / PI / PI_FALLBACK_PS)
+    const val FM_AUTOPARSE_MODE = "fm_autoparse_mode"
+
+    // World Area / Country (zweistufige Region-Auswahl, Pref-Migration aus
+    // dem alten `radio_area` Int-Wert).
+    const val WORLD_AREA_ID = "world_area_id"
+    const val COUNTRY = "country"
+
     // Signal-bars icon (per mode)
     const val SIGNAL_ICON_ENABLED_FM = "signal_icon_enabled_fm"
     const val SIGNAL_ICON_ENABLED_AM = "signal_icon_enabled_am"

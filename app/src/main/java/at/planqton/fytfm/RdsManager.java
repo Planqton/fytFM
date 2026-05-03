@@ -51,7 +51,7 @@ public class RdsManager {
      */
     private String lastFetchedPs = "";
     private int psStableCount = 0;
-    private static final int PS_STABLE_REQUIRED = 2;
+    private static final int PS_STABLE_REQUIRED = 5;
     private volatile String currentRt = "";
     private volatile int currentRssi = 0;
     private volatile int currentPi = 0;
@@ -275,26 +275,37 @@ public class RdsManager {
             }
         }
 
-        // PS abrufen — Stabilitäts-Filter: gleicher Wert muss
-        // PS_STABLE_REQUIRED-mal in Folge ankommen, sonst verworfen.
+        // PS abrufen — zwei Schutz-Ebenen:
+        //  1. Plausibilitäts-Reject: PS mit klaren Korruptions-Mustern
+        //     (Greek/Cyrillic-Mix, „E E E"-Lücken, „E TETEHi"-Singleton-Prefix)
+        //     wird gar nicht erst in den Stabilitäts-Counter eingespeist.
+        //  2. Stabilitäts-Filter: gleicher Wert muss PS_STABLE_REQUIRED-mal
+        //     in Folge ankommen, sonst verworfen.
         String ps = fetchPs();
         Log.d(TAG, "pollRds: fetchPs() returned: '" + ps + "'");
         if (ps != null && !ps.isEmpty()) {
-            if (ps.equals(lastFetchedPs)) {
-                psStableCount++;
+            if (isPsSuspicious(ps)) {
+                Log.w(TAG, "PS rejected (suspicious): '" + ps + "'");
+                // Counter NICHT zurücksetzen — sonst würde stabiler Müll
+                // den vorigen plausiblen Wert auf Dauer blockieren. Wir
+                // ignorieren den korrupten Sample einfach.
             } else {
-                lastFetchedPs = ps;
-                psStableCount = 1;
-                Log.d(TAG, "PS unstable: new value '" + ps + "', count reset");
-            }
-            if (psStableCount >= PS_STABLE_REQUIRED) {
-                lastPsTimestamp = System.currentTimeMillis();
-                if (!ps.equals(currentPs)) {
-                    currentPs = ps;
-                    Log.i(TAG, "PS: '" + ps + "' (stable after " + psStableCount + " polls)");
+                if (ps.equals(lastFetchedPs)) {
+                    psStableCount++;
+                } else {
+                    lastFetchedPs = ps;
+                    psStableCount = 1;
+                    Log.d(TAG, "PS unstable: new value '" + ps + "', count reset");
                 }
-            } else {
-                Log.d(TAG, "PS held: '" + ps + "' (stable=" + psStableCount + "/" + PS_STABLE_REQUIRED + ")");
+                if (psStableCount >= PS_STABLE_REQUIRED) {
+                    lastPsTimestamp = System.currentTimeMillis();
+                    if (!ps.equals(currentPs)) {
+                        currentPs = ps;
+                        Log.i(TAG, "PS: '" + ps + "' (stable after " + psStableCount + " polls)");
+                    }
+                } else {
+                    Log.d(TAG, "PS held: '" + ps + "' (stable=" + psStableCount + "/" + PS_STABLE_REQUIRED + ")");
+                }
             }
         }
 
@@ -643,6 +654,52 @@ public class RdsManager {
         Log.i(TAG, prefix + " [" + tag + "] decoded='" + decoded
             + "' highChars=" + highChars + " greekLC=" + hasGreekLowercase
             + " cyr=" + hasCyrillic + " hex=" + hex.toString().trim());
+    }
+
+    /**
+     * Hard-Reject-Heuristik für PS. Trifft typische Bit-Error-Muster vom
+     * FM-Chip-Buffer ohne legitime Sender-Namen falsch zu verwerfen. Wenn
+     * true → der Wert wird nicht in den Stabilitäts-Counter eingespeist.
+     *
+     * Erkannte Muster:
+     *  - Greek/Cyrillic-Codepoints im Mix mit Latin (z.B. „SupŒ;η4ts").
+     *  - ≥2 isolierte Spaces zwischen Buchstaben („E E E"-Pattern aus
+     *    falsch-positionierten Group-0A-Pairs).
+     *  - Singleton-Letter-Prefix: PS startet mit „X " (genau 1 Buchstabe
+     *    + Space + weiterer Buchstabe), wie „E TETEHi". Echte Sendernamen
+     *    sind selten so kurz vorne abgeschnitten.
+     */
+    private boolean isPsSuspicious(String s) {
+        if (s == null || s.isEmpty()) return false;
+        boolean hasLatinLetter = false;
+        boolean hasGreekLowercase = false;
+        boolean hasCyrillic = false;
+        int isolatedSpaces = 0;
+        for (int i = 0; i < s.length(); i++) {
+            int cp = s.codePointAt(i);
+            if ((cp >= 'A' && cp <= 'Z') || (cp >= 'a' && cp <= 'z')) hasLatinLetter = true;
+            if (cp >= 0x0370 && cp <= 0x03FF) hasGreekLowercase = true;
+            if (cp >= 0x0400 && cp <= 0x04FF) hasCyrillic = true;
+            if (cp == ' ' && i > 0 && i < s.length() - 1) {
+                int prev = s.codePointAt(i - 1);
+                int next = s.codePointAt(i + 1);
+                boolean prevIsLetter = (prev >= 'A' && prev <= 'Z') || (prev >= 'a' && prev <= 'z');
+                boolean nextIsLetter = (next >= 'A' && next <= 'Z') || (next >= 'a' && next <= 'z');
+                if (prevIsLetter && nextIsLetter) isolatedSpaces++;
+            }
+        }
+        if (hasLatinLetter && (hasGreekLowercase || hasCyrillic)) return true;
+        if (isolatedSpaces >= 2) return true;
+        // Singleton-Letter-Prefix: ^[A-Za-z] [A-Za-z]
+        if (s.length() >= 3) {
+            char c0 = s.charAt(0);
+            char c1 = s.charAt(1);
+            char c2 = s.charAt(2);
+            boolean c0Letter = (c0 >= 'A' && c0 <= 'Z') || (c0 >= 'a' && c0 <= 'z');
+            boolean c2Letter = (c2 >= 'A' && c2 <= 'Z') || (c2 >= 'a' && c2 <= 'z');
+            if (c0Letter && c1 == ' ' && c2Letter) return true;
+        }
+        return false;
     }
 
     /**

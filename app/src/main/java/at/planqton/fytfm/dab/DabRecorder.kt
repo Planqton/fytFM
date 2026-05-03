@@ -69,7 +69,11 @@ class DabRecorder(private val context: Context) {
 
             if (documentFile == null || !documentFile.canWrite()) {
                 Log.e(TAG, "Cannot write to selected folder")
-                mainHandler.post { onRecordingError?.invoke("Kein Schreibzugriff auf den gewählten Ordner") }
+                mainHandler.post {
+                    onRecordingError?.invoke(
+                        context.getString(at.planqton.fytfm.R.string.dab_recording_no_write_access)
+                    )
+                }
                 return false
             }
 
@@ -82,7 +86,11 @@ class DabRecorder(private val context: Context) {
             val newFile = documentFile.createFile("audio/mpeg", outputFileName)
             if (newFile == null) {
                 Log.e(TAG, "Failed to create file")
-                mainHandler.post { onRecordingError?.invoke("Datei konnte nicht erstellt werden") }
+                mainHandler.post {
+                    onRecordingError?.invoke(
+                        context.getString(at.planqton.fytfm.R.string.dab_recording_file_create_failed)
+                    )
+                }
                 return false
             }
 
@@ -91,7 +99,11 @@ class DabRecorder(private val context: Context) {
 
             if (outputStream == null) {
                 Log.e(TAG, "Failed to open output stream")
-                mainHandler.post { onRecordingError?.invoke("Ausgabestream konnte nicht geöffnet werden") }
+                mainHandler.post {
+                    onRecordingError?.invoke(
+                        context.getString(at.planqton.fytfm.R.string.dab_recording_output_stream_failed)
+                    )
+                }
                 return false
             }
 

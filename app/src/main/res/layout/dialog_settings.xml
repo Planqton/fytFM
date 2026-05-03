@@ -126,6 +126,58 @@
 
             </LinearLayout>
 
+            <!-- Region (World Area + Country) — fix sichtbar, auch wenn
+                 General-Section eingeklappt ist. -->
+            <LinearLayout
+                android:id="@+id/itemRegion"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:minHeight="56dp"
+                android:orientation="horizontal"
+                android:paddingStart="24dp"
+                android:paddingEnd="24dp"
+                android:gravity="center_vertical">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="12dp"
+                    android:src="@drawable/ic_globe"
+                    android:tint="#757575" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/region_setting_title"
+                        android:textColor="@color/dialog_text"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:id="@+id/textRegionValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/radio_text_secondary"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_chevron_right"
+                    android:alpha="0.5" />
+
+            </LinearLayout>
+
             <LinearLayout
                 android:id="@+id/contentSectionGeneral"
                 android:layout_width="match_parent"
@@ -940,58 +992,6 @@
 
                 </LinearLayout>
 
-                <!-- Radio Area Item -->
-                <LinearLayout
-                    android:id="@+id/itemRadioArea"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:minHeight="56dp"
-                    android:orientation="horizontal"
-                    android:paddingStart="24dp"
-                    android:paddingEnd="24dp"
-                    android:gravity="center_vertical">
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:layout_marginEnd="12dp"
-                        android:src="@drawable/ic_globe"
-                        android:tint="#757575" />
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/radio_area"
-                            android:textColor="@color/dialog_text"
-                            android:textSize="16sp" />
-
-                        <TextView
-                            android:id="@+id/textRadioAreaValue"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/area_europe"
-                            android:textColor="@color/radio_text_secondary"
-                            android:textSize="12sp" />
-
-                    </LinearLayout>
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@drawable/ic_chevron_right"
-                        android:alpha="0.5" />
-
-                </LinearLayout>
-
                 <!-- Auto Scan Sensitivity Toggle -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -1119,10 +1119,14 @@
 
                 </LinearLayout>
 
-                <!-- FM Step Size -->
+                <!-- Stationname Parsing Mode — None / PS / PI / PI→PS -->
                 <LinearLayout
+                    android:id="@+id/itemFmAutoparseMode"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
                     android:minHeight="56dp"
                     android:orientation="horizontal"
                     android:paddingStart="24dp"
@@ -1133,35 +1137,88 @@
                         android:layout_width="20dp"
                         android:layout_height="20dp"
                         android:layout_marginEnd="12dp"
-                        android:src="@drawable/ic_chevron_right"
+                        android:src="@drawable/ic_edit"
                         android:tint="#757575" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/fm_step_size"
-                        android:textColor="@color/dialog_text"
-                        android:textSize="16sp" />
-
-                    <SeekBar
-                        android:id="@+id/seekBarFmStep"
+                    <LinearLayout
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:layout_marginStart="12dp"
-                        android:layout_marginEnd="8dp"
-                        android:min="0"
-                        android:max="9"
-                        android:progress="1" />
+                        android:orientation="vertical">
 
-                    <TextView
-                        android:id="@+id/textFmStepValue"
-                        android:layout_width="56dp"
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/fm_autoparse_title"
+                            android:textColor="@color/dialog_text"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:id="@+id/textFmAutoparseValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textColor="@color/radio_text_secondary"
+                            android:textSize="12sp"
+                            tools:text="PS (aktuell)" />
+
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_chevron_right"
+                        android:alpha="0.5" />
+
+                </LinearLayout>
+
+                <!-- PI Database Item — Anzeige der statischen PI→Name-Tabelle -->
+                <LinearLayout
+                    android:id="@+id/itemPiDatabase"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:minHeight="56dp"
+                    android:orientation="horizontal"
+                    android:paddingStart="24dp"
+                    android:paddingEnd="24dp"
+                    android:gravity="center_vertical">
+
+                    <ImageView
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_marginEnd="12dp"
+                        android:src="@drawable/ic_folder"
+                        android:tint="#757575" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        tools:text="0.10 MHz"
-                        android:textColor="@color/dialog_text"
-                        android:textSize="13sp"
-                        android:gravity="end" />
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/pi_list_settings_item"
+                            android:textColor="@color/dialog_text"
+                            android:textSize="16sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/pi_list_settings_desc"
+                            android:textColor="@color/radio_text_secondary"
+                            android:textSize="12sp" />
+
+                    </LinearLayout>
+
+                    <ImageView
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:src="@drawable/ic_chevron_right"
+                        android:alpha="0.5" />
 
                 </LinearLayout>
 
@@ -1301,52 +1358,6 @@
                             android:textSize="12sp" />
 
                     </LinearLayout>
-
-                </LinearLayout>
-
-                <!-- AM Step Size -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="56dp"
-                    android:orientation="horizontal"
-                    android:paddingStart="24dp"
-                    android:paddingEnd="24dp"
-                    android:gravity="center_vertical">
-
-                    <ImageView
-                        android:layout_width="20dp"
-                        android:layout_height="20dp"
-                        android:layout_marginEnd="12dp"
-                        android:src="@drawable/ic_chevron_right"
-                        android:tint="#757575" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/am_step_size"
-                        android:textColor="@color/dialog_text"
-                        android:textSize="16sp" />
-
-                    <SeekBar
-                        android:id="@+id/seekBarAmStep"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="12dp"
-                        android:layout_marginEnd="8dp"
-                        android:min="0"
-                        android:max="99"
-                        android:progress="8" />
-
-                    <TextView
-                        android:id="@+id/textAmStepValue"
-                        android:layout_width="56dp"
-                        android:layout_height="wrap_content"
-                        tools:text="9 kHz"
-                        android:textColor="@color/dialog_text"
-                        android:textSize="13sp"
-                        android:gravity="end" />
 
                 </LinearLayout>
 

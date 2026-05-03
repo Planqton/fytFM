@@ -152,8 +152,16 @@ class StationRepository(
 
     // ========== Scanned-station merges ==========
 
-    fun mergeScannedStations(scannedStations: List<RadioStation>, isAM: Boolean): List<RadioStation> {
-        val merged = mergeStations(
+    /**
+     * Merged neu gescannte Sender mit existierenden. Liefert das
+     * Ergebnis-Tupel `(mergedList, overwrittenFavorites)`, damit der
+     * Caller (MainActivity) bei Bedarf zugehörige Logos aufräumen kann.
+     */
+    fun mergeScannedStations(
+        scannedStations: List<RadioStation>,
+        isAM: Boolean,
+    ): Pair<List<RadioStation>, List<RadioStation>> {
+        val (merged, overwritten) = mergeStations(
             existing = if (isAM) loadAmStations() else loadFmStations(),
             scanned = scannedStations,
             keyOf = { (it.frequency * 10).toInt() },
@@ -161,11 +169,11 @@ class StationRepository(
             updateNameIfBlank = true,
         )
         if (isAM) saveAmStations(merged) else saveFmStations(merged)
-        return merged
+        return Pair(merged, overwritten)
     }
 
     fun mergeDabScannedStations(scannedStations: List<RadioStation>): List<RadioStation> {
-        val merged = mergeStations(
+        val (merged, _) = mergeStations(
             existing = loadDabStations(),
             scanned = scannedStations,
             keyOf = { it.serviceId },
@@ -176,7 +184,7 @@ class StationRepository(
     }
 
     fun mergeDabDevScannedStations(scannedStations: List<RadioStation>): List<RadioStation> {
-        val merged = mergeStations(
+        val (merged, _) = mergeStations(
             existing = loadDabDevStations(),
             scanned = scannedStations,
             keyOf = { it.serviceId },
@@ -222,20 +230,29 @@ class StationRepository(
         keyOf: (RadioStation) -> K,
         comparator: Comparator<RadioStation>,
         updateNameIfBlank: Boolean = false,
-    ): List<RadioStation> {
+    ): Pair<List<RadioStation>, List<RadioStation>> {
         val overwriteFavorites = isOverwriteFavorites()
         val favoritesMap = existing
             .filter { it.isFavorite }
             .associateBy(keyOf)
             .toMutableMap()
         val resultMap = mutableMapOf<K, RadioStation>()
+        val overwritten = mutableListOf<RadioStation>()
 
         for (s in scanned) {
             val key = keyOf(s)
             val existingFavorite = favoritesMap[key]
             resultMap[key] = when {
                 existingFavorite == null -> s
-                overwriteFavorites -> s.copy(isFavorite = true)
+                // overwriteFavorites: kompletter Replace — der vorherige
+                // Favoriten-Status fällt weg, der neue Eintrag startet
+                // wie ein frisch gescannter Sender (isFavorite=false).
+                // Der alte Favorit wird in `overwritten` aufgehoben, damit
+                // der Caller z.B. das zugehörige Logo löschen kann.
+                overwriteFavorites -> {
+                    overwritten.add(existingFavorite)
+                    s.copy(isFavorite = false)
+                }
                 updateNameIfBlank &&
                     existingFavorite.name.isNullOrBlank() &&
                     !s.name.isNullOrBlank() ->
@@ -246,7 +263,7 @@ class StationRepository(
         }
 
         resultMap.putAll(favoritesMap)
-        return resultMap.values.sortedWith(comparator)
+        return Pair(resultMap.values.sortedWith(comparator), overwritten)
     }
 
     private fun saveStations(prefs: SharedPreferences, stations: List<RadioStation>) {
@@ -262,6 +279,8 @@ class StationRepository(
                 put("serviceId", station.serviceId)
                 put("ensembleId", station.ensembleId)
                 put("ensembleLabel", station.ensembleLabel ?: "")
+                put("pi", station.pi)
+                put("logoPath", station.logoPath ?: "")
             }
             jsonArray.put(obj)
         }
@@ -291,6 +310,8 @@ class StationRepository(
                         serviceId = obj.optInt("serviceId", 0),
                         ensembleId = obj.optInt("ensembleId", 0),
                         ensembleLabel = obj.optString("ensembleLabel").takeIf { it.isNotBlank() },
+                        pi = obj.optInt("pi", 0),
+                        logoPath = obj.optString("logoPath").takeIf { it.isNotBlank() },
                     )
                 )
             }

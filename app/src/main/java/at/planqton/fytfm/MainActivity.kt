@@ -680,6 +680,7 @@ class MainActivity : AppCompatActivity(),
         }
 
         binding.frequencyScale.setMode(lastMode)
+        applyBandsToFrequencyScale()
         android.util.Log.i(TAG, "=== APP START: binding.frequencyScale.getMode() is now ${binding.frequencyScale.getMode()} ===")
 
         // Start MediaService for Car Launcher integration
@@ -945,7 +946,7 @@ class MainActivity : AppCompatActivity(),
                             val isAM = isAmMode
                             val currentFreq = binding.frequencyScale.getFrequency()
                             val ps = rdsManager.ps
-                            val radioLogoPath = radioLogoRepository.getLogoForStation(ps, rdsManager.pi, currentFreq)
+                            val radioLogoPath = lookupFmAmLogoPath(currentFreq)
                             FytFMMediaService.instance?.updateMetadata(
                                 frequency = currentFreq,
                                 ps = ps,
@@ -1001,12 +1002,11 @@ class MainActivity : AppCompatActivity(),
                 }
 
                 runOnUiThread {
-                    // Deactivated. Experimental — RDS-PS kann verbuggt
-                    // sein (Bit-Errors, „E E E" statt richtigem Sendernamen)
-                    // und überschreibt sonst den manuellen Preset-Namen.
-                    // if (!ps.isNullOrBlank()) {
-                    //     handleRdsPsSync(ps)
-                    // }
+                    // Auto-Sync RDS → Preset-Name. Mode kommt aus der
+                    // Settings-„Stationname Parsing"-Einstellung (NONE / PS /
+                    // PI / PI_FALLBACK_PS). PS-Path nutzt den
+                    // Stabilitäts-/Plausibilitäts-Filter im RdsManager.
+                    handleRdsAutoSync(ps, pi)
                     // Debug-UI aktualisieren
                     handleRdsDebugUpdate(ps, rt, rssi, pi, pty, tp, ta, afList)
                     // Signal-Bars-Icon
@@ -1168,7 +1168,7 @@ class MainActivity : AppCompatActivity(),
 
                 val isAM = isAmMode
                 val currentFreq = binding.frequencyScale.getFrequency()
-                val radioLogoPath = radioLogoRepository.getLogoForStation(ps, pi, currentFreq)
+                val radioLogoPath = lookupFmAmLogoPath(currentFreq)
                 val localCover = deezerCache?.getLocalCoverPath(trackInfo?.trackId)
                     ?: trackInfo?.coverUrl?.takeIf { it.startsWith("/") }
 
@@ -1191,7 +1191,7 @@ class MainActivity : AppCompatActivity(),
     private fun handleRdsRawRtUpdate(rt: String, ps: String?, pi: Int) {
         val isAM = isAmMode
         val currentFreq = binding.frequencyScale.getFrequency()
-        val radioLogoPath = radioLogoRepository.getLogoForStation(ps, pi, currentFreq)
+        val radioLogoPath = lookupFmAmLogoPath(currentFreq)
 
         FytFMMediaService.instance?.updateMetadata(
             frequency = currentFreq,
@@ -1209,6 +1209,46 @@ class MainActivity : AppCompatActivity(),
             updateIgnoredIndicator(rt)
             updatePipDisplay()
         }
+    }
+
+    /**
+     * Dispatcher für den FM-Auto-Sync. Liest den Mode aus den Settings
+     * (NONE / PS / PI / PI_FALLBACK_PS) und entscheidet, welcher Sync-Pfad
+     * den Preset-Namen aktualisiert.
+     */
+    private fun handleRdsAutoSync(ps: String?, pi: Int) {
+        val mode = at.planqton.fytfm.data.pi.FmAutoparseMode
+            .fromId(presetRepository.getFmAutoparseMode())
+        when (mode) {
+            at.planqton.fytfm.data.pi.FmAutoparseMode.NONE -> {
+                // Auto-Sync deaktiviert.
+            }
+            at.planqton.fytfm.data.pi.FmAutoparseMode.PS -> {
+                if (!ps.isNullOrBlank()) handleRdsPsSync(ps)
+            }
+            at.planqton.fytfm.data.pi.FmAutoparseMode.PI -> {
+                val name = lookupNameByPi(pi)
+                if (!name.isNullOrBlank()) handleRdsPsSync(name)
+                // Bei kein-Treffer: bewusst KEIN PS-Fallback.
+            }
+            at.planqton.fytfm.data.pi.FmAutoparseMode.PI_FALLBACK_PS -> {
+                val name = lookupNameByPi(pi)
+                if (!name.isNullOrBlank()) {
+                    handleRdsPsSync(name)
+                } else if (!ps.isNullOrBlank()) {
+                    handleRdsPsSync(ps)
+                }
+            }
+        }
+    }
+
+    /**
+     * Sucht den Sendernamen in der statischen PI-Datenbank.
+     * Liefert null wenn pi == 0, ungültig oder nicht in der Tabelle.
+     */
+    private fun lookupNameByPi(pi: Int): String? {
+        if (pi == 0 || pi == 0xFFFF) return null
+        return at.planqton.fytfm.data.pi.PiNameTable.lookup(pi)?.name
     }
 
     /**
@@ -1540,7 +1580,7 @@ class MainActivity : AppCompatActivity(),
             val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
             val savedStation = stations.find { Math.abs(it.frequency - lastFreq) < 0.05f }
             val savedStationName = savedStation?.name
-            val radioLogoPath = radioLogoRepository.getLogoForStation(savedStationName, null, lastFreq)
+            val radioLogoPath = lookupFmAmLogoPath(lastFreq)
             android.util.Log.d(TAG, "Initial MediaSession: freq=$lastFreq, stationName=$savedStationName")
 
             lifecycleScope.launch {
@@ -1979,11 +2019,7 @@ class MainActivity : AppCompatActivity(),
             val currentFreq = binding.frequencyScale.getFrequency()
             val isAM = currentMode == FrequencyScaleView.RadioMode.AM
             val placeholderDrawable = if (isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
-            val stationLogo = radioLogoRepository.getLogoForStation(
-                ps = rdsManager.ps,
-                pi = rdsManager.pi,
-                frequency = currentFreq
-            )
+            val stationLogo = lookupFmAmLogoPath(currentFreq)
             val accentTint = at.planqton.fytfm.ui.theme.AccentColors.current(this, presetRepository)
             if (stationLogo != null) {
                 coverDisplayController.currentUiCoverSource = stationLogo
@@ -2296,7 +2332,7 @@ class MainActivity : AppCompatActivity(),
                     idx++
                 }
             }
-            toast("Debug-Window-Positionen zurückgesetzt")
+            toast(getString(R.string.debug_window_positions_reset))
         }
 
         // Block Spotify/Local Toggle Button
@@ -2639,37 +2675,25 @@ class MainActivity : AppCompatActivity(),
     }
 
     /**
-     * Aktualisiert das RadioLogoRepository mit dem neuen Logo.
+     * Speichert das Logo direkt in der DAB-Sender-Liste (RadioStation.logoPath).
+     * Schreibt sowohl in die normale DAB-Liste als auch in DAB-Dev, damit
+     * der Eintrag beim Mode-Wechsel konsistent bleibt.
      */
-    private fun updateLogoInRepository(stationName: String, logoFile: java.io.File) {
-        val templateName = "Custom-DAB"
-        val activeTemplateName = radioLogoRepository.getActiveTemplateName()
-        val targetTemplateName = activeTemplateName ?: templateName
-
-        val existingTemplate = radioLogoRepository.getTemplates().find { it.name == targetTemplateName }
-        val existingStations = existingTemplate?.stations?.toMutableList() ?: mutableListOf()
-
-        existingStations.removeAll { it.ps.equals(stationName, ignoreCase = true) }
-
-        val stationLogo = at.planqton.fytfm.data.logo.StationLogo(
-            ps = stationName,
-            logoUrl = "local://${logoFile.name}",
-            localPath = logoFile.absolutePath
-        )
-        existingStations.add(stationLogo)
-
-        val newTemplate = at.planqton.fytfm.data.logo.RadioLogoTemplate(
-            name = targetTemplateName,
-            area = existingTemplate?.area ?: 2,
-            stations = existingStations
-        )
-        radioLogoRepository.saveTemplate(newTemplate)
-
-        if (activeTemplateName == null) {
-            radioLogoRepository.setActiveTemplate(targetTemplateName)
+    private fun updateDabStationLogo(serviceId: Int, logoFile: java.io.File) {
+        val path = logoFile.absolutePath
+        val dabStations = presetRepository.loadDabStations()
+        if (dabStations.any { it.serviceId == serviceId }) {
+            presetRepository.saveDabStations(dabStations.map {
+                if (it.serviceId == serviceId) it.copy(logoPath = path) else it
+            })
         }
-
-        android.util.Log.i(TAG, "Added logo to template '$targetTemplateName': ${logoFile.absolutePath}")
+        val devStations = presetRepository.loadDabDevStations()
+        if (devStations.any { it.serviceId == serviceId }) {
+            presetRepository.saveDabDevStations(devStations.map {
+                if (it.serviceId == serviceId) it.copy(logoPath = path) else it
+            })
+        }
+        android.util.Log.i(TAG, "DAB logo gespeichert: serviceId=$serviceId path=$path")
     }
 
     /**
@@ -2701,16 +2725,12 @@ class MainActivity : AppCompatActivity(),
 
         animateCoverSaveGesture(imageView)
 
+        val capturedServiceId = currentDabServiceId
         Thread {
             try {
-                val templateName = "Custom-DAB"
-                val logosDir = java.io.File(filesDir, "logos/$templateName")
-                if (!logosDir.exists()) logosDir.mkdirs()
-
-                val hash = java.security.MessageDigest.getInstance("MD5")
-                    .digest(stationName.toByteArray())
-                    .joinToString("") { "%02x".format(it) }
-                val logoFile = java.io.File(logosDir, "$hash.png")
+                // Logo-Datei pro Sender, Filename = "dab_<serviceId>.png".
+                val logosDir = java.io.File(filesDir, "station_logos").apply { mkdirs() }
+                val logoFile = java.io.File(logosDir, "dab_${capturedServiceId}.png")
 
                 val currentSource = getSelectedCoverSource()
                 if (currentSource == null || (currentSource != DabCoverSource.SLIDESHOW && currentSource != DabCoverSource.DEEZER)) {
@@ -2721,7 +2741,7 @@ class MainActivity : AppCompatActivity(),
                 val saved = saveCoverSourceToFile(currentSource, logoFile)
 
                 if (saved) {
-                    updateLogoInRepository(stationName, logoFile)
+                    updateDabStationLogo(capturedServiceId, logoFile)
                     runOnUiThread {
                         toast(getString(R.string.logo_saved_for_format, stationName))
                         refreshUiAfterLogoSave()
@@ -2850,7 +2870,7 @@ class MainActivity : AppCompatActivity(),
         val placeholderDrawable = if (isAM) R.drawable.placeholder_am else R.drawable.placeholder_fm
         val localCover = trackInfo.coverUrl?.takeIf { it.startsWith("/") }
         val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(currentFreq)
-        val stationLogo = radioLogoRepository.getLogoForStation(ps, rdsManager.pi, currentFreq)
+        val stationLogo = lookupFmAmLogoPath(currentFreq)
 
         val accentTint = at.planqton.fytfm.ui.theme.AccentColors.current(this, presetRepository)
         when {
@@ -3720,11 +3740,7 @@ class MainActivity : AppCompatActivity(),
         val deezerEnabled = presetRepository.isDeezerEnabledForFrequency(currentFreq)
 
         // Try station logo first (always available as fallback)
-        val stationLogo = radioLogoRepository.getLogoForStation(
-            ps = rdsManager.ps,
-            pi = rdsManager.pi,
-            frequency = currentFreq
-        )
+        val stationLogo = lookupFmAmLogoPath(currentFreq)
 
         val accentTint = at.planqton.fytfm.ui.theme.AccentColors.current(this, presetRepository)
         if (deezerEnabled && !localCover.isNullOrBlank()) {
@@ -4211,7 +4227,7 @@ class MainActivity : AppCompatActivity(),
             val logoPath = if (station.isDab || isAnyDabMode) {
                 getLogoForDabStation(station.name, station.serviceId)
             } else {
-                radioLogoRepository.getLogoForStation(station.name, null, station.frequency)
+                station.logoPath
             }
             at.planqton.fytfm.ui.StationCarouselAdapter.StationItem(
                 frequency = station.frequency,
@@ -4566,16 +4582,29 @@ class MainActivity : AppCompatActivity(),
 
     override fun getRadioLogoRepository(): at.planqton.fytfm.data.logo.RadioLogoRepository = radioLogoRepository
 
+    /**
+     * Logo-Lookup für FM/AM-Sender. Liest direkt aus der Sender-Liste
+     * (RadioStation.logoPath). Templates sind abgeschafft — Logos werden
+     * pro Sender via Radio-Editor oder Swipe-Down-Geste gespeichert.
+     */
     override fun getLogoForStation(ps: String?, pi: Int?, freq: Float): String? =
-        radioLogoRepository.getLogoForStation(ps, pi, freq)
+        lookupFmAmLogoPath(freq)
+
+    /**
+     * Lookup für FM/AM-Sender-Logo: matched per Frequenz aus der jeweiligen
+     * Sender-Liste. Templates wurden abgeschafft — `RadioStation.logoPath`
+     * ist die Single-Source-of-Truth.
+     */
+    private fun lookupFmAmLogoPath(frequency: Float): String? {
+        val stations = if (isAmMode) presetRepository.loadAmStations() else presetRepository.loadFmStations()
+        return stations.firstOrNull { Math.abs(it.frequency - frequency) < 0.05f }?.logoPath
+    }
 
     override fun getLogoForDabStation(name: String?, serviceId: Int): String? {
-        // User-saved custom logos win over the demo-default vector drawable.
-        // Otherwise the swipe-down-to-save-as-logo gesture in DAB Demo mode
-        // would silently be overwritten by the bundled demo logo on every
-        // refresh, even though the user just saved a custom one.
-        val custom = radioLogoRepository.getLogoForStation(name, null, 0f)
-        if (custom != null) return custom
+        // Per-Station Logo aus DAB- bzw. DAB-Dev-Liste.
+        val custom = (presetRepository.loadDabStations() + presetRepository.loadDabDevStations())
+            .firstOrNull { it.serviceId == serviceId }?.logoPath
+        if (!custom.isNullOrBlank()) return custom
 
         // Fallback: bundled demo vector drawable (rendered to PNG once at
         // scan time). Demo service-ids ≥ 2000 keep this strictly separate
@@ -4681,7 +4710,7 @@ class MainActivity : AppCompatActivity(),
             },
             getLogoPath = { ps, pi, frequency ->
                 if (presetRepository.isShowLogosInFavorites()) {
-                    radioLogoRepository.getLogoForStation(ps, pi, frequency)
+                    lookupFmAmLogoPath(frequency)
                 } else {
                     null
                 }
@@ -5120,7 +5149,7 @@ class MainActivity : AppCompatActivity(),
     private val stationLogoDownloader by lazy {
         StationLogoDownloader(
             activity = this,
-            radioLogoRepository = radioLogoRepository,
+            presetRepository = presetRepository,
             onLogoSaved = { stationName ->
                 loadStationsForCurrentMode()
                 coverDisplayController.refreshAvailableSources()
@@ -5245,7 +5274,18 @@ class MainActivity : AppCompatActivity(),
                 onStationsAdded = { stations ->
                     // Gefundene Sender mit bestehenden zusammenführen (Favoriten schützen)
                     val isAM = isAmMode
-                    presetRepository.mergeScannedStations(stations, isAM)
+                    val (_, overwritten) = presetRepository.mergeScannedStations(stations, isAM)
+                    // Überschriebene Favoriten verlieren ihren Favoriten-Status
+                    // (im Merge schon erledigt) UND ihr ggf. zugewiesenes Logo,
+                    // damit der jetzt-fremde Sender auf der Frequenz nicht mit
+                    // dem alten Logo fortgeführt wird.
+                    overwritten.forEach { old ->
+                        radioLogoRepository.removeLogoForStation(
+                            ps = old.name,
+                            pi = null,
+                            frequency = old.frequency,
+                        )
+                    }
                     loadStationsForCurrentMode()
                 },
                 onStationSelected = { station ->
@@ -5512,7 +5552,7 @@ class MainActivity : AppCompatActivity(),
             isAM = isAmMode,
             isAppInForeground = isAppInForeground,
             stations = stationAdapter.getStations(),
-            logoFor = { name, freq -> radioLogoRepository.getLogoForStation(name, null, freq) },
+            logoFor = { _, freq -> lookupFmAmLogoPath(freq) },
         )
     }
 
@@ -5531,7 +5571,7 @@ class MainActivity : AppCompatActivity(),
             frequency = binding.frequencyScale.getFrequency(),
             isAM = isAmMode,
             stations = stationAdapter.getStations(),
-            logoFor = { name, freq -> radioLogoRepository.getLogoForStation(name, null, freq) },
+            logoFor = { _, freq -> lookupFmAmLogoPath(freq) },
         )
     }
 
@@ -5566,7 +5606,7 @@ class MainActivity : AppCompatActivity(),
         val stations = if (isAM) presetRepository.loadAmStations() else presetRepository.loadFmStations()
         val savedStation = stations.find { Math.abs(it.frequency - frequency) < 0.05f }
         val savedStationName = savedStation?.name
-        val radioLogoPath = radioLogoRepository.getLogoForStation(savedStationName, null, frequency)
+        val radioLogoPath = lookupFmAmLogoPath(frequency)
 
         // Update Now Playing bar with station info
         resetNowPlayingBarForStation(savedStationName, radioLogoPath, frequency, isAM)
@@ -6664,6 +6704,38 @@ class MainActivity : AppCompatActivity(),
         updateCarouselDeezerToggleAppearance()
     }
 
+    override fun onPiListRequested() {
+        at.planqton.fytfm.ui.pi.PiListDialogFragment()
+            .show(supportFragmentManager, at.planqton.fytfm.ui.pi.PiListDialogFragment.TAG)
+    }
+
+    override fun onRegionChanged() {
+        // Region (World Area + Country) wurde im Settings-Dialog gewechselt.
+        // Chip-Region (Band, Raster, De-Emphasis) live aufs FM-IC schicken,
+        // damit kein Power-Cycle nötig ist. PresetRepository.getRadioArea()
+        // leitet aus der neuen World Area ab.
+        val chipArea = presetRepository.getRadioArea()
+        radioController.fmAmController.setRadioArea(chipArea)
+        // UI-Skala an die neue Region anpassen (FM-Range, AM-Range).
+        applyBandsToFrequencyScale()
+        android.util.Log.i(TAG, "Region changed → chip setRadioArea($chipArea)")
+    }
+
+    /**
+     * Region-abhängige Bandgrenzen aus der aktiven WorldArea in die
+     * FrequencyScaleView pushen. Beim App-Start aufgerufen + nach jedem
+     * Region-Wechsel.
+     */
+    private fun applyBandsToFrequencyScale() {
+        val area = at.planqton.fytfm.data.region.WorldAreas.byId(presetRepository.getWorldAreaId())
+        binding.frequencyScale.setBands(
+            fmMinMHz = area.fmMinMHz,
+            fmMaxMHz = area.fmMaxMHz,
+            amMinKHz = area.amMinKHz,
+            amMaxKHz = area.amMaxKHz,
+        )
+    }
+
     override fun onSignalIconToggleChanged(mode: FrequencyScaleView.RadioMode, enabled: Boolean) {
         // Toggle for a non-current mode → just persist; the icon UI for the
         // current mode must not be touched (carousel icon view is shared
@@ -6760,7 +6832,7 @@ class MainActivity : AppCompatActivity(),
             val freq = binding.frequencyScale.getFrequency()
             resetNowPlayingBarForStation(
                 stationName = rdsManager.ps,
-                logoPath = radioLogoRepository.getLogoForStation(rdsManager.ps, null, freq),
+                logoPath = lookupFmAmLogoPath(freq),
                 frequency = freq,
                 isAM = isAmMode,
             )

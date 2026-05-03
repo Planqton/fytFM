@@ -52,15 +52,17 @@ class ScanStationAdapter(
 
             val ctx = itemView.context
 
-            // Name (PS)
+            // Name (PS) + PI — PI als Hex-Code mit Mittelpunkt-Trenner.
+            // PI=0 heißt: kein RDS-PI gefunden (z.B. AM, schwacher Empfang).
             val name = station.name
-            if (!name.isNullOrEmpty()) {
-                tvStationName.text = name
-                tvStationName.visibility = View.VISIBLE
-            } else {
-                tvStationName.text = ctx.getString(R.string.placeholder_dashes)
-                tvStationName.visibility = View.VISIBLE
+            val piStr = if (station.pi != 0) "0x%04X".format(station.pi) else null
+            tvStationName.text = when {
+                !name.isNullOrEmpty() && piStr != null -> "$name · $piStr"
+                !name.isNullOrEmpty() -> name
+                piStr != null -> piStr
+                else -> ctx.getString(R.string.placeholder_dashes)
             }
+            tvStationName.visibility = View.VISIBLE
 
             // RSSI
             if (station.rssi > 0) {

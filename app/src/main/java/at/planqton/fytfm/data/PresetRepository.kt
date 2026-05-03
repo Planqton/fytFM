@@ -49,7 +49,14 @@ class PresetRepository(context: Context) {
     fun isDabDevFavorite(serviceId: Int): Boolean = stationRepository.isDabDevFavorite(serviceId)
 
     // ===== Scanned-station merges (delegated) =====
-    fun mergeScannedStations(scannedStations: List<RadioStation>, isAM: Boolean): List<RadioStation> =
+    /**
+     * Liefert `(merged, overwrittenFavorites)`. Der Caller kann mit den
+     * überschriebenen Favoriten z.B. zugehörige Logos aufräumen.
+     */
+    fun mergeScannedStations(
+        scannedStations: List<RadioStation>,
+        isAM: Boolean,
+    ): Pair<List<RadioStation>, List<RadioStation>> =
         stationRepository.mergeScannedStations(scannedStations, isAM)
 
     fun mergeDabScannedStations(scannedStations: List<RadioStation>): List<RadioStation> =
@@ -96,6 +103,10 @@ class PresetRepository(context: Context) {
     fun setMonoMode(enabled: Boolean) = settings.setMonoMode(enabled)
     fun getRadioArea(): Int = settings.getRadioArea()
     fun setRadioArea(area: Int) = settings.setRadioArea(area)
+    fun getWorldAreaId(): Int = settings.getWorldAreaId()
+    fun setWorldAreaId(id: Int) = settings.setWorldAreaId(id)
+    fun getCountry(): String = settings.getCountry()
+    fun setCountry(name: String) = settings.setCountry(name)
 
     fun getFmFrequencyStep(): Float = settings.getFmFrequencyStep()
     fun setFmFrequencyStep(step: Float) = settings.setFmFrequencyStep(step)
@@ -108,6 +119,8 @@ class PresetRepository(context: Context) {
     fun setSignalIconEnabledAm(enabled: Boolean) = settings.setSignalIconEnabledAm(enabled)
     fun isSignalIconEnabledDab(): Boolean = settings.isSignalIconEnabledDab()
     fun setSignalIconEnabledDab(enabled: Boolean) = settings.setSignalIconEnabledDab(enabled)
+    fun getFmAutoparseMode(): Int = settings.getFmAutoparseMode()
+    fun setFmAutoparseMode(mode: Int) = settings.setFmAutoparseMode(mode)
 
     fun isShowFavoritesOnlyFm(): Boolean = settings.isShowFavoritesOnlyFm()
     fun setShowFavoritesOnlyFm(enabled: Boolean) = settings.setShowFavoritesOnlyFm(enabled)

@@ -89,6 +89,12 @@ class SettingsDialogFragment : DialogFragment() {
         /** Wird gefeuert wenn ein Signal-Icon-Toggle geändert wurde, damit
          *  die Hauptansicht das Icon sofort ein-/ausblendet. */
         fun onSignalIconToggleChanged(mode: FrequencyScaleView.RadioMode, enabled: Boolean)
+        /** Öffnet den read-only-Viewer für die statische PI→Name-Tabelle. */
+        fun onPiListRequested()
+        /** Wird beim Wechsel der World-Area / Country gefeuert. Erlaubt
+         *  der MainActivity, den FM-Chip live auf die neue Region (band,
+         *  spacing, de-emphasis) umzustellen, ohne Power-Cycle. */
+        fun onRegionChanged()
     }
 
     private var callback: SettingsCallback? = null
@@ -468,7 +474,7 @@ class SettingsDialogFragment : DialogFragment() {
             SearchableItem(R.id.itemRadioEditorFm, listOf("fm", "radio", "editor", "sender", "bearbeiten", "edit", "stations")),
             SearchableItem(R.id.switchLocalMode, listOf("loc", "local", "lokal", "signal", "empfang")),
             SearchableItem(R.id.switchMonoMode, listOf("mono", "noise", "rauschen", "stereo", "audio")),
-            SearchableItem(R.id.itemRadioArea, listOf("area", "region", "gebiet", "europa", "usa", "japan")),
+            SearchableItem(R.id.itemRegion, listOf("region", "area", "country", "land", "kontinent", "europa", "usa", "japan", "asia")),
             SearchableItem(R.id.switchAutoScanSensitivity, listOf("scan", "sensitivity", "empfindlichkeit", "auto")),
             SearchableItem(R.id.switchDeezerFm, listOf("deezer", "cover", "fm", "artwork", "album")),
             SearchableItem(R.id.switchSignalIconFm, listOf("signal", "rssi", "balken", "bars", "empfang", "stärke", "fm")),
@@ -677,16 +683,6 @@ class SettingsDialogFragment : DialogFragment() {
             callback?.onMonoModeChanged(isChecked)
         }
 
-        // Radio Area item
-        val textRadioAreaValue = dialogView.findViewById<TextView>(R.id.textRadioAreaValue)
-        updateRadioAreaText(textRadioAreaValue)
-        dialogView.findViewById<View>(R.id.itemRadioArea).setOnClickListener {
-            callback?.onRadioAreaDialogRequested { area ->
-                viewModel.setRadioArea(area)
-                updateRadioAreaText(textRadioAreaValue)
-            }
-        }
-
         // Auto Scan Sensitivity toggle
         val switchAutoScanSensitivity = dialogView.findViewById<SwitchCompat>(R.id.switchAutoScanSensitivity)
         switchAutoScanSensitivity.isChecked = viewModel.state.value.isAutoScanSensitivity
@@ -709,32 +705,63 @@ class SettingsDialogFragment : DialogFragment() {
             callback?.onSignalIconToggleChanged(FrequencyScaleView.RadioMode.FM, isChecked)
         }
 
-        // FM Step Size SeekBar — progress 0..9 → 0.05..0.50 MHz in 0.05-Schritten.
-        val seekBarFmStep = dialogView.findViewById<SeekBar>(R.id.seekBarFmStep)
-        val textFmStepValue = dialogView.findViewById<TextView>(R.id.textFmStepValue)
-        val prefs = callback?.getPresetRepository()
-        val initialFmStep = prefs?.getFmFrequencyStep() ?: 0.1f
-        seekBarFmStep.progress = ((initialFmStep / 0.05f).toInt() - 1).coerceIn(0, 9)
-        textFmStepValue.text = "%.2f MHz".format(initialFmStep)
-        seekBarFmStep.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val step = (progress + 1) * 0.05f
-                textFmStepValue.text = "%.2f MHz".format(step)
-                if (fromUser) prefs?.setFmFrequencyStep(step)
+        // PI Database — opens the PI→Name lookup dialog (read-only viewer).
+        dialogView.findViewById<View>(R.id.itemPiDatabase).setOnClickListener {
+            callback?.onPiListRequested()
+        }
+
+        // Stationname Parsing Mode — None / PS / PI / PI→PS Fallback
+        val itemAutoparse = dialogView.findViewById<View>(R.id.itemFmAutoparseMode)
+        val textAutoparseValue = dialogView.findViewById<TextView>(R.id.textFmAutoparseValue)
+        val prefsForAutoparse = callback?.getPresetRepository()
+        textAutoparseValue.text = autoparseModeLabel(prefsForAutoparse?.getFmAutoparseMode() ?: 1)
+        itemAutoparse.setOnClickListener {
+            showFmAutoparseModeDialog { newMode ->
+                prefsForAutoparse?.setFmAutoparseMode(newMode)
+                textAutoparseValue.text = autoparseModeLabel(newMode)
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
+        }
     }
 
-    private fun updateRadioAreaText(textView: TextView) {
-        val areaName = callback?.getRadioAreaName(viewModel.state.value.radioArea) ?: ""
-        val templateName = callback?.getActiveLogoTemplateName()
-        textView.text = if (templateName != null) {
-            "$areaName / $templateName"
-        } else {
-            areaName
+    private fun autoparseModeLabel(modeId: Int): String {
+        val resId = when (modeId) {
+            0 -> R.string.fm_autoparse_none
+            2 -> R.string.fm_autoparse_pi
+            3 -> R.string.fm_autoparse_pi_fallback_ps
+            else -> R.string.fm_autoparse_ps
         }
+        return getString(resId)
+    }
+
+    private fun showFmAutoparseModeDialog(onPick: (Int) -> Unit) {
+        val ctx = requireContext()
+        val labels = arrayOf(
+            getString(R.string.fm_autoparse_none),
+            getString(R.string.fm_autoparse_ps),
+            getString(R.string.fm_autoparse_pi),
+            getString(R.string.fm_autoparse_pi_fallback_ps),
+        )
+        val current = callback?.getPresetRepository()?.getFmAutoparseMode() ?: 1
+        androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setTitle(R.string.fm_autoparse_pick_title)
+            .setSingleChoiceItems(labels, current) { dlg, which ->
+                onPick(which)
+                dlg.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun updateRegionText(textView: TextView) {
+        val prefs = callback?.getPresetRepository() ?: return
+        val area = at.planqton.fytfm.data.region.WorldAreas.byId(prefs.getWorldAreaId())
+        val country = prefs.getCountry()
+        val flag = at.planqton.fytfm.data.region.CountryFlags.flagFor(country)
+        textView.text = getString(
+            R.string.region_value_format,
+            getString(area.nameRes),
+            "$flag $country",
+        )
     }
 
     // ========== AM SETTINGS ==========
@@ -751,22 +778,6 @@ class SettingsDialogFragment : DialogFragment() {
             callback?.onSignalIconToggleChanged(FrequencyScaleView.RadioMode.AM, isChecked)
         }
 
-        // AM Step Size SeekBar — progress 0..99 → 1..100 kHz in 1-kHz-Schritten.
-        val seekBarAmStep = dialogView.findViewById<SeekBar>(R.id.seekBarAmStep)
-        val textAmStepValue = dialogView.findViewById<TextView>(R.id.textAmStepValue)
-        val prefs = callback?.getPresetRepository()
-        val initialAmStep = prefs?.getAmFrequencyStep() ?: 9f
-        seekBarAmStep.progress = (initialAmStep.toInt() - 1).coerceIn(0, 99)
-        textAmStepValue.text = "%d kHz".format(initialAmStep.toInt())
-        seekBarAmStep.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val step = (progress + 1).toFloat()
-                textAmStepValue.text = "%d kHz".format(step.toInt())
-                if (fromUser) prefs?.setAmFrequencyStep(step)
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
     }
 
     // ========== DAB SETTINGS ==========
@@ -868,6 +879,22 @@ class SettingsDialogFragment : DialogFragment() {
         switchAutoplay.isChecked = viewModel.state.value.isAutoplayAtStartup
         switchAutoplay.setOnCheckedChangeListener { _, isChecked ->
             viewModel.setAutoplayAtStartup(isChecked)
+        }
+
+        // Region (World Area + Country) — Click öffnet WorldRegionDialogFragment.
+        val itemRegion = dialogView.findViewById<View>(R.id.itemRegion)
+        val textRegionValue = dialogView.findViewById<TextView>(R.id.textRegionValue)
+        updateRegionText(textRegionValue)
+        itemRegion.setOnClickListener {
+            val prefs = callback?.getPresetRepository() ?: return@setOnClickListener
+            at.planqton.fytfm.ui.settings.WorldRegionDialogFragment().apply {
+                presetRepository = prefs
+                onApplied = {
+                    updateRegionText(textRegionValue)
+                    callback?.onRadioModeSpinnerNeedsUpdate()
+                    callback?.onRegionChanged()
+                }
+            }.show(parentFragmentManager, at.planqton.fytfm.ui.settings.WorldRegionDialogFragment.TAG)
         }
 
         // Show debug infos toggle

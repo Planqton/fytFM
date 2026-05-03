@@ -154,26 +154,65 @@ class AppSettingsRepository(context: Context) {
         prefs.edit().putBoolean(SettingsKeys.MONO_MODE, enabled).apply()
     }
 
-    /** 2 = Europe (default). */
-    fun getRadioArea(): Int = prefs.getInt(SettingsKeys.RADIO_AREA, 2)
+    /**
+     * Aktive World-Area-ID (0 = Western Europe, ..., 7 = Africa & Middle
+     * East). Migration aus dem alten `radio_area`-Pref-Wert (5 Chip-Regionen)
+     * beim ersten Lesen, falls noch kein `world_area_id` gespeichert ist.
+     */
+    fun getWorldAreaId(): Int {
+        if (prefs.contains(SettingsKeys.WORLD_AREA_ID)) {
+            return prefs.getInt(SettingsKeys.WORLD_AREA_ID, 0)
+        }
+        // Migration: aus altem `radio_area` ableiten.
+        val legacy = if (prefs.contains(SettingsKeys.RADIO_AREA))
+            prefs.getInt(SettingsKeys.RADIO_AREA, 2) else 2
+        val migrated = at.planqton.fytfm.data.region.WorldAreas.fromLegacyChipRegion(legacy)
+        prefs.edit().putInt(SettingsKeys.WORLD_AREA_ID, migrated).apply()
+        return migrated
+    }
+
+    fun setWorldAreaId(id: Int) {
+        prefs.edit().putInt(SettingsKeys.WORLD_AREA_ID, id).apply()
+    }
+
+    fun getCountry(): String {
+        val stored = prefs.getString(SettingsKeys.COUNTRY, null)
+        // Leerer String / null / blank → Austria-Default. Schützt vor
+        // Edge-Cases (frische Installation, beschädigter Pref, alte Daten).
+        return if (stored.isNullOrBlank()) "Austria" else stored
+    }
+
+    fun setCountry(name: String) {
+        prefs.edit().putString(SettingsKeys.COUNTRY, name).apply()
+    }
+
+    /** Chip-Region (0=USA, 1=LatAm, 2=EU, 3=RU, 4=JP) — leitet aus der
+     *  aktiven World Area ab. Wird an `fmNative.setRadioArea` gegeben. */
+    fun getRadioArea(): Int =
+        at.planqton.fytfm.data.region.WorldAreas.byId(getWorldAreaId()).chipRegion
 
     fun setRadioArea(area: Int) {
+        // Legacy: nicht mehr aktiv, der echte Wert kommt aus World-Area.
         prefs.edit().putInt(SettingsKeys.RADIO_AREA, area).apply()
     }
 
-    /** Schrittweite der Prev/Next-Buttons im FM-Modus (in MHz).
-     *  Min sinnvoll 0.05, Max sinnvoll 0.5. Default 0.1 MHz. */
-    fun getFmFrequencyStep(): Float = prefs.getFloat(SettingsKeys.FM_FREQUENCY_STEP, 0.1f)
+    /** Schrittweite der Prev/Next-Buttons im FM-Modus (MHz), abgeleitet
+     *  aus der aktiven World Area. */
+    fun getFmFrequencyStep(): Float =
+        at.planqton.fytfm.data.region.WorldAreas.byId(getWorldAreaId()).fmStep
 
     fun setFmFrequencyStep(step: Float) {
+        // Legacy: nicht mehr aktiv. Wert wird aus World Area abgeleitet.
         prefs.edit().putFloat(SettingsKeys.FM_FREQUENCY_STEP, step).apply()
     }
 
-    /** Schrittweite der Prev/Next-Buttons im AM-Modus (in kHz).
-     *  Min 1, Max sinnvoll 100. Default 9 kHz (Europe/IARU R1 Raster). */
-    fun getAmFrequencyStep(): Float = prefs.getFloat(SettingsKeys.AM_FREQUENCY_STEP, 9f)
+    /** Schrittweite der Prev/Next-Buttons im AM-Modus (kHz), abgeleitet
+     *  aus der aktiven World Area. */
+    fun getAmFrequencyStep(): Float =
+        at.planqton.fytfm.data.region.WorldAreas.byId(getWorldAreaId()).amStep
 
     fun setAmFrequencyStep(step: Float) {
+        // Legacy: nicht mehr aktiv. Wert wird aus World Area abgeleitet.
         prefs.edit().putFloat(SettingsKeys.AM_FREQUENCY_STEP, step).apply()
     }
 
@@ -195,6 +234,13 @@ class AppSettingsRepository(context: Context) {
 
     fun setSignalIconEnabledDab(enabled: Boolean) {
         prefs.edit().putBoolean(SettingsKeys.SIGNAL_ICON_ENABLED_DAB, enabled).apply()
+    }
+
+    /** FM-Stationname-Auto-Parse-Mode. Default: PS (= heutiges Verhalten). */
+    fun getFmAutoparseMode(): Int = prefs.getInt(SettingsKeys.FM_AUTOPARSE_MODE, 1)
+
+    fun setFmAutoparseMode(mode: Int) {
+        prefs.edit().putInt(SettingsKeys.FM_AUTOPARSE_MODE, mode).apply()
     }
 
     // ===== Favourites filter (per mode) =====

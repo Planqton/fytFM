@@ -185,7 +185,10 @@ class DabTunerManager :
         try {
             val tuner = currentTuner
             if (tuner == null) {
-                listener.onScanError("Kein DAB+ Tuner verfügbar")
+                listener.onScanError(
+                    appContext?.getString(at.planqton.fytfm.R.string.dab_no_tuner_available)
+                        ?: "No DAB+ tuner available"
+                )
                 return
             }
 
@@ -541,7 +544,9 @@ class DabTunerManager :
             releaseAudioTrack()
             currentTuner = null
             currentService = null
-            mainHandler.post { onTunerError?.invoke("DAB+ Gerät getrennt") }
+            val msg = appContext?.getString(at.planqton.fytfm.R.string.dab_device_disconnected)
+                ?: "DAB+ device disconnected"
+            mainHandler.post { onTunerError?.invoke(msg) }
         }
     }
 

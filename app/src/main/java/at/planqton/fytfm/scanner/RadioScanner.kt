@@ -600,8 +600,14 @@ class RadioScanner(
                         return@forEachIndexed
                     }
 
-                    // Station mit RDS-Daten hinzufügen
-                    val verifiedStation = station.copy(name = if (psName.isNotEmpty()) psName else null)
+                    // Station mit RDS-Daten hinzufügen — PS als name, PI als
+                    // separates Feld. PI bleibt 0 wenn der Chip in der
+                    // Sammelzeit keinen PI lesen konnte (z.B. AM oder
+                    // Sender ohne RDS).
+                    val verifiedStation = station.copy(
+                        name = if (psName.isNotEmpty()) psName else null,
+                        pi = piCode
+                    )
                     verifiedStations.add(verifiedStation)
 
                     mainHandler.post { onStationVerified?.invoke(verifiedStation) }

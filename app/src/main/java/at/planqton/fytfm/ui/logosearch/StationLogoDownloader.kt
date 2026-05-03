@@ -8,10 +8,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import at.planqton.fytfm.R
+import at.planqton.fytfm.data.PresetRepository
 import at.planqton.fytfm.data.RadioStation
-import at.planqton.fytfm.data.logo.RadioLogoRepository
-import at.planqton.fytfm.data.logo.RadioLogoTemplate
-import at.planqton.fytfm.data.logo.StationLogo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -19,19 +17,15 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.MessageDigest
 
 /**
- * Downloads an image URL, resizes it to a reasonable max size, and stores it
- * as the station logo inside the active template (or the default
- * "Manual-Search" template when nothing is active). Extracted from the
- * previous inline implementation in MainActivity; uses [lifecycleScope] so
- * the background job gets cancelled on Activity destruction instead of
- * outliving it (old code used a free-floating `Thread`).
+ * Downloads an image URL, resizes it, saves to `filesDir/station_logos/`,
+ * and writes the path directly to the corresponding [RadioStation]
+ * (`logoPath` field). Templates are obsolete — logos are now per-station.
  */
 class StationLogoDownloader(
     private val activity: AppCompatActivity,
-    private val radioLogoRepository: RadioLogoRepository,
+    private val presetRepository: PresetRepository,
     /** Invoked on the main thread after a successful save — the Activity
      *  should refresh station-list / cover-source UI. */
     private val onLogoSaved: (stationName: String) -> Unit,
@@ -63,8 +57,8 @@ class StationLogoDownloader(
                 val stationName = station.name ?: station.ensembleLabel ?: "Unknown"
                 val bitmap = downloadAndDecode(imageUrl)
                 val sized = resize(bitmap, MAX_DIMENSION)
-                val logoFile = saveBitmapAsPng(sized, stationName)
-                upsertStationLogoTemplate(station, stationName, logoFile)
+                val logoFile = saveBitmapAsPng(sized, station)
+                writeLogoPathToStation(station, logoFile)
 
                 withContext(Dispatchers.Main) {
                     progress.dismiss()
@@ -88,15 +82,19 @@ class StationLogoDownloader(
     }
 
     private fun downloadAndDecode(imageUrl: String): Bitmap {
-        val connection = (URL(imageUrl).openConnection() as HttpURLConnection).apply {
-            setRequestProperty("User-Agent", UA)
+        val url = URL(imageUrl)
+        val connection = (url.openConnection() as HttpURLConnection).apply {
             connectTimeout = CONNECT_TIMEOUT_MS
             readTimeout = READ_TIMEOUT_MS
+            setRequestProperty("User-Agent", UA)
         }
         try {
+            connection.connect()
+            if (connection.responseCode != 200) {
+                throw IllegalStateException("HTTP ${connection.responseCode}")
+            }
             val raw = connection.inputStream.use { BitmapFactory.decodeStream(it) }
-                ?: throw IllegalStateException("Bild konnte nicht dekodiert werden")
-            // Hardware bitmaps can't be processed further — copy to software.
+                ?: throw IllegalStateException("Bitmap decode failed")
             return if (raw.config == Bitmap.Config.HARDWARE) {
                 raw.copy(Bitmap.Config.ARGB_8888, false)
             } else raw
@@ -116,45 +114,61 @@ class StationLogoDownloader(
         )
     }
 
-    private fun saveBitmapAsPng(bitmap: Bitmap, stationName: String): File {
-        val templateName = radioLogoRepository.getActiveTemplateName() ?: "Manual-Search"
-        val logosDir = File(activity.filesDir, "logos/$templateName").apply { mkdirs() }
-        val hash = MessageDigest.getInstance("MD5")
-            .digest(stationName.toByteArray())
-            .joinToString("") { "%02x".format(it) }
-        val logoFile = File(logosDir, "$hash.png")
+    /**
+     * Pro-Sender deterministischer Pfad in `filesDir/station_logos/`.
+     * - DAB: `dab_<serviceId>.png`
+     * - FM:  `fm_<frequency*10>.png` (z.B. `fm_924` für 92.4 MHz)
+     * - AM:  `am_<frequencyKHz>.png`
+     */
+    private fun saveBitmapAsPng(bitmap: Bitmap, station: RadioStation): File {
+        val logosDir = File(activity.filesDir, "station_logos").apply { mkdirs() }
+        val key = when {
+            station.isDab -> "dab_${station.serviceId}"
+            station.isAM -> "am_${station.frequency.toInt()}"
+            else -> "fm_${(station.frequency * 10).toInt()}"
+        }
+        val logoFile = File(logosDir, "$key.png")
         FileOutputStream(logoFile).use { out ->
             bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
         }
         return logoFile
     }
 
-    private fun upsertStationLogoTemplate(
-        station: RadioStation,
-        stationName: String,
-        logoFile: File,
-    ) {
-        val templateName = radioLogoRepository.getActiveTemplateName() ?: "Manual-Search"
-        val existingTemplate = radioLogoRepository.getTemplates().find { it.name == templateName }
-        val stations = existingTemplate?.stations?.toMutableList() ?: mutableListOf()
-
-        // Drop any prior logo for the same station name (case-insensitive).
-        stations.removeAll { it.ps.equals(stationName, ignoreCase = true) }
-        stations += StationLogo(
-            ps = stationName,
-            logoUrl = "local://${logoFile.name}",
-            localPath = logoFile.absolutePath,
-        )
-
-        val newTemplate = RadioLogoTemplate(
-            name = templateName,
-            area = existingTemplate?.area ?: 2,
-            stations = stations,
-        )
-        radioLogoRepository.saveTemplate(newTemplate)
-
-        if (radioLogoRepository.getActiveTemplateName() == null) {
-            radioLogoRepository.setActiveTemplate(templateName)
+    /**
+     * Schreibt den `logoPath` in die passende Sender-Liste (FM/AM/DAB/DAB-Dev).
+     */
+    private fun writeLogoPathToStation(station: RadioStation, logoFile: File) {
+        val path = logoFile.absolutePath
+        when {
+            station.isDab -> {
+                // DAB-Sender können in beiden Listen vorkommen (real + dev),
+                // wir patchen jeden Match per serviceId.
+                val dab = presetRepository.loadDabStations()
+                if (dab.any { it.serviceId == station.serviceId }) {
+                    presetRepository.saveDabStations(dab.map {
+                        if (it.serviceId == station.serviceId) it.copy(logoPath = path) else it
+                    })
+                }
+                val dev = presetRepository.loadDabDevStations()
+                if (dev.any { it.serviceId == station.serviceId }) {
+                    presetRepository.saveDabDevStations(dev.map {
+                        if (it.serviceId == station.serviceId) it.copy(logoPath = path) else it
+                    })
+                }
+            }
+            station.isAM -> {
+                val am = presetRepository.loadAmStations()
+                presetRepository.saveAmStations(am.map {
+                    if (Math.abs(it.frequency - station.frequency) < 0.05f) it.copy(logoPath = path) else it
+                })
+            }
+            else -> {
+                val fm = presetRepository.loadFmStations()
+                presetRepository.saveFmStations(fm.map {
+                    if (Math.abs(it.frequency - station.frequency) < 0.05f) it.copy(logoPath = path) else it
+                })
+            }
         }
+        Log.i(TAG, "logo gespeichert: ${station.name} → $path")
     }
 }

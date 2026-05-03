@@ -276,6 +276,27 @@ class RadioLogoRepository(private val context: Context) {
     }
 
     /**
+     * Entfernt aus dem aktiven Template alle StationLogo-Einträge, die
+     * mit (ps, pi, frequency) matchen würden. Wird beim Überschreiben
+     * eines Favoriten beim Scan aufgerufen, damit das alte Logo nicht
+     * mehr für die jetzt-fremde Frequenz angezeigt wird.
+     *
+     * Genutzt wird die gleiche `matchPriority`-Logik wie bei
+     * [getLogoForStation] — alles mit priority > 0 fliegt raus.
+     */
+    fun removeLogoForStation(ps: String?, pi: Int?, frequency: Float?): Int {
+        val template = getActiveTemplate() ?: return 0
+        val before = template.stations.size
+        val filtered = template.stations.filter { it.matchPriority(ps, pi, frequency) <= 0 }
+        val removed = before - filtered.size
+        if (removed > 0) {
+            saveTemplate(template.copy(stations = filtered))
+            Log.i(TAG, "removeLogoForStation: ps='$ps' pi=$pi freq=$frequency → $removed logo(s) entfernt")
+        }
+        return removed
+    }
+
+    /**
      * Import a template from JSON string.
      * Does NOT download logos - call downloadLogos() separately.
      */

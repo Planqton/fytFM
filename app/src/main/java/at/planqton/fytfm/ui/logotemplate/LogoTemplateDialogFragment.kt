@@ -372,7 +372,7 @@ class LogoTemplateDialogFragment : DialogFragment() {
         val title = dialogView.findViewById<TextView>(R.id.textStationEditorTitle)
         val layoutSaveProgress = dialogView.findViewById<View>(R.id.layoutSaveProgress)
 
-        title.text = if (station == null) "Sender hinzufügen" else "Sender bearbeiten"
+        title.text = getString(if (station == null) R.string.add_station else R.string.edit_station)
 
         station?.let {
             editPs.setText(it.ps ?: "")
